@@ -1,0 +1,110 @@
+---
+title: オーナーのサインイン
+description: パスキー、ワンタイムリンク、セットアップコード、ID プロバイダーのいずれかでサインインします。
+---
+
+オーナーは、SwB を管理するためにサインインします。オーナーとしてサインインすると、エージェントのサインインを承認し、トークンを保存できます。
+
+| ページ | 用途 |
+| - | - |
+| `/login` | オーナーとしてサインインします。 |
+| `/authorize` | エージェントからの接続リクエストを確認します。 |
+
+## ワンタイムリンク
+
+```bash
+swb login-link
+```
+
+このコマンドは、`https://swb.example.com/login#t=...` のようなリンクを表示します。5 分以内にブラウザーで開いてください。リンクは 1 回だけ使えます。オーナーとしてサインインしたエージェントも、`login_link` ツールでリンクを作れます。トークンは、リンクの `#` より後ろの部分に入ります。
+
+初めてローカルで起動すると、`swb up` がワンタイムリンクを表示します。ローカルアドレスの既定値は `http://localhost:8870` です。`SWB_PORT` を設定すると、SwB はそのポートをアドレスに使います。`swb login-link` で別のサーバーを選ぶときは `--url` を使います。別のインスタンスフォルダーからオーナーキーを読むときは `--dir` を使います。
+
+リンクでのサインインに失敗したら、もう一度 `swb login-link` を実行してください。新しいリンクをブラウザーで開いてください。
+
+## セットアップコード
+
+セットアップコードは、オーナーの初回サインインで 1 回だけ使えます。SwB が直接サインインを処理するときに使ってください。ホスティングしたサーバーでコードを取得する場所は、[デプロイのガイド](/ja/docs/deploy)で説明しています。
+
+独自のコードを設定するときは、32 バイトのランダムな値を生成してください。その値を、64 文字の小文字の 16 進数か、標準の Base64 でエンコードしてください。このコマンドは、16 進数のコードを非公開の `.env` ファイルに追加します。`swb init` のあと、インスタンスフォルダーで実行してください。
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+`SWB_SETUP_CODE` を設定した状態で SwB を起動してください。ブラウザーで `/login` を開いてください。**Setup code** にコードを貼り付けてください。**Sign in** を選択してください。
+
+## パスキー
+
+**パスキー**は、手元のデバイスを使ってサインインを確認するしくみです。初めてサインインしたあと、**Passkey name** にデバイスの名前を入力してください。**Add a passkey** を選択してください。
+
+別のデバイスでは、**Settings** を開いてください。**Sign-in** で **Add a passkey** を選択してください。名前を入力してください。**Add passkey** を選択して保存してください。次回からはパスキーでサインインしてください。
+
+## OIDC
+
+OpenID Connect（OIDC）を使うと、Google などのサインインサービスが本人確認を行います。設定ファイルにそのサービスを追加してください。`SWB_OIDC_CLIENT_SECRET` に、そのサービスのシークレットを設定してください。
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+プロバイダーのリダイレクト先アドレスを `https://swb.example.com/auth/oidc/callback` に設定してください。サインインページに、そのサービスのボタンが表示されます。SwB は、`auth.owner_emails` にある確認済みのメールアドレスを受け付けます。サービスのアカウント ID を `auth.oidc.owner_subjects` に列挙することもできます。
+
+## Cloudflare Access
+
+Cloudflare Access でコンソールを保護するときは、[Cloudflare のセットアップ](/ja/docs/setup/cloudflare)に従ってください。SwB は Access のトークンを確認し、メールアドレスを `auth.owner_emails` か `SWB_OWNER_EMAILS` と照合します。
+
+## エージェントのサインイン
+
+OAuth を使うと、アプリはオーナーの承認を得て SwB に接続できます。接続は `/authorize` で承認してください。アプリは OAuth スコープ `switchboard` を受け取ります。これは、アプリが求めるアクセスの名前です。アプリは `/token` でトークンを取得または更新します。
+
+アプリが OAuth のエラーを受け取ったときは、`error_description` で詳細を確認してください。
+
+| エラー | 意味 |
+| - | - |
+| `access_denied` | オーナーが接続を拒否しました。 |
+| `invalid_client` | SwB がアプリの ID か認証情報を拒否しました。 |
+| `invalid_client_metadata` | SwB がアプリの登録設定を拒否しました。 |
+| `invalid_redirect_uri` | 登録時に、許可されたコールバックアドレスが必要です。 |
+| `invalid_request` | リクエストの形式か、必須の値が無効です。 |
+| `invalid_grant` | SwB が認可コードかリフレッシュトークンを拒否しました。 |
+| `invalid_target` | リクエストが誤った MCP アドレスを指定しています。 |
+| `unsupported_response_type` | `response_type=code` を使ってください。 |
+| `unsupported_grant_type` | `grant_type=authorization_code` か `grant_type=refresh_token` を使ってください。 |
+| `temporarily_unavailable` | `public_url` を設定するか、クライアント登録の上限を確認してください。 |
+
+SwB が[ペアリングコード](/ja/docs/connect#ペアリングコードで接続する)を拒否したときも、`/connect` は `invalid_grant` を返します。
+
+## セッション
+
+**Cookie** とは、サインインした状態を保つためにブラウザーが保存する値です。SwB は、この Cookie に `Secure` フラグを設定します。公開アドレスには HTTPS を使ってください。
+
+設定を変更すると、ブラウザーはトークンを送ります。SwB はこのトークンでリクエストを確認します。サインアウトは **Settings** から行ってください。
+
+ブラウザーは、現在のサインイン状態を `/auth/session` から読み取ります。
+
+## サインインのエラー
+
+SwB は、ブラウザーでのサインインの失敗を **Audit** に記録します。各行には理由が表示されます。コードとトークンは伏せたまま記録します。一部の失敗では、SwB は同じ行の繰り返しを抑えます。
+
+| エラー | 意味 |
+| - | - |
+| `link_used` | 期限が切れる前に、誰かがこのリンクでサインインしました。 |
+| `link_expired` | リンクの期限が切れました。 |
+| `link_invalid` | SwB がリンクを拒否しました。 |
+| `setup_failed` | セットアップコードの形式が誤っているか、`SWB_SETUP_CODE` と異なります。 |
+| `setup_closed` | セットアップコードでのサインインは終了しています。別のサインイン方法を使ってください。 |
+| `passkey_failed` | パスキーの設定か確認に失敗しました。 |
+| `last_method` | OIDC と Cloudflare Access がどちらも無効なので、SwB は最後のパスキーを残します。 |
+| `not_found` | パスキー ID が誤っているか、パスキーが削除済みです。 |
+| `oidc_failed` | ID プロバイダーでのサインインに失敗しました。 |
+| `signed_out` | このリクエストにはオーナーのセッションが必要です。 |
+| `csrf` | SwB がページのアドレスかセキュリティトークンを拒否しました。 |
+| `slow_down` | サインインの試行回数が上限に達しました。`Retry-After` の時間だけ待ってください。 |

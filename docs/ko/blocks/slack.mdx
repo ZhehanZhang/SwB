@@ -1,0 +1,129 @@
+---
+title: Slack
+description: Slack 메시지를 에이전트에게 보내고 답을 스레드에 올립니다.
+---
+
+## Slack 앱 만들기
+
+[Slack 설정](/ko/docs/setup/slack#앱-매니페스트)을 여세요. 두 계정을 모두 쓰는 매니페스트나 사용자 계정용 매니페스트를 고르세요. 매니페스트는 Slack 앱 설정을 담은 파일입니다.
+
+워크스페이스에 앱을 설치하세요. 에이전트에게 Slack 연결을 요청하거나 `swb connect slack`을 실행하세요. 등록 링크로 워크스페이스 토큰을 저장하세요. 저장한 토큰을 불러오려면 SwB을 다시 시작하세요.
+
+| 토큰 | 찾는 곳 |
+| - | - |
+| 봇 토큰, `xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| 사용자 토큰, `xoxp-` | OAuth & Permissions → User OAuth Token |
+| 앱 수준 토큰, `xapp-` | Basic Information → App-Level Tokens, `connections:write` 포함 |
+
+## Slack에서 보내기
+
+봇을 멘션하고 대상의 짧은 이름을 적으세요. 이름은 `targets`로 찾아보세요.
+
+```text
+@swb claude check the release notes
+```
+
+SwB은 대상 이름을 떼어 내고 나머지 메시지를 보냅니다. 일반적인 봇 답장은 대상의 이름과 그림으로 스레드에 올라갑니다. 후속 메시지에서는 SwB이 스레드의 대상을 다시 쓸 수 있습니다. 워크스페이스의 `default_target`은 대체 대상입니다.
+
+## 에이전트로 게시
+
+에이전트는 `slack_post`로 게시합니다. 에이전트가 어디에, 어떤 계정으로 게시할지 정하려면 `blocks.slack.agents.<agent>.workspaces`를 사용하세요. 계정마다 쓰기 정책이 있습니다.
+
+| 정책 | 효과 |
+| - | - |
+| `free` | 에이전트가 바로 게시합니다 |
+| `approval` | 소유자가 게시물마다 먼저 승인합니다 |
+| `never` | 이 계정은 읽기 전용입니다 |
+
+소유자는 Slack DM이나 SwB 페이지에서 게시물을 승인합니다. MCP 도구로는 승인을 요청하는 일만 할 수 있습니다.
+
+## 페르소나
+
+페르소나는 봇 게시물에 표시되는 이름과 그림입니다. SwB은 Capy Captain마다 페르소나를 하나씩 줍니다. 사용할 수 있는 페르소나를 보려면 에이전트에게 `slack_personas` 호출을 요청하세요. 에이전트는 `slack_post`에서 허용된 페르소나를 고를 수 있습니다. 직접 만든 그림 파일은 `<data>/avatars`에 넣으세요.
+
+## 채널별 프로젝트
+
+`workspace_projects`는 워크스페이스를 프로젝트에 연결합니다. `channel_projects`는 채널 하나를 프로젝트에 연결합니다. 이 연결에 따라 `@swb claude`에 쓸 프로젝트 메모리와 기본 루틴이 정해집니다.
+
+## 블록 설정
+
+| 키 | 용도 |
+| - | - |
+| `blocks.slack` | Slack 블록과 워크스페이스 설정 |
+| `blocks.slack.use` | `slack` 블록을 불러옵니다 |
+| `blocks.slack.enabled` | 블록을 불러오려면 `true`, 끄려면 `false`로 설정합니다 |
+| `blocks.slack.refresh_minutes` | 대상 목록을 업데이트하는 간격(분). 기본값은 `30`입니다 |
+| `blocks.slack.target_aliases` | 추가 대상 이름을 기존 대상에 연결합니다 |
+| `blocks.slack.workspace_projects` | 워크스페이스별 기본 SwB 프로젝트를 정합니다 |
+| `blocks.slack.channel_projects` | 워크스페이스와 채널 이름 또는 ID별로 SwB 프로젝트를 정합니다 |
+| `blocks.slack.listen_channels` | 워크스페이스별로 지정한 채널 이름이나 ID에 `assist` 모드를 설정합니다. 채널 모드가 이 값보다 우선할 수 있습니다 |
+| `blocks.slack.max_text_chars` | 들어오는 메시지마다 보관할 최대 글자 수. 기본값은 `4000`입니다 |
+| `blocks.slack.event_retention_days` | Slack 이벤트를 보관할 기간(일). 기본값은 `14`입니다 |
+
+프로젝트 라우트로 에이전트를 깨우려면 [채널 모드](/ko/docs/channel-modes)를 사용하세요.
+
+## 워크스페이스와 계정
+
+| 키 | 용도 |
+| - | - |
+| `blocks.slack.workspaces` | SwB에서 쓰는 워크스페이스 이름을 Slack 설정에 연결합니다 |
+| `blocks.slack.workspaces.*.team_id` | Slack 워크스페이스 ID |
+| `blocks.slack.workspaces.*.app_id` | Slack 앱 ID. SwB은 이 값으로 자기 앱이 보낸 메시지를 건너뜁니다 |
+| `blocks.slack.workspaces.*.intake` | 실시간 이벤트는 `socket`, 채널 기록 읽기는 `poll`, 메시지 수신 끄기는 `none`을 고릅니다 |
+| `blocks.slack.workspaces.*.app_token_env` | Socket Mode에 쓰는 앱 토큰의 환경 변수 이름 |
+| `blocks.slack.workspaces.*.identities` | 이 워크스페이스에서 SwB이 쓸 수 있는 Slack 계정 |
+| `blocks.slack.workspaces.*.identities.bot` | 봇 계정 설정 |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | 봇 토큰의 환경 변수 이름 |
+| `blocks.slack.workspaces.*.identities.bot.write` | 봇 계정의 쓰기 정책. 기본값은 `free`입니다 |
+| `blocks.slack.workspaces.*.identities.user` | Slack 사용자 계정 설정 |
+| `blocks.slack.workspaces.*.identities.user.token_env` | 사용자 토큰의 환경 변수 이름 |
+| `blocks.slack.workspaces.*.identities.user.write` | 사용자 계정의 쓰기 정책. 기본값은 `approval`입니다 |
+| `blocks.slack.workspaces.*.user_only` | 사용자 계정만 쓰려면 `true`로 설정합니다. 쓰기 정책은 `approval`이나 `never`로 설정합니다 |
+| `blocks.slack.workspaces.*.watched` | 나열한 채널에 `watch` 모드를 설정합니다. 봇이 참여한 모든 채널에는 `*`를 사용합니다 |
+| `blocks.slack.workspaces.*.default_target` | 대상 이름을 생략하고 SwB에 보낸 새 메시지의 대상 |
+| `blocks.slack.workspaces.*.ack_reaction` | 멘션과 다이렉트 메시지를 받았다고 표시할 Slack 이모지 이름. 봇의 기본값은 `eyes`입니다 |
+| `blocks.slack.workspaces.*.owner_user_ids` | 소유자로 취급할 Slack 사용자 ID. 기본값은 워크스페이스 승인자입니다 |
+| `blocks.slack.workspaces.*.known` | 알고 있는 Slack 사용자 ID나 봇 ID를 표시 이름에 연결합니다. 어떤 발신자의 메시지를 받을지 고를 때 씁니다 |
+| `blocks.slack.workspaces.*.sender_rate` | 소유자 외의 발신자마다 메시지 수신량을 제한합니다. `assist`, `triage`, 맥락 정보로 쓰는 메시지에 적용됩니다 |
+| `blocks.slack.workspaces.*.sender_rate.count` | 시간 범위 안에서 발신자당 최대 메시지 수. 기본값은 `5`입니다 |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | 시간 범위의 길이(초). 기본값은 `600`입니다 |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | 스레드당 1시간에 허용하는 봇 게시물 수. 넘으면 승인이 필요합니다. 기본값은 `20`입니다 |
+
+## 에이전트 권한과 승인
+
+| 키 | 용도 |
+| - | - |
+| `blocks.slack.agents` | SwB 에이전트를 Slack 권한에 연결합니다 |
+| `blocks.slack.agents.*.workspaces` | 워크스페이스별로 에이전트가 쓸 수 있는 계정을 정합니다 |
+| `blocks.slack.agents.*.allow_persona_override` | 에이전트가 봇 게시물의 페르소나를 고르게 하려면 `true`로 설정합니다 |
+| `blocks.slack.agents.*.allowed_personas` | 페르소나 선택 권한이 있을 때 에이전트가 고를 수 있는 페르소나 ID |
+| `blocks.slack.approvals` | Slack 게시물 승인 요청의 기본 설정 |
+| `blocks.slack.approvals.approver_user_id` | 기본 승인 요청을 받고 결정하는 Slack 사용자 ID |
+| `blocks.slack.approvals.notify_workspace` | 기본 승인자에게 승인 요청을 보낼 봇이 있는 워크스페이스 |
+| `blocks.slack.approvals.ttl_minutes` | 승인 요청이 만료되기까지의 시간(분). 기본값은 `60`입니다 |
+| `blocks.slack.workspaces.*.approver_user_id` | 이 워크스페이스의 요청을 받고 결정하는 Slack 사용자 ID. 기본값보다 우선합니다 |
+
+## 이름과 그림
+
+| 키 | 용도 |
+| - | - |
+| `blocks.slack.personas` | 봇이 게시물에 쓸 수 있는 이름과 그림을 정의합니다 |
+| `blocks.slack.personas.*.name` | 이 페르소나를 쓰는 봇 게시물의 표시 이름 |
+| `blocks.slack.personas.*.avatar` | 페르소나 그림의 파일 이름. Slack이 그림을 가져갈 수 있게 `blocks.slack.public_base_url`을 설정합니다 |
+| `blocks.slack.personas.*.emoji` | 페르소나 그림 대신 쓸 Slack 이모지 |
+| `blocks.slack.avatar_dirs` | 기본 제공 그림보다 먼저 아바타 파일을 찾을 추가 폴더 |
+| `blocks.slack.public_base_url` | Slack이 아바타 파일을 가져갈 공개 HTTPS 주소. 예를 들면 `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | 이 워크스페이스에서 봇 게시물에 쓸 기본 페르소나 ID |
+
+## 이벤트 전달
+
+| 키 | 용도 |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | Slack 이벤트를 다른 서비스로 보내는 웹훅을 설정합니다 |
+| `blocks.slack.workspaces.*.sinks.*.name` | 로그와 상태에서 웹훅을 식별하는 이름 |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | 웹훅 URL의 환경 변수 이름 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | Stripe 형식으로 요청에 서명하려면 `stripe`로 설정합니다 |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 서명 키의 환경 변수 이름 |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | 보낼 이벤트 유형. `watched`, `mention`, `dm` 중에서 고릅니다. 기본적으로 세 유형을 모두 보냅니다 |
+| `blocks.slack.workspaces.*.sinks.*.targets` | 이 대상 이름의 이벤트만 보냅니다 |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 요청 하나에 이벤트를 모을 시간(초). 기본값 `0`이면 이벤트를 하나씩 따로 보냅니다 |

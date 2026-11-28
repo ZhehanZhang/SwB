@@ -1,0 +1,85 @@
+---
+title: MCP 클라이언트
+description: 로컬 소유자 키나 페어링 코드로 MCP 클라이언트를 연결합니다.
+---
+
+MCP는 앱이 외부 도구를 쓰는 표준 방식입니다. 이 가이드에서는 키로 앱을 SwB과 페어링합니다.
+
+## 시작하기 전에
+
+Streamable HTTP로 원격 MCP를 지원하는 앱을 사용하세요. 이 방식으로 앱이 웹을 통해 도구를 호출합니다. 키를 보내려면 앱이 사용자 지정 요청 헤더도 지원해야 합니다. SwB 소유자 클라이언트나 SwB 컴퓨터의 터미널이 필요합니다.
+
+앱과 같은 컴퓨터에서 SwB을 시작하려면 빈 폴더에서 `uvx swb-one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 여세요. 다른 방법은 [설치](/ko/docs/install)를 참고하세요.
+
+Claude, ChatGPT, Grok, 코딩 에이전트는 OAuth 로그인을 다루는 별도 페이지가 있습니다. 이 앱들은 해당 페이지를 따르세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="mcp-client" lang="ko" />
+
+이 프롬프트를 SwB 소유자 클라이언트나 연결할 앱에 붙여 넣으세요.
+
+## 로컬 소유자 클라이언트
+
+다른 앱을 설정하려면 SwB 컴퓨터에 있는 비공개 클라이언트를 사용하세요. 시작할 때 표시되는 로컬 `/mcp` 주소를 사용하세요. 인스턴스 `.env`의 `SWB_KEY_OWNER`를 `Authorization: Bearer <key>`로 사용하세요. 이 키는 소유자 권한을 모두 줍니다. 파일 모드 `0600`인 클라이언트의 비공개 로컬 설정에 저장하세요. 이 키는 로컬 SwB으로만 보내세요.
+
+## 클라이언트 페어링
+
+에이전트가 로컬에서 설정을 편집할 수 있다면 앱 설정을 에이전트에게 맡기세요. 키는 앱의 비공개 설정에 저장하세요. 설정 파일에는 파일 모드 `0600`을 사용하세요.
+
+### 앱 이름 정하기
+
+`notes-bot`처럼 앱의 짧은 이름을 에이전트에게 알려 주세요. SwB은 앱이 보낸 메시지에 이 이름을 표시합니다.
+### 페어링 코드 받기
+
+SwB 소유자 에이전트에게 앱 이름으로 `connect_code`를 호출하도록 요청하세요. SwB 인스턴스 폴더에서 `uvx swb-one connect mcp-client --choose agent=notes-bot`을 실행해도 됩니다. `notes-bot`을 내 앱 이름으로 바꾸세요.
+### 키 받기
+
+앱을 실행하는 컴퓨터의 터미널에서 비공개 폴더를 여세요. `https://swb.example.com`을 내 SwB 주소로 바꾸세요. 끝의 `/connect`는 그대로 두세요. 로컬 SwB이면 시작할 때 표시된 포트로 `http://localhost:8870/connect`를 사용하세요. 입력 내용이 가려지는 프롬프트에 페어링 코드를 10분 안에 입력하세요.
+
+
+```bash
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
+```
+### 키를 비공개로 보관
+
+비공개 편집기에서 `.swb-pairing.json`을 여세요. 이 명령은 응답을 파일 모드 `0600`으로 저장합니다. 앱 설정에 그 파일의 `key`를 사용하세요. SwB은 키를 한 번만 돌려줍니다.
+### 앱에 SwB 추가
+
+앱의 MCP 설정에 `swb`라는 서버를 추가하세요. Streamable HTTP를 선택하세요. 공개 SwB 서버에는 파일의 `mcp_url`을 사용하세요. 로컬 SwB에는 시작할 때 표시된 MCP 주소를 사용하세요.
+### 키 추가
+
+앱의 비공개 설정에 `Authorization: Bearer <key>` 헤더를 추가하세요. 키를 저장한 뒤 `.swb-pairing.json`을 삭제하세요.
+
+## 에이전트가 하는 일
+
+에이전트가 소유자 로그인으로 `connect(what="mcp-client")`를 호출합니다. SwB은 MCP 주소를 돌려주고 앱 이름을 묻습니다. 에이전트는 `choose={"agent":"notes-bot"}`로 `connect`를 다시 호출합니다.
+
+SwB은 그 이름으로 페어링 코드를 만들고 `POST /connect` 단계를 돌려줍니다. 페어링 코드는 10분 동안 유효한 일회용 코드입니다. 앱에 이미 키가 있으면 SwB이 그 사실을 알리고, `connect_revoke`를 호출한 뒤에만 새 코드를 만듭니다.
+
+SwB 서버의 터미널에서 `swb connect mcp-client --choose agent=notes-bot`을 실행해도 같은 단계를 받습니다.
+
+## 자격 증명
+
+| 항목 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| 페어링 코드 | `connect`나 `connect_code` 결과 | `XXXXX-XXXXX`, 10분 동안 유효, 한 번만 사용 | `POST /connect` 요청 |
+| 에이전트 키 | `POST /connect` 응답, 한 번만 표시 | `swb_`로 시작 | 앱 비공개 설정의 `Authorization` 헤더 |
+
+키는 앱의 비공개 설정에 저장하세요. SwB은 키 자체 대신 키의 해시를 저장합니다.
+
+## 연결 확인
+
+새 에이전트에게 `inbox` 호출을 요청하세요. 소유자로 로그인한 에이전트에게 `connect_list`를 호출해 새 키의 마지막 호출 시각을 확인해 달라고 요청하세요. 소유자 에이전트가 `agent:notes-bot`으로 테스트 메시지를 보내게 하세요. 새 에이전트가 `inbox`로 읽고 `reply`로 답하게 하세요.
+
+## 문제 해결
+
+`POST /connect`가 실패하면 SwB 주소를 확인하세요. 코드가 만료되었거나 이미 사용되었다면 소유자에게 새 코드를 요청하세요. 키가 유출되면 `connect_revoke`로 폐기하세요. 그러면 SwB은 그 키를 쓰는 호출을 거부합니다.

@@ -1,0 +1,75 @@
+---
+title: Telegram
+description: 봇으로 Telegram 채팅과 그룹을 SwB에 연결합니다.
+---
+
+SwB은 BotFather에서 만든 봇으로 Telegram과 통신합니다. SwB이 Telegram에 새 메시지를 직접 요청하므로 SwB 서버는 비공개 주소를 그대로 써도 됩니다.
+
+## 시작하기 전에
+
+Telegram 계정을 사용하세요. 그룹을 연결하려면 멤버를 추가할 수 있는 계정을 사용하세요. 소유자로 SwB에 로그인하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="telegram" lang="ko" />
+
+이 프롬프트를 SwB 소유자 클라이언트에 붙여 넣으세요.
+
+## Telegram 봇 설정
+
+### BotFather 열기
+
+Telegram에서 [https://t.me/BotFather](https://t.me/BotFather)를 여세요. BotFather와 처음 대화한다면 **Start**를 누르세요.
+### 봇 만들기
+
+`/newbot`을 보내세요. 표시 이름으로 답하세요.
+
+### 사용자 이름 정하기
+
+`bot`으로 끝나는 사용자 이름으로 답하세요. BotFather가 토큰으로 답합니다.
+### 토큰 저장
+
+에이전트가 준 SwB 등록 링크를 여세요. 필드에 토큰을 붙여 넣으세요.
+### 개인 채팅 시작
+
+봇과의 개인 채팅에서 **Start**를 누르세요. SwB이 내 사용자 ID를 찾을 수 있도록 메시지를 하나 보내세요.
+### 그룹에 봇 추가
+
+에이전트가 준 그룹 링크를 여세요. 그룹을 선택하세요.
+
+### 설정 명령 보내기
+
+그룹에서 `/swb@<bot username>`을 보내세요. 그러면 SwB이 그룹 ID를 알게 됩니다.
+### 그룹 메시지 모두 읽기
+
+봇이 모든 메시지를 읽어야 하는 그룹이 있다면 BotFather에 `/setprivacy`를 보내세요. 내 봇을 고르세요. **Disable**을 선택하세요.
+
+### 봇 다시 추가
+
+각 그룹에서 봇을 내보내세요. 봇을 그룹에 다시 추가하세요.
+
+## 에이전트가 하는 일
+
+에이전트가 `connect(what="telegram")`를 호출합니다. 필요하면 `telegram` 블록을 켭니다. 블록이 켜지면 `connect`나 `telegram_provision`이 봇 토큰용 등록 링크를 돌려줍니다.
+
+토큰을 저장하면 에이전트가 `telegram_status`를 호출합니다. 에이전트는 봇과 프라이버시 모드를 확인합니다. 그룹 초대 링크는 `setup.add_to_group_url`에 있습니다. 최근 채팅 ID는 `setup.seen_chats`에 있습니다.
+
+에이전트는 `config/switchboard.yaml`의 `blocks.telegram.spaces` 아래에 공간을 설정합니다. 공간은 채팅 묶음을 SwB 프로젝트에 연결합니다. 그룹 ID는 `chats`에 설정하세요. 내 사용자 ID는 `owner_ids`에 설정하세요. 파일을 수정한 뒤 SwB을 다시 시작하세요.
+
+## 자격 증명
+
+| 토큰 | Telegram에서 표시되는 곳 | 형식 | 입력할 곳 |
+| --- | --- | --- | --- |
+| 봇 토큰 | `/newbot` 또는 `/token` 뒤의 BotFather 답장 | 숫자, 콜론, 그 뒤에 영문자와 숫자 | SwB 등록 링크 |
+
+## 연결 확인
+
+에이전트에게 `connect`를 다시 호출하도록 요청하세요. 설정이 끝나면 `connected`가 나옵니다.
+
+`owner_ids`에 등록한 Telegram 계정을 사용하세요. 개인 채팅에서 봇에게 `/swb <target> hello`를 보내세요. `<target>`은 `targets`에 나온 대상 이름으로 바꾸세요. 답장이 오는지 확인하세요.
+
+## 문제 해결
+
+그룹에서 봇이 명령만 읽는다면 BotFather에서 프라이버시 모드를 끄세요. 그다음 봇을 내보냈다가 다시 추가하세요.
+
+웹훅은 Telegram이 메시지를 보내는 웹 주소입니다. 이전 웹훅이 남아 있다면 봇 소유자에게 Telegram의 `deleteWebhook` 메서드로 제거해 달라고 요청하세요.

@@ -24,7 +24,7 @@ Webhook 由擁有者管理。呼叫 `webhook_create`，提供名稱，在 `verif
 
 把回傳的 URL 貼到服務供應商的 Webhook 設定中。在這個範例中，簽署密鑰要從 Stripe 取得。簽署密鑰是一把雙方共用的金鑰，SwB 用它確認事件來自服務供應商。
 
-開啟認領連結，這個連結通往擁有者儲存密鑰的頁面。在那裡儲存密鑰。SwB 會將儲存的密鑰保密。
+認領連結會開啟擁有者儲存密鑰的頁面。先以擁有者身分登入 SwB，再開啟認領連結，在那裡儲存密鑰。SwB 會將儲存的密鑰保密。
 
 如果你的 SwB 網址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 原則](/zh-Hant/docs/setup/cloudflare#保護主控台)設為 **Bypass**。
 
@@ -76,7 +76,7 @@ Webhook payments delivery evt_example.
 
 呼叫 `webhook_list` 可查看網址、計數和密鑰狀態。把 `include_revoked` 設為 `true`，結果就會包含已撤銷的 Webhook。
 
-呼叫 `webhook_rotate` 並提供 Webhook 名稱，取得新密鑰的認領連結。用這個連結儲存新密鑰，再把新密鑰更新到服務供應商或接收端。如果是路徑密鑰，更新服務供應商那邊的 URL。
+呼叫 `webhook_rotate` 並提供 Webhook 名稱，取得新密鑰的認領連結。先以擁有者身分登入 SwB，再開啟認領連結，在那裡儲存新密鑰。接著把新密鑰更新到服務供應商或接收端。如果是路徑密鑰，更新服務供應商那邊的 URL。
 
 設定 `grace_s` 後，舊密鑰在你儲存新密鑰後仍然有效。寬限期從工具呼叫時開始，最長 7 天。如果是傳出 Webhook，SwB 在變更後的寬限期內會同時用兩組密鑰簽署。如果接收端更換了 URL，用同一個認領連結儲存新 URL。
 
@@ -93,7 +93,7 @@ Webhook payments delivery evt_example.
 }
 ```
 
-開啟認領連結，儲存接收端的公開 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
+先以擁有者身分登入 SwB，再開啟認領連結，儲存接收端的公開 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
 
 使用 `send`，並把 `to` 設為 `webhook:out:alerts`。SwB 會在 `POST` 請求中傳送下面的 JSON 主體。
 
@@ -153,7 +153,7 @@ SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效�
 | - | - |
 | 請求主體 | 預設為 256 KiB。把 `blocks.webhook.max_body_kb` 設為 1 到 1024 的整數 |
 | 每個 Webhook 通過驗證的新事件，所有位址合計 | 每 10 分鐘 600 個 |
-| 每個 Webhook 每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次。通過驗證的請求一律放行 |
+| 每個 Webhook 每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次 |
 | 每個用戶端 IP 位址送往錯誤網址的請求 | 每 10 分鐘 20 個 |
 | Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放時間窗 | 30 天 |
 | Stripe 和 Standard Webhooks 的時間戳記容許誤差 | 預設為 300 秒 |
@@ -161,6 +161,8 @@ SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效�
 | Stripe、Linear 和 Standard Webhooks 的自訂時間戳記容許誤差 | 把 `tolerance_s` 設為 1 到 3600 秒 |
 | Sentry 和 HMAC 的重放檢查 | SwB 只檢查重複的主體 |
 | bearer 和 path 的重放檢查 | SwB 只檢查密鑰 |
+
+SwB 在驗證之後才檢查失敗上限。同一個 Webhook 和用戶端 IP 位址在 10 分鐘內驗證失敗滿 20 次，接下來驗證失敗的請求就會收到 `429`。每次計入的失敗在 10 分鐘後過期。失敗上限生效期間，通過驗證的請求仍會照常處理。600 個事件的上限是另一項限制，Webhook 一達到這個上限，送往這個 Webhook 的所有請求都會收到 `429`。
 
 受信任的伺服器轉送請求時，SwB 用 `trusted_proxies` 找出用戶端 IP 位址。
 
@@ -172,6 +174,8 @@ SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效�
 | - | - | - |
 | `stripe` | `Stripe-Signature` | [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) 中該端點的 `whsec_` 簽署密鑰 |
 
+十六進位使用數字 `0` 到 `9` 和字母 `a` 到 `f`。Stripe 簽章中的十六進位字母，SwB 要求使用小寫。
+
 SwB 會拿已簽署的時間與自己的時鐘比對，容許誤差預設為 300 秒。
 
 ### Linear
@@ -180,13 +184,15 @@ SwB 會拿已簽署的時間與自己的時鐘比對，容許誤差預設為 300
 | - | - | - |
 | `linear` | `Linear-Signature` | [Linear Webhook 設定](https://linear.app/developers/webhooks)中的簽署密鑰 |
 
-SwB 會檢查已簽署主體中的 `webhookTimestamp`，容許誤差預設為 60 秒。
+Linear 簽章中的十六進位字母，SwB 接受大寫和小寫。SwB 會檢查已簽署主體中的 `webhookTimestamp`，容許誤差預設為 60 秒。
 
 ### Sentry
 
 | `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | [Sentry 內部整合](https://docs.sentry.io/integrations/integration-platform/internal-integration/)的用戶端密鑰 |
+
+Sentry 簽章中的十六進位字母，SwB 接受大寫和小寫。
 
 ### Svix 與 Standard Webhooks
 
@@ -201,7 +207,7 @@ SwB 會檢查已簽署主體中的 `webhookTimestamp`，容許誤差預設為 60
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | [建立 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) 時取得的密鑰，或 Integration Console 中的用戶端密鑰 |
 
-把 `header` 設為 `x-vercel-signature`。純十六進位簽章使用 `"encoding": "hex"` 和 `"prefix": ""`。十六進位使用數字 `0` 到 `9` 和字母 `a` 到 `f`。
+把 `header` 設為 `x-vercel-signature`，並設定 `"encoding": "hex"`。純十六進位簽章要設定 `"prefix": ""`。Vercel 簽章中的十六進位字母，SwB 接受大寫和小寫。
 
 ### Home Assistant
 
@@ -236,7 +242,13 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | 你為這個 Webhook 產生的隨機密鑰 |
 
-傳送者只能呼叫 URL 時，使用路徑驗證。選一組至少 16 個字母或數字的隨機密鑰，用認領連結儲存。把 URL 結尾的 `<secret>` 換成儲存的密鑰。把整個 URL 當作密鑰保管。SwB 的存取記錄會略去路徑密鑰。
+傳送者只能呼叫 URL 時，使用路徑驗證。用 OpenSSL 產生一組隨機的路徑密鑰。
+
+```sh
+openssl rand -hex 16
+```
+
+用認領連結儲存這組密鑰。把 URL 結尾的 `<secret>` 換成儲存的密鑰。把整個 URL 當作密鑰保管。SwB 的存取記錄會略去路徑密鑰。
 
 在 IFTTT 中選擇 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。把方法設為 `POST`，再輸入完整的 URL。
 
@@ -246,7 +258,7 @@ rest_command:
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | 你為這個 Webhook 產生的隨機密鑰 |
 
-HMAC 用共用密鑰從主體算出簽章。把 `header` 設為 `X-Signature-256`，`encoding` 設為 `hex`，`prefix` 設為 `sha256=`。
+HMAC 用共用密鑰從主體產生簽章。把 `header` 設為 `X-Signature-256`，`encoding` 設為 `hex`，`prefix` 設為 `sha256=`。兩種 HMAC 驗證方式都接受十六進位簽章中的大寫和小寫字母。
 
 用 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 在私有檔案中產生一組密鑰，再用認領連結儲存它的值。
 

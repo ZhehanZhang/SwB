@@ -118,6 +118,8 @@ routes:
 | `auth.key_targets` | 依金鑰名稱列出允許的訊息目標，例如 `[agent:claude]`。受此限制的金鑰需要指定一個允許的目標 |
 | `auth.inbox_keys` | 金鑰名稱與代理的對應表，每把金鑰只能讀取這一個代理的收件匣。內建項目是 `channel: claude-code` |
 
+使用 Cloudflare Access 登入時，SwB 採用 `Cf-Access-Jwt-Assertion` 標頭中的權杖。如果標頭是空的，或請求缺少這個標頭，SwB 會改從 `CF_Authorization` Cookie 讀取權杖。Cookie 是瀏覽器隨請求送出的一個值。SwB 用 `team_domain` 提供的公開金鑰檢查 RS256 簽章。權杖的核發者必須與 `team_domain` 的 HTTPS 網址相符。權杖的對象（audience）必須包含 `aud`。權杖如果帶有核發時間、生效時間和到期時間，SwB 會一併檢查。SwB 把電子郵件地址轉成小寫後，再與 `owner_emails` 比對。
+
 ## 可見性
 
 | 鍵 | 用途 |

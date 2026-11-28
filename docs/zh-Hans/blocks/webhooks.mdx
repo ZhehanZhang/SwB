@@ -24,7 +24,7 @@ Webhook 由所有者管理。调用 `webhook_create`，传入名称，在 `verif
 
 把返回的 URL 粘贴到提供方的 Webhook 设置中。在这个示例中，签名密钥从 Stripe 获取。签名密钥是双方共享的密钥，SwB 用它确认事件来自提供方。
 
-打开认领链接，它指向所有者保存密钥的页面。在那里保存密钥。SwB 会对保存的密钥保密。
+认领链接会打开所有者保存密钥的页面。先以所有者身份登录 SwB，再打开认领链接。在那里保存密钥。SwB 会对保存的密钥保密。
 
 如果你的 SwB 地址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 策略](/zh-Hans/docs/setup/cloudflare#保护控制台)设为 **Bypass**。
 
@@ -76,7 +76,7 @@ Webhook payments delivery evt_example.
 
 调用 `webhook_list` 查看地址、计数和密钥状态。把 `include_revoked` 设为 `true`，可以列出已撤销的 Webhook。
 
-调用 `webhook_rotate` 并传入 Webhook 名称，获取用来保存新密钥的认领链接。用这个链接保存新密钥，再把新密钥更新到提供方或接收端。如果是路径密钥，更新提供方那边的 URL。
+调用 `webhook_rotate` 并传入 Webhook 名称，获取用来保存新密钥的认领链接。先以所有者身份登录 SwB，再打开认领链接。在那里保存新密钥，然后把新密钥更新到提供方或接收端。如果是路径密钥，更新提供方那边的 URL。
 
 设置 `grace_s`，可以让旧密钥在你保存新密钥后继续有效。宽限期从调用工具时开始，最长 7 天。出站 Webhook 在轮换密钥后的宽限期内，由 SwB 同时用两个密钥签名。如果接收端更换了 URL，用同一个认领链接保存新 URL。
 
@@ -93,7 +93,7 @@ Webhook payments delivery evt_example.
 }
 ```
 
-打开认领链接，保存接收端的公网 HTTPS URL 和签名密钥。通过私密渠道把同一个 `whsec_` 签名密钥交给接收端。
+先以所有者身份登录 SwB，再打开认领链接。保存接收端的公网 HTTPS URL 和签名密钥。通过私密渠道把同一个 `whsec_` 签名密钥交给接收端。
 
 调用 `send`，把 `to` 设为 `webhook:out:alerts`。SwB 在 `POST` 请求中发送下面的 JSON 请求体。
 
@@ -153,7 +153,7 @@ SwB 按收到的原始请求体校验签名。重放指重复发送一个有效�
 | - | - |
 | 请求体 | 默认为 256 KiB。把 `blocks.webhook.max_body_kb` 设为 1 到 1024 之间的整数 |
 | 每个 Webhook 在所有地址上新增的已验证事件 | 每 10 分钟 600 个 |
-| 每个 Webhook 来自每个客户端 IP 地址的验证失败 | 每 10 分钟 20 次。已通过验证的请求始终放行 |
+| 每个 Webhook 来自每个客户端 IP 地址的验证失败 | 每 10 分钟 20 次 |
 | 每个客户端 IP 地址发往错误地址的请求 | 每 10 分钟 20 次 |
 | Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放窗口 | 30 天 |
 | Stripe 和 Standard Webhooks 的时间戳容差 | 默认为 300 秒 |
@@ -161,6 +161,8 @@ SwB 按收到的原始请求体校验签名。重放指重复发送一个有效�
 | Stripe、Linear 和 Standard Webhooks 的自定义时间戳容差 | 把 `tolerance_s` 设为 1 到 3600 秒 |
 | Sentry 和 HMAC 的重放检查 | SwB 只检查重复的请求体 |
 | bearer 和 path 的重放检查 | SwB 只检查密钥 |
+
+SwB 在验证之后检查失败上限。同一个 Webhook 和客户端 IP 地址在 10 分钟内失败 20 次后，后续的失败请求会收到 `429`。每次计入的失败在 10 分钟后过期。失败上限生效期间，已通过验证的请求仍会照常处理。另有一项 600 个事件的上限，Webhook 达到这个上限后，发往它的所有请求都会收到 `429`。
 
 请求由受信任的服务器转发时，SwB 用 `trusted_proxies` 确定客户端 IP 地址。
 
@@ -172,6 +174,8 @@ SwB 按收到的原始请求体校验签名。重放指重复发送一个有效�
 | - | - | - |
 | `stripe` | `Stripe-Signature` | [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) 中这个端点的 `whsec_` 签名密钥 |
 
+十六进制使用数字 `0` 到 `9` 和字母 `a` 到 `f`。SwB 要求 Stripe 签名中的十六进制字母为小写。
+
 SwB 把已签名的时间与自己的时钟比对，默认容差为 300 秒。
 
 ### Linear
@@ -180,13 +184,15 @@ SwB 把已签名的时间与自己的时钟比对，默认容差为 300 秒。
 | - | - | - |
 | `linear` | `Linear-Signature` | [Linear Webhook 设置](https://linear.app/developers/webhooks)中的签名密钥 |
 
-SwB 检查已签名请求体中的 `webhookTimestamp`，默认容差为 60 秒。
+SwB 接受 Linear 签名中大写和小写的十六进制字母。SwB 检查已签名请求体中的 `webhookTimestamp`，默认容差为 60 秒。
 
 ### Sentry
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | [Sentry 内部集成](https://docs.sentry.io/integrations/integration-platform/internal-integration/)的客户端密钥 |
+
+SwB 接受 Sentry 签名中大写和小写的十六进制字母。
 
 ### Svix 和 Standard Webhooks
 
@@ -201,7 +207,7 @@ SwB 检查已签名请求体中的 `webhookTimestamp`，默认容差为 60 秒�
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | [创建 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) 时得到的密钥，或 Integration Console 中的客户端密钥 |
 
-把 `header` 设为 `x-vercel-signature`。签名是纯十六进制时，使用 `"encoding": "hex"` 和 `"prefix": ""`。十六进制使用数字 `0` 到 `9` 和字母 `a` 到 `f`。
+把 `header` 设为 `x-vercel-signature`。设置 `"encoding": "hex"`。签名是纯十六进制时，设置 `"prefix": ""`。SwB 接受 Vercel 签名中大写和小写的十六进制字母。
 
 ### Home Assistant
 
@@ -236,7 +242,13 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | 你为这个 Webhook 生成的随机密钥 |
 
-发送方只能调用 URL 时，使用路径验证。选一个至少 16 位、由字母或数字组成的随机密钥，用认领链接保存它。把 URL 末尾的 `<secret>` 换成保存的密钥。把整个 URL 当作密钥对待。SwB 的访问日志会隐去路径密钥。
+发送方只能调用 URL 时，使用路径验证。用 OpenSSL 生成一个随机的路径密钥。
+
+```sh
+openssl rand -hex 16
+```
+
+用认领链接保存它。把 URL 末尾的 `<secret>` 换成保存的密钥。把整个 URL 当作密钥对待。SwB 的访问日志会隐去路径密钥。
 
 在 IFTTT 中选择 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。把方法设为 `POST`。填写完整的 URL。
 
@@ -246,7 +258,7 @@ rest_command:
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | 你为这个 Webhook 生成的随机密钥 |
 
-HMAC 用共享密钥根据请求体计算签名。把 `header` 设为 `X-Signature-256`，`encoding` 设为 `hex`，`prefix` 设为 `sha256=`。
+HMAC 用共享密钥根据请求体生成签名。把 `header` 设为 `X-Signature-256`，`encoding` 设为 `hex`，`prefix` 设为 `sha256=`。两种 HMAC 方法都接受十六进制签名中的大写和小写字母。
 
 用 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 在一个仅自己可读的文件中生成密钥，再用认领链接保存它的值。
 

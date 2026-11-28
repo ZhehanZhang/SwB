@@ -1,0 +1,52 @@
+---
+title: Blocs
+description: Découvrez les connexions et les fonctions de SwB.
+---
+
+Un bloc ajoute une connexion ou une fonction à SwB. Configurez les blocs dans le fichier de configuration. Avec la configuration par défaut, SwB détecte certains blocs à partir des variables d'environnement. Lancez `swb status` pour voir l'état des blocs et des conseils de configuration. Connectez-vous en tant que propriétaire pour voir le détail sur `/healthz`.
+
+| Connexion | Moyen de connexion | Transmission des messages |
+| - | - | - |
+| [Claude](/fr/docs/blocks/claude) | Connecteur personnalisé et routines Claude | `wait`, `inbox` et réveils de routines |
+| [ChatGPT](/fr/docs/blocks/chatgpt) | Serveur MCP personnalisé et dots ChatGPT | MCP Events |
+| [Capy](/fr/docs/blocks/capy) | Clé d'API Capy | Flux du fil de discussion Capy |
+| [Grok](/fr/docs/blocks/grok) | Connecteur MCP et routines Grok Bot | `wait`, `inbox` et réveils de routines |
+| [Agents de code](/fr/docs/blocks/coding-agents) | OAuth ou code d'appairage | `wait`, `inbox` et canal Claude Code |
+| [Sessions locales](/fr/docs/blocks/local-sessions) | Appareil appairé | Boîte aux lettres ou livraison directe à une session ouverte |
+| [Slack](/fr/docs/blocks/slack) | Application Slack via Socket Mode | Réponses dans le fil de discussion |
+| [Discord](/fr/docs/blocks/discord) | Jeton du bot | Réponses dans le fil de discussion |
+| [Telegram](/fr/docs/blocks/telegram) | Jeton du bot | Réponses dans le fil de discussion |
+| [GitHub](/fr/docs/blocks/github) | Secret du webhook | Webhooks signés |
+| [Webhooks](/fr/docs/blocks/webhooks) | Secret de signature ou secret partagé | Événements entrants et messages sortants signés |
+| [Muse](/fr/docs/setup/muse) | Gadget Muse appairé et connecteur MCP | Réveils en temps réel et messages dans la boîte aux lettres |
+| [Autres clients MCP](/fr/docs/setup/mcp-client) | OAuth ou code d'appairage | `wait` et `inbox` |
+
+## Confiance et accès
+
+SwB vérifie les ID de plateforme pour définir le niveau de confiance d'un message. Dans Slack, Discord et Telegram, utilisez `known` pour aider SwB à choisir les messages à accepter. Les messages des personnes autres que le propriétaire portent une confiance `external`. Consultez la section [Confiance](/fr/docs/security#confiance).
+
+Les cibles, les canaux et les portées de mémoire sont privés par défaut. Partagez une ressource pour en donner l'accès à d'autres personnes.
+
+## Avatars intégrés
+
+Indiquez un nom de fichier pour choisir une image intégrée pour une [persona Slack](/fr/docs/blocks/slack#personas).
+
+| Fichier | Nom |
+| - | - |
+| `capy.png` | Capy |
+| `chatgpt.png` | ChatGPT |
+| `claude-code.png` | Claude Code |
+| `claude.png` | Claude |
+| `codex.png` | Codex |
+| `default.png` | `default` |
+| `dots.png` | Dots ChatGPT |
+| `dsh.png` | DeepSeek Harness |
+| `gemini.png` | Gemini |
+| `grok-bot.png` | Grok Bot |
+| `grok.png` | Grok |
+| `muse.png` | Muse |
+| `swb.png` | SwB |
+
+## Ajouter votre propre bloc
+
+Un bloc est une classe Python accompagnée d'un manifeste. Le manifeste décrit les capacités du bloc, les destinations possibles de ses messages et les secrets qu'il utilise. Enregistrez votre bloc dans le groupe de points d'entrée `switchboard.blocks`. Lancez `swb blocks list` pour voir les blocs configurés sur votre serveur.

@@ -1,0 +1,80 @@
+---
+title: Discord
+description: Discord のメッセージをエージェントにルーティングし、スレッドで返信します。
+---
+
+## ボットを作成する
+
+[Discord のセットアップ](/ja/docs/setup/discord)に従って、ボットを作成してください。本文と続きのメッセージを読むために、Message Content Intent を有効にしてください。
+
+Discord の接続をエージェントに頼んでください。エージェントは `discord_provision` を呼び出し、受け取りリンクを渡します。リンクを開いて、ボットトークンを貼り付けてください。
+
+## ボットをサーバーに追加する
+
+ボットが接続したら、`discord_status` を呼び出してください。`setup.invite_url` のリンクを開いてください。ボットを自分のサーバーに追加してください。このリンクは、有効にした機能に必要な権限を求めます。
+
+`discord_status` の `discovered.guilds` でサーバー ID を確認してください。そのサーバー ID を、設定ファイルのスペースに追加してください。スペースには、1 つの Discord サーバーの設定が入ります。
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: claude
+    agents: {claude: [home]}
+```
+
+オーナーを設定するときは、ボットにダイレクトメッセージを送ってください。`discord_status` の `discovered.dm_users` で、自分のユーザー ID を確認してください。その ID を `owner_ids` に入れてください。
+
+## Discord から送る
+
+`@swb claude check the build` のように、ボットをメンションして送信先の短い名前を書いてください。スレッドを有効にすると、SwB は送られたメッセージからスレッドを始め、送信者をそのスレッドに追加できます。SwB はそこに回答を投稿します。続きのメッセージでは、スレッドの送信先を使い回せます。ペルソナを有効にすると、対象の返信にはエージェントの名前と画像が付きます。
+
+## ほかの人と共有する
+
+チャンネルと送信先は、既定で非公開です。ほかの人にアクセスを与えるときは、チャンネルと送信先の両方を共有してください。`channel:<space>/<channel id>` と `target:<slug>` を使います。特定のユーザーにアクセスを与えるときは、アクセスリストに `discord:<user id>` を追加してください。
+
+## ブロックの設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.discord` | Discord のボットとそのスペースの設定 |
+| `blocks.discord.use` | `discord` ブロックを読み込みます |
+| `blocks.discord.enabled` | `true` でブロックを読み込み、`false` で止めます |
+| `blocks.discord.token_env` | ボットトークンの環境変数の名前 |
+| `blocks.discord.application_id` | 招待リンク用の Discord のアプリケーション ID。SwB は Discord から ID を読むこともできます |
+| `blocks.discord.connect` | `true` にすると、Discord からリアルタイムのイベントを受け取ります。API の呼び出しだけをテストするときは `false` を設定します |
+| `blocks.discord.message_content` | `true` にすると、スレッドの続きのメッセージも含めて本文を読みます。Developer Portal で Message Content Intent を有効にしてください |
+| `blocks.discord.threads` | `true` にすると、サーバーのテキストチャンネルでの返信のために公開スレッドを始めます |
+| `blocks.discord.personas` | `true` にすると、Webhook で送るサーバーの投稿にエージェントの名前と画像を使います。ボットに Manage Webhooks の権限を与えてください |
+| `blocks.discord.avatar` | ボットのプロフィールの画像のファイル名 |
+| `blocks.discord.ack_reaction` | ボット宛てのメッセージの受信を示す絵文字。このリアクションを止めるときは `null` を設定します |
+| `blocks.discord.dm_space` | ダイレクトメッセージにルーティングとオーナーの設定を適用するスペース。既定値は、最初に設定したスペースです |
+| `blocks.discord.dm_mode` | ほかの人からのダイレクトメッセージのモード。ダイジェストにまとめるときは `watch`、破棄するときは `off` を使います |
+| `blocks.discord.daily_cap` | ツールで投稿や返信をする各操作の 1 日あたりの上限。上限を外すときは `null` を設定します |
+| `blocks.discord.refresh_minutes` | 送信先の一覧を更新する間隔（分）。既定値は `30` です |
+| `blocks.discord.target_aliases` | 追加の送信先の名前を、既存の送信先に対応付けます |
+| `blocks.discord.agents` | 各エージェントが投稿とイベントの受信をできるスペース。すべてのスペースには `*` を使います |
+
+プロジェクトのルートを通じてエージェントを起こすときは、[チャンネルモード](/ja/docs/channel-modes)を使ってください。
+
+## スペースとチャンネル
+
+| キー | 用途 |
+| - | - |
+| `blocks.discord.spaces` | SwB で使う名前を、Discord サーバーの設定に対応付けます |
+| `blocks.discord.spaces.*.guild_id` | Discord のサーバー ID。1 つのスペースで省略すると、自動で照合します。その場合、スペースのオーナーが所有する使えるサーバーが、ちょうど 1 つ必要です |
+| `blocks.discord.spaces.*.owner_ids` | オーナーとして扱う Discord のユーザー ID。既定値は Discord アプリの所有者です |
+| `blocks.discord.spaces.*.known` | 既知の Discord のユーザー ID を表示名に対応付けます |
+| `blocks.discord.spaces.*.default_target` | 送信先の名前を省略して SwB 宛てに送った新しいメッセージの送信先 |
+| `blocks.discord.spaces.*.project` | このスペースの既定の SwB プロジェクト |
+| `blocks.discord.spaces.*.channel_projects` | チャンネル ID か、`#` で始まる名前ごとに SwB のプロジェクトを設定します |
+| `blocks.discord.spaces.*.mode` | スペースのモード。チャンネルかスレッドのモードで上書きできます |
+| `blocks.discord.spaces.*.channels` | チャンネルかスレッドの ID ごとに、モードや詳しい設定を指定します |
+| `blocks.discord.spaces.*.channels.*.mode` | 1 つのチャンネルかスレッドのモード |
+| `blocks.discord.spaces.*.channels.*.actions` | `triage` モードで許可する操作。`reply` や `notify_owner` などです |
+| `blocks.discord.spaces.*.listen` | `assist` モードを使うチャンネルかスレッドの ID を指定する、以前の設定 |
+| `blocks.discord.spaces.*.bot_posts_per_hour` | 1 時間に 1 つのスレッドでボットが投稿できる最大の数。既定値は `20` です |

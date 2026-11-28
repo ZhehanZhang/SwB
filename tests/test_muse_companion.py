@@ -324,6 +324,28 @@ async def test_corebluetooth_constructor_has_event_loop():
     assert await transport._create_corebluetooth({"loop": loop}) is server
 
 
+async def test_corebluetooth_keeps_muse_name_in_advertisement_and_service_in_gatt(fake_ble, monkeypatch):
+    monkeypatch.setattr(muse, "sys", SimpleNamespace(platform="darwin"))
+    server = _FakeGatt(name=_BLE_NAME, loop=asyncio.get_running_loop(), adapter="hci0")
+    transport = muse._BlessTransport(muse._load_bless(), _BLE_NAME)
+
+    async def create(_params):
+        return server
+
+    async def start(*, prioritize_local_name):
+        assert server.scope == muse.SERVICE_UUID
+        assert set(server.characteristics) == {muse.RX_UUID, muse.TX_UUID}
+        name_size = 2 + len(_BLE_NAME.encode("ascii"))
+        assert 3 + name_size + 18 > 31
+        assert 3 + name_size <= 31
+        assert prioritize_local_name is True
+        return True
+
+    monkeypatch.setattr(transport, "_create_corebluetooth", create)
+    monkeypatch.setattr(server, "start", start, raising=False)
+    await transport.start(None)
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="BlueZ advertisement")
 async def test_bluez_advertisement_has_sdk_fields_without_changing_host_name():
     pytest.importorskip("bless")

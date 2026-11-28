@@ -24,7 +24,7 @@ Carry structure with headings, short paragraphs and tables. Use tabs for alterna
 
 The Simplified Chinese and Traditional Chinese docs follow the same rules. Write them natively, with short plain sentences and one idea per sentence. Keep the terms consistent across pages. Simplified Chinese uses mainland terms. Traditional Chinese uses Taiwan terms. Use full-width punctuation, and use none of the full-width colon, semicolon or dash in prose.
 
-Write zh-Hans to GB/T 15834 and Mainland usage, and zh-Hant to Taiwan punctuation and usage. Keep the technical directness of the English. Put one half-width space between Chinese and Latin letters, digits or inline code. Prefer positive phrasing. When a negation is the only correct and natural Chinese wording, keep it and mark the line with {/* negation-ok */} so the style check accepts it.
+Write zh-Hans to GB/T 15834 and Mainland usage, and zh-Hant to Taiwan punctuation and usage. Keep the technical directness of the English. Put one half-width space between Chinese and Latin letters, digits or inline code. Prefer positive phrasing. When a negation is the only correct and natural Chinese wording, keep it and add the exact phrase to allowedNegation in site/scripts/check-style.mjs.
 
 | en | zh-Hans | zh-Hant |
 | - | - | - |

@@ -9,6 +9,11 @@ const paidPlan = {
   en: 'Paid plan',
   'zh-Hans': '付费套餐',
   'zh-Hant': '付費方案',
+  es: "Plan de pago",
+  fr: "Offre payante",
+  de: "Kostenpflichtig",
+  ko: "유료 플랜",
+  ja: "有料プラン",
 };
 
 export const deployProviders = {
@@ -21,6 +26,11 @@ export const deployProviders = {
       en: 'Free with monthly allowance',
       'zh-Hans': '每月额度内免费',
       'zh-Hant': '每月額度內免費',
+      es: "Gratis dentro de la cuota mensual",
+      fr: "Gratuit avec quota mensuel",
+      de: "Kostenlos mit Monatskontingent",
+      ko: "월 무료 사용량 제공",
+      ja: "毎月の無料枠あり",
     },
   },
   render: {
@@ -43,6 +53,11 @@ export const deployProviders = {
       en: 'Hobby plan',
       'zh-Hans': 'Hobby 套餐',
       'zh-Hant': 'Hobby 方案',
+      es: "Plan Hobby",
+      fr: "Offre Hobby",
+      de: "Hobby-Plan",
+      ko: "Hobby 플랜",
+      ja: "Hobby プラン",
     },
   },
 } as const;

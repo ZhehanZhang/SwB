@@ -1,0 +1,70 @@
+---
+title: Telegram
+description: Telegram のメッセージをエージェントにルーティングし、回答を投稿します。
+---
+
+SwB は、新しいメッセージを Telegram に問い合わせて取得します。そのため、SwB サーバーは非公開のアドレスでも使えます。
+
+## ボットを作成する
+
+[@BotFather](https://t.me/BotFather) で `/newbot` を送ってください。Telegram の接続をエージェントに頼んでください。エージェントは `telegram_provision` を呼び出し、受け取りリンクを渡します。リンクを開いて、ボットトークンを貼り付けてください。
+
+## ボットをグループに追加する
+
+ボットをグループに追加してください。グループで `/swb@<bot username>` を送ってください。すると、`telegram_status` の `setup.seen_chats` にグループのチャット ID が表示されます。その ID を、スペースの `chats` に入れてください。
+
+ボットとの個人チャットを始めてください。ボットにメッセージを送ってください。`setup.seen_chats` で、自分の個人チャットの ID を確認してください。その ID を `owner_ids` に使ってください。
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## Telegram から送る
+
+ボットに個人メッセージを送るか、ボットをメンションするか、`/swb <target> <message>` を使ってください。会話を続けるときは、ボットの回答に返信してください。`persona_prefix` を有効にすると、エージェントの返信にエージェントの名前を太字で表示できます。
+
+ボットにグループのすべてのメッセージを読ませるときは、@BotFather の `/setprivacy` でプライバシーモードをオフにしてください。そのあと、ボットをグループから削除し、もう一度追加してください。
+
+## ブロックの設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.telegram` | Telegram のボットとそのスペースの設定 |
+| `blocks.telegram.use` | `telegram` ブロックを読み込みます |
+| `blocks.telegram.enabled` | `true` でブロックを読み込み、`false` で止めます |
+| `blocks.telegram.token_env` | ボットトークンの環境変数の名前 |
+| `blocks.telegram.dm_space` | 個人チャットにルーティングとオーナーの設定を適用するスペース。既定値は、最初に設定したスペースです |
+| `blocks.telegram.dm_mode` | ほかの人からの個人メッセージのモード。ダイジェストにまとめるときは `watch`、破棄するときは `off` を使います |
+| `blocks.telegram.ack_reaction` | ボット宛てのメッセージの受信を示す絵文字。このリアクションを止めるときは `null` を設定します |
+| `blocks.telegram.persona_prefix` | `true` にすると、エージェントが使う名前を 1 行目に太字で入れます |
+| `blocks.telegram.refresh_minutes` | 送信先の一覧を更新する間隔（分）。既定値は `30` です |
+| `blocks.telegram.target_aliases` | 追加の送信先の名前を、既存の送信先に対応付けます |
+| `blocks.telegram.agents` | 各エージェントが投稿とイベントの受信をできるスペース。すべてのスペースには `*` を使います |
+
+プロジェクトのルートを通じてエージェントを起こすときは、[チャンネルモード](/ja/docs/channel-modes)を使ってください。
+
+## スペースとグループ
+
+| キー | 用途 |
+| - | - |
+| `blocks.telegram.spaces` | SwB で使う名前を、Telegram のグループのまとまりの設定に対応付けます |
+| `blocks.telegram.spaces.*.chats` | このスペースのグループチャットの ID。負の整数を使います。各グループは 1 つのスペースにだけ入れてください |
+| `blocks.telegram.spaces.*.owner_ids` | オーナーとして扱う Telegram のユーザー ID |
+| `blocks.telegram.spaces.*.known` | 既知の Telegram のユーザー ID を表示名に対応付けます |
+| `blocks.telegram.spaces.*.default_target` | 送信先の名前を省略して SwB 宛てに送った新しいメッセージの送信先 |
+| `blocks.telegram.spaces.*.project` | このスペースの既定の SwB プロジェクト |
+| `blocks.telegram.spaces.*.channel_projects` | グループチャットの ID ごとに SwB のプロジェクトを設定します |
+| `blocks.telegram.spaces.*.mode` | スペースのモード。グループのモードで上書きできます |
+| `blocks.telegram.spaces.*.channels` | グループチャットの ID ごとに、モードや詳しい設定を指定します |
+| `blocks.telegram.spaces.*.channels.*.mode` | 1 つのグループのモード |
+| `blocks.telegram.spaces.*.channels.*.project` | 1 つのグループの SwB プロジェクト。スペースのプロジェクトより優先されます |
+| `blocks.telegram.spaces.*.listen` | `assist` モードを使うグループチャットの ID を指定する、以前の設定 |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | 1 時間に 1 つの会話スレッドでボットが投稿できる最大の数。既定値は `20` です |

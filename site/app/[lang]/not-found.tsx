@@ -9,6 +9,11 @@ const copy = {
   en: { title: 'Page missing', home: 'Home' },
   'zh-Hans': { title: '页面不存在', home: '返回首页' },
   'zh-Hant': { title: '找不到頁面', home: '返回首頁' },
+  es: { title: 'Página no disponible', home: 'Inicio' },
+  fr: { title: 'Page indisponible', home: 'Accueil' },
+  de: { title: 'Seite nicht verfügbar', home: 'Startseite' },
+  ko: { title: '페이지를 찾을 수 없습니다', home: '홈' },
+  ja: { title: 'ページが見つかりません', home: 'ホーム' },
 };
 
 export default function NotFound() {

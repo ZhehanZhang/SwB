@@ -57,6 +57,8 @@ auth:
     aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
+以 Cloudflare Access 登入時，SwB 使用 `Cf-Access-Jwt-Assertion` 標頭中的權杖。如果請求中缺少這個標頭，或標頭是空的，SwB 會改從 `CF_Authorization` Cookie 讀取權杖。Cookie 是瀏覽器隨請求一起送出的值。SwB 用 `team_domain` 提供的公開金鑰檢查 RS256 簽章。權杖的核發者必須與 `team_domain` 的 HTTPS 網址相符。權杖的對象（audience）必須包含 `aud`。權杖如果帶有核發時間、生效時間和到期時間，SwB 會逐一檢查。SwB 把電子郵件地址轉成小寫，再與 `owner_emails` 比對。
+
 再次執行 `docker compose --profile tunnel up -d` 來套用設定。
 
 ## 發布主機名稱

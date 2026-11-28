@@ -1,0 +1,120 @@
+---
+title: Sesiones locales
+description: Envía mensajes a agentes de programación que se ejecutan en un dispositivo emparejado.
+---
+
+Una sesión local es un espacio de trabajo abierto de un agente de programación en un dispositivo emparejado. SwB la muestra como destino. Un destino es una dirección que puede recibir un mensaje.
+
+## Emparejar el dispositivo
+
+Sigue [Emparejar un dispositivo](/es/docs/companion#emparejar-un-dispositivo). Usa el comando de tu agente que aparece más abajo. Cambia `https://swb.example.com` por tu dirección de SwB. Usa una opción `--cap` por cada función. Para cambiar las funciones de un dispositivo emparejado, [desconéctalo](/es/docs/companion#desconectar) primero.
+
+Desde un agente propietario, llama a `targets(block="local")` para comprobar cada configuración. Copia la dirección de tu sesión. El formato es `local:session:<companion>:<harness>:<session>`. Un harness es el programa que ejecuta el agente.
+
+## Enviar un mensaje
+
+Pasa la dirección de la sesión como `to` en `send`. SwB intenta entregar el mensaje a la sesión abierta. Para una sesión con un agente asociado, la entrega al buzón exige acceso al buzón de ese agente. En las demás sesiones, un mensaje del propietario va al buzón del propietario. Usa el ID de conversación devuelto con `result` para leer la respuesta.
+
+| Estado | Significado |
+| --- | --- |
+| `working` | El agente está trabajando |
+| `blocked` | El agente espera una aprobación o una respuesta |
+| `idle` | El agente está listo para trabajar |
+| `done` | El agente terminó su trabajo |
+| `unknown` | El estado está pendiente de confirmar |
+
+Si una sesión está bloqueada, responde a la solicitud en la sesión. SwB conserva el mensaje en el buzón si el remitente puede usar ese buzón.
+
+El companion informa del estado de la sesión a tu servidor SwB. También puede enviar el nombre de la sesión y el nombre de la carpeta. El companion puede devolver una respuesta a cada mensaje que entrega directamente. El resto de la sesión se queda en el dispositivo.
+
+## Hooks de estado
+
+Un hook ejecuta un comando cuando un agente informa de un cambio. Los hooks de estado funcionan en macOS y Linux.
+
+```sh
+swb companion connect https://swb.example.com --cap hooks
+```
+
+Instala el comando `swb` con [pipx](/es/docs/install). Asegúrate de que `swb` está en la ruta de búsqueda de comandos del agente. Si defines `SWB_COMPANION_HOME`, usa la misma carpeta para el agente y el companion.
+
+| Agente | Comando de evento | Configuración |
+| --- | --- | --- |
+| Claude Code | `swb hook claude-code` | Incorpora los `hooks` de `channel/hooks/hooks.json` a `~/.claude/settings.json` |
+| Gemini CLI | `swb hook gemini` | Instala la extensión de SwB desde la copia local como se muestra abajo |
+| Codex | `swb hook codex` | Incorpora los `hooks` de `integrations/codex/hooks.json` a `~/.codex/hooks.json` |
+
+Usa los archivos de la [copia local de la versión publicada de SwB](/es/docs/self-hosting#docker-compose). El plugin de SwB para Claude Code también incluye estos hooks. Para una carpeta de ajustes de Codex personalizada, usa el `hooks.json` de esa carpeta.
+
+```sh
+gemini extensions install /path/to/SwB/integrations/gemini
+```
+
+Abre una sesión nueva después de configurar el hook. Comprueba que su dirección aparece en `targets(block="local")`. Si solo activas los hooks, las sesiones reciben los mensajes a través de sus buzones.
+
+## Herdr
+
+Abre un agente de programación en un panel de Herdr, un área de la terminal. El companion recibe los eventos de sesión a través del socket de Herdr. Un socket es una conexión que usan los programas dentro del mismo dispositivo.
+
+Para una sesión con nombre o una ruta de socket personalizada, consulta los [ajustes de Herdr del companion](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48).
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+Para recibir respuestas desde el panel, configura el [hook de estado](#hooks-de-estado) que corresponda. Comprueba que existe un destino `local:session:<companion>:herdr:<session>`. Envía un mensaje corto de prueba al destino. Comprueba que aparece en el panel. Si configuraste un hook de estado, comprueba la respuesta con `result`.
+
+## Codex
+
+El servidor de la app Codex es un proceso que da a otros programas acceso a las sesiones abiertas de Codex. Inícialo en una terminal.
+
+```sh
+codex app-server --listen unix://
+```
+
+Abre una sesión desde una segunda terminal.
+
+```sh
+codex --remote unix://
+```
+
+Usa otra terminal para el companion. Usa la misma carpeta de ajustes de Codex en todas las terminales. Para un socket personalizado, usa `unix://<path>` en los dos comandos anteriores. Define `SWB_CODEX_SOCKET` con esa ruta en la terminal del companion.
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+El companion lee los eventos de sesión del servidor de la app. Comprueba que existe un destino `local:session:<companion>:codex:<session>`. Envía un mensaje corto de prueba al destino. Comprueba la respuesta con `result`.
+
+## OpenCode
+
+Inicia el servidor OpenCode en el dispositivo.
+
+```sh
+opencode serve --hostname 127.0.0.1 --port 4096
+```
+
+Abre una sesión en ese servidor. Define `SWB_OPENCODE_URL` con la dirección local del servidor. Para un servidor protegido con contraseña, consulta los [ajustes de OpenCode del companion](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228).
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+El companion lee los eventos de sesión del servidor OpenCode. Comprueba que existe un destino `local:session:<companion>:opencode:<session>`. Envía un mensaje corto de prueba al destino. Comprueba la respuesta con `result`.
+
+## DeepSeek Harness
+
+Usa DeepSeek Harness `0.2.2-rc.5`. Un perfil es un conjunto de ajustes de la app. Instala el puente de SwB en el perfil `web`. El puente envía los eventos de sesión al companion.
+
+Usa una copia local de la rama `release/1.0`. Cambia `/path/to/SwB` por la ruta completa de esa copia.
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+Reinicia DeepSeek Harness con el perfil `web`. Abre una sesión. Si defines `SWB_COMPANION_HOME`, usa la misma ruta absoluta para DeepSeek Harness y el companion.
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+Comprueba que existe un destino `local:session:<companion>:dsh:<session>`. Envía un mensaje corto de prueba al destino. Comprueba la respuesta con `result`.

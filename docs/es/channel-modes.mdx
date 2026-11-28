@@ -1,0 +1,100 @@
+---
+title: Modos de canal
+description: Elige cómo trata SwB los mensajes de cada espacio.
+---
+
+Un **espacio** es un lugar donde llegan mensajes. Son espacios los canales de Slack, los canales e hilos de Discord, los grupos de Telegram y los repositorios de GitHub.
+
+| Modo | Lo que hace SwB |
+| - | - |
+| `off` | Descarta todos los eventos de GitHub, también los del propietario. En Slack, Discord y Telegram descarta los mensajes de otras personas |
+| `watch` | Reúne los mensajes en un resumen de los eventos recientes |
+| `assist` | Despierta a un agente para que lea el contexto y responda en el hilo |
+| `triage` | Despierta a un agente para que revise un evento y elija una respuesta. La acción predeterminada es una respuesta en el hilo |
+| `work` | Atiende los mensajes del propietario |
+
+En Slack, Discord y Telegram, tus menciones y mensajes directos usan `work` en todos los modos. Los ajustes de visibilidad siguen controlando el acceso a canales y destinos.
+
+Para el modo `work` de GitHub, añade tu número de cuenta a la [lista de propietarios](/es/docs/blocks/github#cuentas-de-propietario) del espacio.
+
+## Definir un modo
+
+Elige el modo en **Channel modes**, en la página de la conexión o del proyecto. También puedes definirlo en YAML. El propietario puede usar `space_mode` para definir el modo, el destino, el proyecto y las acciones permitidas.
+
+YAML es el formato de texto del archivo de configuración de SwB. En YAML, escribe `"off"` entre comillas.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      example-org/app:
+        mode: "off"
+```
+
+SwB comprueba primero el ajuste guardado y después los ajustes del canal y del espacio. Luego comprueba los ajustes antiguos del bloque, el modo del proyecto y `modes.default`. El valor predeterminado es `off`.
+
+## Vincular un destino
+
+En GitHub, Slack, Discord y Telegram, la ruta del proyecto puede despertar a un agente en modo `assist`, `triage` o `work`. SwB usa el primer destino aplicable.
+
+| Orden | Destino |
+| - | - |
+| Primero | El destino del ajuste guardado de `space_mode`. Un ajuste de canal sustituye todo el ajuste del espacio |
+| Después | El `target` de YAML en el ajuste de modo del canal, del espacio o del proyecto, en ese orden |
+| Después | En `triage`, un destino disponible llamado `claude-<project>-triage`, como una rutina de Claude |
+| Después | El `default_target` del espacio o su alias `target` |
+| Al final | La ruta del proyecto |
+
+Elige un destino de `targets`. Este ejemplo vincula el buzón de un agente a un espacio de GitHub existente.
+
+```python
+space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
+```
+
+Usa `mode="assist"` para el modo assist. Omite `target` para conservar la vinculación. Usa `target=""` para quitarla.
+
+Para definir la ruta de reserva, llama a `routes_set` con el proyecto vinculado y la dirección del destino. Para una ruta de Capy bloqueada, usa un destino como `capy:captain:<name>` y mantén `allow_override=false`.
+
+## Permitir remitentes externos de GitHub
+
+Llama a `visibility_list` para ver los nombres que puedes usar en `visibility_set`. La dirección `agent:beta` apunta al buzón. La regla `target:beta` controla quién puede llegar a él.
+
+```python
+visibility_set(resource="channel:github/acme/app", visibility="shared")
+visibility_set(resource="target:beta", visibility="shared")
+```
+
+Para limitar el acceso a un solo remitente, usa el mismo ID de remitente verificado en los dos recursos. Por ejemplo, usa `visibility=["github:1234"]` en ambos.
+
+## Leer un resumen de Watch
+
+Define el intervalo con `modes.digest_minutes`. El valor predeterminado es 60 minutos. SwB pone el resumen en el buzón del destino cuando termina el intervalo o cuando el lote llega a 50 eventos. Si falta el destino, SwB usa el buzón del propietario.
+
+Lee cada resumen como propietario en **Inbox**, en la consola, o por MCP con `inbox` y `wait`. El resumen indica el número de eventos. Muestra el autor, un fragmento y el enlace disponible de cada evento. Su nivel de confianza es `external`.
+
+En modo Watch, los agentes siguen dormidos. Usa la bandeja de entrada para leer un resumen. Los [destinos de eventos de GitHub](/es/docs/blocks/github) siguen recibiendo una copia de cada evento.
+
+## Acciones de triage
+
+El agente de triage puede leer información sobre el evento. De forma predeterminada, su única acción es `reply` en el mismo hilo. Usa `github_reply` para un hilo de GitHub. Pasa el ID de la conversación en `handle`. Pon la respuesta en `text`.
+
+Define `actions` en `space_mode` o en YAML para dar más acciones al agente. Incluye `reply` para mantener activas las respuestas. Por ejemplo, usa `actions=["reply", "notify_owner"]`.
+
+| Acción | Lo que hace |
+| - | - |
+| `label` | Añade etiquetas a una issue o una pull request de GitHub |
+| `comment` | Añade un comentario en GitHub |
+| `open_issue` | Abre una issue en GitHub |
+| `link_duplicate` | Vincula y cierra una issue duplicada de GitHub |
+| `notify_owner` | Envía una nota al propietario |
+
+Los cambios en GitHub necesitan una credencial de GitHub con permiso de escritura. SwB anota las acciones de triage en el registro de auditoría.
+
+## Comprobar una entrega
+
+Usa `modes_status` para comprobar el modo, su destino, sus acciones y los problemas de configuración. La fila de modo de la consola muestra el agente vinculado. En triage, la sugerencia de agente predeterminado aparece solo cuando SwB recurre a la ruta de reserva. Tanto `space_mode` como `modes_status` te piden que elijas un agente de triage cuando el modo triage necesita un destino.
+
+SwB anota en el registro de auditoría los motivos de descarte en Slack, Discord y Telegram. Anota como máximo una entrada cada 10 minutos para el mismo bloque, espacio, canal y motivo.
+
+SwB también anota los motivos de los webhooks de GitHub descartados. Abre **Audit** o ejecuta `swb log` para ver el motivo.

@@ -18,6 +18,8 @@ const pages = {
   '/zh-Hans/docs/setup/mcp-client': html('zh-Hans', 'MCP 客户端'),
   '/zh-Hant/docs': html('zh-Hant', 'SwB'),
   '/zh-Hant/docs/setup/mcp-client': html('zh-Hant', 'MCP 用戶端'),
+  ...Object.fromEntries(Object.entries({ es: 'Cliente MCP', fr: 'Client MCP', de: 'MCP-Client', ko: 'MCP 클라이언트', ja: 'MCP クライアント' })
+    .flatMap(([lang, title]) => [[`/${lang}/docs`, html(lang, 'SwB')], [`/${lang}/docs/setup/mcp-client`, html(lang, title)]])),
   '/': html('en', 'SwB', '<h1 id="landing-heading">First-party agents working together</h1>'),
   '/about': html('en', 'About'),
   '/prompts/claude.md': ['text/markdown', 'Help me connect Claude to SwB.'],
@@ -46,7 +48,7 @@ async function startFixture(t, respond) {
 test('fetches all public routes and follows redirects', async (t) => {
   const { requested, run } = await startFixture(t);
   const { stdout } = await run();
-  assert.match(stdout, /passed for 10 routes/);
+  assert.match(stdout, /passed for 20 routes/);
   assert.deepEqual(requested.sort(), ['/docs', ...Object.keys(pages)].sort());
 });
 

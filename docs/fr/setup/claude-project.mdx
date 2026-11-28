@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: Laissez SwB lancer une routine Claude Code qui travaille dans votre Claude Project.
+---
+
+Une routine est une tâche Claude Code enregistrée qui s'exécute d'elle-même. SwB lance la routine dans votre Claude Project quand un autre agent lui confie du travail. La routine répond dans la même conversation SwB.
+
+## Avant de commencer
+
+Il vous faut Claude Pro, Max ou Ultra avec l'accès aux Claude Code Projects. Ouvrez [Claude Code](https://claude.ai/code) et sélectionnez **Projects**. [Inscrivez-vous sur la liste d'attente](https://claude.com/form/projects) pour obtenir l'accès.
+
+Ajoutez SwB au même compte Claude. Consultez [Claude](/fr/docs/setup/claude). Activez le bloc `claude-routine` dans `config/switchboard.yaml`.
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="claude-project" lang="fr" />
+
+Ouvrez votre projet dans [Claude Code](https://claude.ai/code). Collez le prompt dans la discussion du coordinateur, à gauche. Le coordinateur crée dans votre projet une routine nommée `swb <project>`.
+
+## Ouvrir la routine
+
+Ouvrez le lien de la routine fourni par le coordinateur ou suivez l'un de ces chemins.
+
+### Depuis la page Routines
+
+Ouvrez la [page Routines](https://claude.ai/code/routines). Cliquez sur la bannière en haut pour afficher les routines de projet masquées. Ouvrez `swb <project>`.
+
+### Depuis le projet
+
+Cliquez sur **+** dans la rangée d'onglets en haut du panneau de droite. Sélectionnez **Routines**. Ouvrez `swb <project>`. Cliquez sur **View full page**.
+
+## Ouvrir le déclencheur API
+
+Ouvrez le menu à côté du nom de la routine. Sélectionnez **Edit**. Dans le formulaire, sélectionnez **Trigger**, puis **+**, puis **API**.
+
+Copiez la **Fire URL**. Donnez cette URL au coordinateur.
+
+## Générer et enregistrer le jeton
+
+Le propriétaire génère le jeton dans Claude. Sélectionnez **Generate token**. Copiez le jeton tant que la fenêtre **Token generated** est ouverte.
+
+Ouvrez le lien de saisie fourni par le coordinateur. Vérifiez le projet et l'ID de la routine sur la page **Claude routine token**. Collez le jeton dans **Token**. Sélectionnez **Save token**.
+
+SwB affiche **Routine saved** ou **Routine and project saved**. Prévenez le coordinateur quand le jeton est enregistré.
+
+## Ce que fait l'agent
+
+Le coordinateur appelle `connect(what="claude-project")` depuis un client SwB doté d'un accès propriétaire complet. SwB vérifie le bloc `claude-routine` et liste ses routines. Le coordinateur peut appeler `project_list` pour trouver votre projet SwB.
+
+Le coordinateur ajoute un déclencheur API. Il place cette instruction dans le prompt de la routine avec le nom exact du Claude Project.
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+Le coordinateur rappelle `connect` avec `fire_url`, `claude_project` et `project` dans `choose`. SwB renvoie un lien de saisie. Un lien de saisie ouvre une page SwB privée où vous saisissez un identifiant. Ce lien sert une seule fois et expire après 30 minutes.
+
+Si SwB trouve des projets proches, l'agent vous demande d'en choisir un. Pour un nouveau projet, il appelle `connect` avec un nouveau nom court et `create_new` défini sur `true`.
+
+## Identifiants
+
+| Élément | Où Claude l'affiche | Format | Destination |
+| - | - | - | - |
+| Jeton de routine | **Token generated** dans le panneau API, une seule fois | Commence par `sk-ant-oat01-` | Le champ **Token** du lien de saisie SwB |
+| Fire URL | **Fire URL** dans le panneau API | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | L'agent dans la discussion du coordinateur. L'URL désigne uniquement la routine. |
+
+## Vérifier la connexion
+
+Le coordinateur appelle `routine_list` pour vérifier le projet et l'état `untested`. Il envoie un message de test avec `send`. Un lancement réussi renvoie `fired: true` et fait passer l'état à `tested`. Ouvrez le lien de session si Claude en renvoie un. Vérifiez que la session s'exécute dans votre projet.
+
+## Résoudre les problèmes
+
+Si le lien de saisie a expiré, demandez à l'agent de rappeler `connect` pour obtenir un nouveau lien. Si vous cliquez sur **Regenerate** dans le panneau API, l'ancien jeton cesse aussitôt de fonctionner. Demandez à l'agent d'enregistrer de nouveau la routine, puis enregistrez le nouveau jeton via le nouveau lien de saisie.
+
+Si Claude renvoie **this project is paused** pour une requête avec du texte, SwB réessaie avec une requête vide. La routine récupère alors le message avec `routine_pickup`. Si votre projet est en pause, reprenez-le dans Claude.

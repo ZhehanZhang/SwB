@@ -57,6 +57,8 @@ auth:
     aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
+使用 Cloudflare Access 登录时，SwB 取 `Cf-Access-Jwt-Assertion` 请求头中的令牌。如果这个请求头为空或缺失，SwB 改从 `CF_Authorization` Cookie 中读取令牌。Cookie 是浏览器随请求发送的一个值。SwB 用 `team_domain` 提供的公钥校验 RS256 签名。令牌的签发者必须与 `team_domain` 的 HTTPS 地址一致。令牌的受众中必须包含 `aud`。如果令牌带有签发时间、生效时间和过期时间，SwB 会逐一检查。SwB 把电子邮件地址转成小写，再与 `owner_emails` 比对。
+
 再次运行 `docker compose --profile tunnel up -d`，让设置生效。
 
 ## 发布主机名

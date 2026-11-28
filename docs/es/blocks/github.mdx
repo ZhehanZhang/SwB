@@ -1,0 +1,102 @@
+---
+title: GitHub App
+description: Envía los eventos de GitHub a tus agentes y servicios.
+---
+
+## Crear la app
+
+Crea una GitHub App en tu cuenta. Define como dirección del webhook tu dirección pública de SwB seguida de `/github/webhook`. Por ejemplo, usa `https://swb.example.com/github/webhook`. Genera un secreto de webhook en un archivo privado. SwB acepta secretos de 16 caracteres como mínimo.
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
+```
+
+Escribe el secreto en **Webhook secret**. Pide a un agente que conecte GitHub. Guarda el mismo secreto con su enlace de entrega. Borra el archivo privado. Reinicia SwB para cargar el secreto. Pide al agente que llame a `connect` otra vez para obtener los enlaces que falten del App ID o de la clave privada. Pega todo el contenido del archivo `.pem` en el campo de la clave privada.
+
+## Permisos
+
+En **Repository permissions**, usa los niveles de acceso de la tabla.
+
+| Recurso del repositorio | Acceso | Eventos |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`, `issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`, `check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | **Read-only** automáticamente | |
+
+Instala la app en los repositorios que quieras.
+
+## Enrutar eventos
+
+```yaml
+blocks:
+  github:
+    use: github
+    sinks:
+      team: {url_env: SWB_EXAMPLE_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+En el entorno de tu servidor, define `SWB_EXAMPLE_GITHUB_SINK_URL` con la dirección del receptor.
+
+Un **sink** es una URL que recibe una copia de un evento. SwB envía a cada sink que coincida un evento JSON compacto en modo `watch`. Un repositorio con una ruta a un sink usa `watch` de forma predeterminada. Los modos de canal y de espacio tienen prioridad. SwB añade los detalles adicionales como texto citado en `metadata`. Cada petición usa el ID de entrega del evento como `Idempotency-Key`. SwB reintenta los fallos de conexión, los tiempos de espera agotados y las respuestas HTTP 5xx.
+
+Si Cloudflare Access protege tu host, deja pasar `/github/webhook`. La firma de GitHub protege esa ruta.
+
+## Cuentas de propietario
+
+En el modo `off`, SwB descarta todos los eventos de GitHub del espacio, también los de las cuentas de propietario.
+
+Usa el modo `work` para aceptar solo los eventos de las cuentas de propietario configuradas. Cambia `USERNAME` en `https://api.github.com/users/USERNAME` por tu nombre de usuario de GitHub. Abre la URL. Copia el `id` numérico en la lista `owner_ids` del espacio. Reinicia SwB para aplicar el ajuste.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        owner_ids: [4242]
+        mode:
+          mode: work
+          target: agent:beta
+```
+
+Usa `blocks.github.owner_ids` para definir los IDs de propietario predeterminados. La lista `owner_ids` de un espacio sustituye ese valor predeterminado. Una lista vacía en el espacio anula ese valor predeterminado.
+
+SwB comprueba el autor de cada título, cuerpo o comentario. El texto cuenta como `owner` solo cuando su propio autor está en `owner_ids` y es una persona. SwB trata como `external` los nombres de ramas, las refs, los títulos de workflows y los nombres de checks.
+
+Un `check_run` con nombre de check tiene el nivel de confianza `external`, aunque lo lance el propietario. Una pull request desde un fork puede definir el nombre del check. Usa IDs como `github:4242` en las reglas de acceso. Estas reglas dan acceso con independencia de la confianza.
+
+En las acciones de conversación de GitHub, pasa el ID de conversación de SwB en `conversation` o en `handle`.
+
+## Configuración
+
+| Clave | Uso |
+| - | - |
+| `blocks.github` | Ajustes de los eventos y las acciones de GitHub |
+| `blocks.github.use` | Tipo de bloque. Usa `github` |
+| `blocks.github.enabled` | Usa `false` para omitir este bloque |
+| `blocks.github.app_id_env` | Nombre de la variable que contiene el App ID |
+| `blocks.github.private_key_env` | Nombre de la variable que contiene la clave privada de la App |
+| `blocks.github.token_env` | Nombre de la variable que contiene un token de permisos detallados, como alternativa a las credenciales de la App |
+| `blocks.github.secret_env` | Nombre de la variable que contiene el secreto del webhook |
+| `blocks.github.sinks` | Ajustes por nombre de receptor de eventos |
+| `blocks.github.sinks.*.url_env` | Nombre de la variable que contiene la dirección del receptor |
+| `blocks.github.routes` | Asigna nombres de repositorio u `owner/*` a listas de receptores de eventos |
+| `blocks.github.owner_ids` | Lista predeterminada de IDs numéricos de usuarios de GitHub que se tratan como propietarios de confianza |
+| `blocks.github.spaces` | Conjuntos con nombre de repositorios que comparten ajustes. Un nombre como `acme/app` elige ese repositorio |
+| `blocks.github.spaces.*.repo` | Nombre del repositorio con la forma `owner/repo` |
+| `blocks.github.spaces.*.owner_ids` | Lista de IDs numéricos de usuarios de GitHub que sustituye la lista predeterminada en este espacio |
+| `blocks.github.spaces.*.mode` | [Modo de canal](/es/docs/channel-modes) predeterminado de los repositorios de este espacio |
+| `blocks.github.spaces.*.mode.target` | Destino en los ajustes del modo. Elige una dirección como `agent:beta` |
+| `blocks.github.spaces.*.project` | Proyecto de SwB predeterminado para los eventos de este espacio |
+
+Vincula un agente a un repositorio con `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`. Usa `mode="assist"` para el modo assist. Elige un destino de `targets`. SwB usa como reserva la ruta del proyecto vinculado.
+
+Para los remitentes externos, da acceso a `channel:github/acme/app` y también a `target:beta`. Consulta la [visibilidad de canales](/es/docs/channel-modes#permitir-remitentes-externos-de-github) para las reglas de acceso.
+
+En el modo `watch`, SwB envía un resumen al buzón del destino cuando pasa el tiempo de `modes.digest_minutes` o cuando reúne 50 eventos para ese buzón y ese espacio. Consulta [Resúmenes de Watch](/es/docs/channel-modes#leer-un-resumen-de-watch).

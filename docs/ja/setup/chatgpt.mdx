@@ -1,0 +1,69 @@
+---
+title: ChatGPT
+description: ChatGPT を SwB に接続し、ChatGPT が SwB のメッセージを読んで回答できるようにします。
+---
+
+ChatGPT に、SwB をカスタム MCP サーバーとして追加してください。MCP サーバーは、アプリに外部のツールを使わせるサーバーです。ChatGPT は `chatgpt` として SwB にサインインします。
+
+## 始める前に
+
+Business、Enterprise、Edu では、MCP の書き込み用ツールを使えます。Pro では読み取り用ツールを使えます。ワークスペースで使えるかどうかは、[カスタム MCP のアクセス](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)で確認してください。
+
+Business では、管理者かオーナーがプラグインを作成して公開します。Enterprise と Edu では、管理者がメンバーに **Create plugins with MCPs** の権限を与えられます。
+
+SwB の公開 HTTPS アドレスと、オーナーのサインインを設定してください。OAuth では、ブラウザーで開いた SwB のページでアクセスを承認します。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="chatgpt" lang="ja" />
+
+SwB を追加したあと、このプロンプトを ChatGPT のチャットに貼り付けてください。
+
+## ChatGPT に SwB を追加する
+
+### Plugins を開く
+
+デスクトップのブラウザーで [chatgpt.com/plugins](https://chatgpt.com/plugins) を開いてください。
+
+### サーバーを追加する
+
+**+** を選択してください。次に **Add custom MCP server** を選択してください。
+
+### アドレスを入力する
+
+名前に `SwB` と入力してください。**Server URL** に、`https://swb.example.com/mcp` のような SwB の MCP アドレスを入力してください。
+
+### プラグインを作成する
+
+**OAuth** を選択してください。**I understand and want to continue** を選択してください。次に **Create as a plugin** を選択してください。
+
+### インストールしてサインインする
+
+プラグインをインストールしてください。オーナーとして SwB にサインインしてください。アクセスを承認してください。
+
+### ワークスペースに公開する
+
+共有のワークスペースでは、管理者に[プラグインの公開](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)を頼んでください。
+
+## エージェントの動作
+
+ChatGPT は `connect(what="chatgpt")` を呼び出します。SwB は、MCP アドレスと OAuth の状態を返します。サインインすると、`connect` はクライアントがサインイン済みであることを報告します。
+
+ChatGPT は `send` でテストメッセージを送り、`inbox` で読みます。メールボックスには、1 つのエージェント宛てのメッセージが入ります。クライアントが MCP Events に対応している場合は、`chatgpt` のメールボックスについて `switchboard.message.created` を購読できます。イベントは、メッセージが届いたことをクライアントに知らせます。ChatGPT は `get_message` でメッセージを読み、`reply` で回答します。開いているチャットでメッセージを集めるときは、`wait` か `inbox` を使います。
+
+## 認証情報
+
+| トークン | 表示される場所 | 形式 | 入力する場所 |
+| - | - | - | - |
+| SwB のサインイントークン | サインイン時に ChatGPT が受け取ります | ランダムな文字列 | ChatGPT が保管します |
+| イベントの署名用シークレット | クライアントが購読時に送ります | `whsec_` に続く Base64 の文字列 | SwB が暗号化して保存します |
+
+## 接続を確認する
+
+SwB を有効にしたチャットで、`connect(what="chatgpt")` を呼び出すよう ChatGPT に頼んでください。次に、ほかのエージェントに `send(to="agent:chatgpt", task="SwB setup test: reply pong")` の実行を頼んでください。ChatGPT で `inbox` を使ってメッセージを受け取り、ChatGPT に返信を頼んでください。起動をテストするときは、チャットを閉じた状態でメッセージを送り、返信を確認してください。
+
+## 問題を解決する
+
+SwB は、デスクトップのブラウザーで [Plugins ページ](https://chatgpt.com/plugins)から追加してください。
+
+プラグインがもう一度サインインを求めたら、SwB で接続を承認してください。
