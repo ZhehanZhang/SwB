@@ -43,6 +43,8 @@ jobs:
       - run: pnpm build
       - run: pnpm check:cjk
       - run: pnpm exec opennextjs-cloudflare build
+      - run: pnpm exec wrangler deploy --dry-run --env= --outdir .open-next/size-check
+      - run: node scripts/check-worker-size.mjs
 
   e2e:
     runs-on: ubuntu-latest
