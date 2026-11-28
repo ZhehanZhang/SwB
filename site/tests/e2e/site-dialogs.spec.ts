@@ -56,15 +56,22 @@ test.describe('Linux search shortcut', () => {
 
     const key = page.locator('[data-search-full] kbd').first();
     const shortcut = key.locator('..');
+    const keyTextX = () => key.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect().left;
+    });
     try {
       await page.goto('/', { waitUntil: 'commit' });
       await expect(key).toHaveText('⌘');
       await page.evaluate(() => document.fonts.ready);
       const before = await shortcut.boundingBox();
       expect(before).not.toBeNull();
+      const beforeTextX = await keyTextX();
       hydrate();
       await expect(key).toHaveText('Ctrl');
       expect(await shortcut.boundingBox()).toEqual(before);
+      expect(await keyTextX()).toBe(beforeTextX);
     } finally {
       hydrate();
     }
