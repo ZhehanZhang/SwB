@@ -24,7 +24,7 @@ The owner manages webhooks. Call `webhook_create` with a name, a verification me
 
 Paste the returned URL in the provider’s webhook settings. For this example, get the signing secret from Stripe. A signing secret is a shared key that lets SwB check that the event came from the provider.
 
-Open the claim link, a link to the page where the owner saves the secret. Save the secret there. SwB keeps the saved secret private.
+A claim link opens the page where the owner saves the secret. Sign in to SwB as the owner. Then open the claim link. Save the secret there. SwB keeps the saved secret private.
 
 Set the [Cloudflare Access policy](/docs/setup/cloudflare#protect-the-console) for `/hooks/*` to **Bypass** if your SwB address uses Cloudflare Access.
 
@@ -76,7 +76,7 @@ This example uses a [Stripe snapshot event](https://docs.stripe.com/api/events/o
 
 Call `webhook_list` to see the address, counts and secret status. Set `include_revoked` to `true` to include revoked webhooks.
 
-Call `webhook_rotate` with the webhook name to get a claim link for a new secret. Save the new secret through that link. Update the provider or receiver with the new secret. For a path secret, update the provider’s URL.
+Call `webhook_rotate` with the webhook name to get a claim link for a new secret. Sign in to SwB as the owner. Then open the claim link. Save the new secret there. Update the provider or receiver with the new secret. For a path secret, update the provider’s URL.
 
 Set `grace_s` to keep the old secret valid after you save its replacement. The grace period starts at the tool call and lasts up to seven days. For outbound webhooks, SwB signs with both secrets after the change and during that period. If the receiver changes its URL, save the new URL through the same claim link.
 
@@ -93,7 +93,7 @@ Call `webhook_create` with `direction` set to `out` and a name.
 }
 ```
 
-Open the claim link to save the receiver’s public HTTPS URL and the signing secret. Share the same `whsec_` signing secret with the receiver through a private channel.
+Sign in to SwB as the owner. Then open the claim link. Save the receiver’s public HTTPS URL and the signing secret. Share the same `whsec_` signing secret with the receiver through a private channel.
 
 Use `send` with `to` set to `webhook:out:alerts`. SwB sends this JSON body in a `POST` request.
 
@@ -153,7 +153,7 @@ For methods that check the timestamp, tolerance is the maximum difference betwee
 | - | - |
 | Request body | 256 KiB by default. Set `blocks.webhook.max_body_kb` to a whole number from 1 to 1024 |
 | New verified events per webhook across all addresses | 600 per 10 minutes |
-| Verification failures per webhook per client IP address | 20 per 10 minutes. A verified request always passes |
+| Verification failures per webhook per client IP address | 20 per 10 minutes |
 | Requests to wrong addresses per client IP address | 20 per 10 minutes |
 | Replay window for Stripe, Linear, Sentry, Standard Webhooks and HMAC | 30 days |
 | Timestamp tolerance for Stripe and Standard Webhooks | 300 seconds by default |
@@ -161,6 +161,8 @@ For methods that check the timestamp, tolerance is the maximum difference betwee
 | Custom timestamp tolerance for Stripe, Linear and Standard Webhooks | Set `tolerance_s` from 1 to 3600 seconds |
 | Replay check for Sentry and HMAC | SwB checks for repeat bodies only |
 | Replay check for bearer and path | SwB checks the secret only |
+
+SwB checks the failure limit after verification. After 20 failures for the same webhook and client IP address within 10 minutes, further failures receive `429`. Each counted failure expires after 10 minutes. Verified requests can still proceed while the failure limit applies. The separate 600-event limit returns `429` for all requests to the webhook once the webhook reaches that limit.
 
 SwB uses `trusted_proxies` to find the client IP address when a trusted server forwards requests.
 
@@ -172,6 +174,8 @@ SwB uses `trusted_proxies` to find the client IP address when a trusted server f
 | - | - | - |
 | `stripe` | `Stripe-Signature` | The `whsec_` signing secret for the endpoint in [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) |
 
+Hexadecimal uses the digits `0` through `9` and the letters `a` through `f`. SwB requires lower-case hexadecimal letters in Stripe signatures.
+
 SwB checks the signed time against its clock with a default tolerance of 300 seconds.
 
 ### Linear
@@ -180,13 +184,15 @@ SwB checks the signed time against its clock with a default tolerance of 300 sec
 | - | - | - |
 | `linear` | `Linear-Signature` | The signing secret in [Linear webhook settings](https://linear.app/developers/webhooks) |
 
-SwB checks `webhookTimestamp` in the signed body with a default tolerance of 60 seconds.
+SwB accepts upper-case and lower-case hexadecimal letters in Linear signatures. SwB checks `webhookTimestamp` in the signed body with a default tolerance of 60 seconds.
 
 ### Sentry
 
 | `verify` | Header | Secret source |
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | The client secret of a [Sentry internal integration](https://docs.sentry.io/integrations/integration-platform/internal-integration/) |
+
+SwB accepts upper-case and lower-case hexadecimal letters in Sentry signatures.
 
 ### Svix and Standard Webhooks
 
@@ -201,7 +207,7 @@ SwB checks `webhookTimestamp` in the signed body with a default tolerance of 60 
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | The secret from [webhook creation](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) or the client secret in the Integration Console |
 
-Set `header` to `x-vercel-signature`. Use `"encoding": "hex"` and `"prefix": ""` for the plain hexadecimal signature. Hexadecimal uses the digits `0` through `9` and the letters `a` through `f`.
+Set `header` to `x-vercel-signature`. Set `"encoding": "hex"`. Set `"prefix": ""` for the plain hexadecimal signature. SwB accepts upper-case and lower-case hexadecimal letters in Vercel signatures.
 
 ### Home Assistant
 
@@ -236,7 +242,13 @@ In [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | A random secret you generate for this webhook |
 
-Use path verification for senders that can only call a URL. Choose a random secret of at least 16 letters or digits. Save it through the claim link. Replace `<secret>` at the end of the URL with the saved secret. Treat the whole URL as a secret. SwB keeps path secrets out of its access log.
+Use path verification for senders that can only call a URL. Generate a random path secret with OpenSSL.
+
+```sh
+openssl rand -hex 16
+```
+
+Save it through the claim link. Replace `<secret>` at the end of the URL with the saved secret. Treat the whole URL as a secret. SwB keeps path secrets out of its access log.
 
 In IFTTT, choose [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request). Set the method to `POST`. Enter the full URL.
 
@@ -246,7 +258,7 @@ In IFTTT, choose [**Make a web request**](https://ifttt.com/maker_webhooks/actio
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | A random secret you generate for this webhook |
 
-HMAC uses a shared secret to calculate a signature from the body. Set `header` to `X-Signature-256`, `encoding` to `hex` and `prefix` to `sha256=`.
+HMAC uses a shared secret to make a signature from the body. Set `header` to `X-Signature-256`. Set `encoding` to `hex`. Set `prefix` to `sha256=`. Both HMAC methods accept upper-case and lower-case letters in hexadecimal signatures.
 
 Generate a secret in a private file with [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/). Save its value through the claim link.
 
