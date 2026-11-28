@@ -1,12 +1,12 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { Plug } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronDown, Package, Plug } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { AgentExchange } from '@/components/agent-exchange';
 import { BlockHeader, GuideLink } from '@/components/block-actions';
-import { DeployProviders, DeployTile } from '@/components/deploy-providers';
+import { deployRowClass, DeployProviders, DeployTile } from '@/components/deploy-providers';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
@@ -34,14 +34,15 @@ export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
   return pageMetadata(lang, '/', 'SwB', tagline[lang]);
 }
 
-function DeployOption({ heading, intro, children, guide }: {
-  heading: string; intro: string; children: ReactNode; guide: ReactNode;
+function DeployOption({ heading, intro, children, guide, secondary }: {
+  heading: string; intro: string; children: ReactNode; guide?: ReactNode; secondary: ReactNode;
 }) {
   return (
-    <div className="grid min-w-0 gap-2" data-deploy-option>
+    <div className="grid min-w-0 gap-2 min-[900px]:row-span-4 min-[900px]:grid-rows-subgrid" data-deploy-option>
       <BlockHeader guides={guide}><h3 className="text-base font-semibold">{heading}</h3></BlockHeader>
       <p className={deployIntro}>{intro}</p>
-      {children}
+      <div className="grid min-w-0" data-deploy-primary>{children}</div>
+      <div className="grid min-w-0" data-deploy-secondary>{secondary}</div>
     </div>
   );
 }
@@ -89,21 +90,39 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-deploy">
             <h2 id="landing-deploy" className={sectionTitle}>{deploy.title}</h2>
-            <div className="mt-6 grid items-start gap-6 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)_minmax(0,1fr)] min-[900px]:gap-x-4 lg:gap-x-6" data-deploy-grid>
+            <div className="mt-6 grid gap-6 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)_minmax(0,1fr)] min-[900px]:gap-x-4 min-[900px]:gap-y-2 lg:gap-x-6" data-deploy-grid>
               <DeployOption heading={deploy.local} intro={deploy.localIntro}
-                guide={<GuideLink href={localize(lang, '/docs/install')}>{deploy.localGuide}</GuideLink>}>
+                guide={<GuideLink href={localize(lang, '/docs/install')}>{deploy.localGuide}</GuideLink>}
+                secondary={
+                  <details className="group/pipx relative">
+                    <summary className={`${deployRowClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
+                      <Package aria-hidden="true" />
+                      <strong className="font-semibold">{deploy.pipxAction}</strong>
+                      <ChevronDown aria-hidden="true" className="text-fd-muted-foreground group-open/pipx:rotate-180" />
+                    </summary>
+                    <div className="mt-2 min-[900px]:absolute min-[900px]:inset-x-0 min-[900px]:top-full min-[900px]:z-10">
+                      <DeployCommand>{'pipx install swb-one\nswb up'}</DeployCommand>
+                    </div>
+                  </details>
+                }>
                 <DeployCommand>{copy.install}</DeployCommand>
-                <p className={`mt-3 ${deployIntro}`}>{deploy.localAlternative}</p>
-                <DeployCommand>{'pipx install swb-one\nswb up'}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.server} intro={deploy.serverIntro}
-                guide={<GuideLink href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</GuideLink>}>
+                guide={<GuideLink href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</GuideLink>}
+                secondary={
+                  <DeployTile href={`${selfHosting}#cloudflare-tunnel`} mark="cloudflare"
+                    name="Cloudflare Tunnel" plan={deploy.freePlan} tunnel />
+                }>
                 <DeployCommand>{compose}</DeployCommand>
-                <DeployTile href={`${selfHosting}#cloudflare-tunnel`} mark="cloudflare"
-                  name="Cloudflare Tunnel" plan={deploy.freePlan} tunnel />
               </DeployOption>
               <DeployOption heading={deploy.cloud} intro={deploy.cloudIntro}
-                guide={<GuideLink href={selfHosting}>{deploy.cloudGuide}</GuideLink>}>
+                secondary={
+                  <Link href={selfHosting} className={deployRowClass}>
+                    <BookOpen aria-hidden="true" />
+                    <strong className="font-semibold">{deploy.cloudGuide}</strong>
+                    <ArrowRight aria-hidden="true" className="text-fd-muted-foreground" />
+                  </Link>
+                }>
                 <DeployProviders lang={lang} landing />
               </DeployOption>
             </div>

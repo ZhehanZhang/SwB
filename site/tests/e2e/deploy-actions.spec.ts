@@ -43,11 +43,34 @@ async function expectActionRow(row: Locator) {
 test('landing deploy guides align with their block titles', async ({ page }) => {
   await page.goto('/');
   const deploy = page.locator('section[aria-labelledby="landing-deploy"]');
-  const headers = deploy.locator('[data-block-header]');
-  await expect(headers).toHaveCount(3);
+  const headers = deploy.locator('[data-block-header]').filter({ has: page.locator('a') });
+  await expect(headers).toHaveCount(2);
   for (const header of await headers.all()) await expectGuideInHeader(header);
   await expect(deploy.getByRole('link', { name: 'Compose' })).toHaveAttribute('href', '/docs/self-hosting#docker-compose');
+  await expect(deploy.locator('[data-deploy-secondary]').getByRole('link', { name: 'Self-hosting guide' })).toHaveAttribute('href', '/docs/self-hosting');
   await expect(deploy.locator('[data-deploy-tunnel] [data-provider-arrow]')).toBeVisible();
+});
+
+test('landing pipx commands open below their row without moving the aligned rows', async ({ page }) => {
+  await page.goto('/');
+  const grid = page.locator('[data-deploy-grid]');
+  const toggle = grid.locator('summary').filter({ hasText: 'Use pipx' });
+  const commands = grid.locator('details pre');
+  const following = grid.locator('[data-deploy-option]').nth(1).locator('[data-block-header]');
+  await expect(commands).toBeHidden();
+  await toggle.scrollIntoViewIfNeeded();
+  const before = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  const row = (await toggle.boundingBox())!;
+  await toggle.press('Enter');
+  await expect(commands).toBeVisible();
+  expect(await commands.locator('code').textContent()).toBe('pipx install swb-one\nswb up');
+  const expanded = (await commands.boundingBox())!;
+  expect(expanded.y - row.y - row.height).toBe(8);
+  const after = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  expect(after).toBe(before + (page.viewportSize()!.width < 900 ? expanded.height + 8 : 0));
+  await toggle.press('Space');
+  await expect(commands).toBeHidden();
+  expect(await following.evaluate((node) => node.getBoundingClientRect().top + scrollY)).toBe(before);
 });
 
 test('Get started uses one width and aligned actions for every run location', async ({ page }) => {
@@ -82,7 +105,14 @@ test('provider tiles share one design and visible deploy affordances on landing 
     const grid = page.locator(selector).locator('[data-deploy-providers]');
     const tiles = grid.getByRole('link');
     await expect(tiles).toHaveCount(3);
-    await expect(grid).toHaveCSS('gap', '12px');
+    if (path === '/') {
+      await expect(grid).toHaveCSS('border-radius', '6px');
+      await expect(grid).toHaveCSS('border-width', '1px');
+      await expect(tiles.first()).toHaveCSS('border-bottom-width', '1px');
+      await expect(tiles.last()).toHaveCSS('border-width', '0px');
+    } else {
+      await expect(grid).toHaveCSS('gap', '12px');
+    }
     const layout = await grid.evaluate((node) => {
       const columns = getComputedStyle(node).gridTemplateColumns.split(' ').filter((width) => width !== '0px');
       const boxes = [...node.querySelectorAll('a')].map((item) => item.getBoundingClientRect());
@@ -96,7 +126,8 @@ test('provider tiles share one design and visible deploy affordances on landing 
     await expect(tile.locator('[data-provider-arrow]')).toBeVisible();
     const style = await tile.evaluate((item) => {
       const css = getComputedStyle(item);
-      return { border: css.border, radius: css.borderRadius, padding: css.padding, font: css.fontSize, line: css.lineHeight };
+      const icon = getComputedStyle(item.querySelector('svg')!);
+      return { padding: css.padding, font: css.fontSize, line: css.lineHeight, icon: icon.width };
     });
     chrome ??= style;
     expect(style).toEqual(chrome);
