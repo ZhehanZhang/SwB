@@ -1,7 +1,8 @@
 import { DocsBody, DocsPage, DocsTitle, PageFooter, ViewOptionsPopover } from 'fumadocs-ui/layouts/notebook/page';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
-import { markdownUrl, repository, siteUrl, source, type DocsPage as DocumentPage } from '@/lib/source';
+import { latestDocsVersion } from '@/lib/docs-version';
+import { docsLoaders, markdownUrl, repository, siteUrl, type DocsPage as DocumentPage } from '@/lib/source';
 import { releaseBranch } from '@/lib/urls';
 import { MdxLink } from '@/lib/mdx-address';
 import type { Locale } from '@/lib/i18n';
@@ -12,12 +13,15 @@ import styles from './page-actions.module.css';
 import { PersonalizedMarkdownCopy } from './personalized-docs';
 import { TranslationNote } from './translation-note';
 
-export function Document({ page }: { page: DocumentPage }) {
+export function Document({ page, version = latestDocsVersion }: { page: DocumentPage; version?: string }) {
   const { body: MDX, title, toc, full } = page.data;
   const hasToc = Boolean(toc?.length);
-  const markdown = markdownUrl(page);
-  const githubUrl = `${repository}/blob/${releaseBranch}/docs/${page.path.split('/').map(encodeURIComponent).join('/')}`;
-  const startNext = page.slugs.join('/') === 'get-started' ? source.getPage([], page.locale) : undefined;
+  const versionLoader = docsLoaders.get(version)!;
+  const latest = version === latestDocsVersion;
+  const markdown = latest ? markdownUrl(page) : undefined;
+  const sourcePath = latest ? page.path : `versions/${version}/${page.path}`;
+  const githubUrl = `${repository}/blob/${releaseBranch}/docs/${sourcePath.split('/').map(encodeURIComponent).join('/')}`;
+  const startNext = page.slugs.join('/') === 'get-started' ? versionLoader.getPage([], page.locale) : undefined;
 
   return (
     <DocsPage toc={toc} full={full} data-swb-toc={hasToc || undefined}
@@ -33,14 +37,14 @@ export function Document({ page }: { page: DocumentPage }) {
       ) }}>
       <DocsTitle className="font-display font-extrabold tracking-tight">{title}</DocsTitle>
       <div className={styles.row} data-docs-actions>
-        <PersonalizedMarkdownCopy lang={page.locale as Locale} markdownUrl={markdown} />
-        <ViewOptionsPopover className={styles.button} markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
+        {markdown && <PersonalizedMarkdownCopy lang={page.locale as Locale} markdownUrl={markdown} />}
+        <ViewOptionsPopover className={styles.button} markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown ?? page.url, siteUrl).href} />
         <DocsNavigation askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} />
       </div>
       <TranslationNote lang={page.locale ?? 'en'} url={page.url} />
       <DocsBody className="swb-mdx">
         <MDX components={useMDXComponents({
-          a: createRelativeLink(source, { ...page, path: page.path.split('/').slice(1).join('/') }, MdxLink),
+          a: createRelativeLink(versionLoader, { ...page, path: page.path.split('/').slice(1).join('/') }, MdxLink),
         })} />
       </DocsBody>
     </DocsPage>

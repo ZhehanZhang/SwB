@@ -17,7 +17,7 @@ async function headerGeometry(page: Page) {
   });
 }
 
-test('header and all items stay within 0.5px across home and docs without a theme toggle', async ({ page }) => {
+test('the shared header keeps its geometry across home and docs except for the search offset', async ({ page }) => {
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
@@ -26,8 +26,9 @@ test('header and all items stay within 0.5px across home and docs without a them
     const home = await headerGeometry(page);
     const tabs = width === 390 ? [] : ['docs', 'setup', 'about'];
     const rest = width === 390 ? ['menu'] : [];
+    const search = width < 1024 ? 'search-icon' : 'search';
     expect(Object.keys(home)).toEqual([
-      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'address', 'language', 'github', ...rest,
+      'header', 'brand', ...tabs, search, 'address', 'language', 'github', ...rest,
     ]);
 
     for (const path of ['/docs', '/docs/install']) {
@@ -35,10 +36,16 @@ test('header and all items stay within 0.5px across home and docs without a them
       await page.evaluate(() => document.fonts.ready);
       await expect(page.locator('#nd-nav [data-theme-toggle]')).toHaveCount(0);
       const docs = await headerGeometry(page);
-      expect(Object.keys(docs)).toEqual(Object.keys(home));
+      const { version } = docs;
+      expect(version.height).toBe(home.language.height);
+      expect(version.width).toBe(64);
+      expect(Object.keys(docs)).toEqual([
+        'header', 'brand', ...tabs, search, 'version', 'address', 'language', 'github', ...rest,
+      ]);
       for (const item of Object.keys(home)) {
         for (const edge of ['x', 'y', 'width', 'height'] as const) {
-          expect(Math.abs(docs[item][edge] - home[item][edge]), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
+          const offset = item === search && edge === 'x' ? version.width + (width < 640 ? 4 : 8) : 0;
+          expect(Math.abs(docs[item][edge] - home[item][edge] + offset), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
         }
       }
     }
@@ -47,24 +54,31 @@ test('header and all items stay within 0.5px across home and docs without a them
 
 test('landing, About and docs render matching header control gaps before hydration', async ({ page }) => {
   await page.route('**/_next/static/**/*.js', (route) => route.abort());
-  const gap = page.viewportSize()!.width === 390 ? 4 : 8;
+  const width = page.viewportSize()!.width;
+  const gap = width < 640 ? 4 : 8;
   let right: number | undefined;
   for (const path of ['/', '/about', '/docs/install']) {
     await page.goto(path);
     const cluster = page.locator('[data-header-controls]');
     await expect(cluster.locator('[data-header-item="address"]')).toBeVisible();
+    const docs = path.startsWith('/docs/');
+    await expect(cluster.locator('[data-header-item="version"]')).toHaveCount(docs ? 1 : 0);
     const layout = await cluster.evaluate((element) => {
-      const controls = [...element.querySelectorAll('[data-header-item]')]
-        .filter((control) => control.getClientRects().length)
-        .map((control) => control.getBoundingClientRect());
+      const items = [...element.querySelectorAll<HTMLElement>('[data-header-item]')]
+        .filter((control) => control.getClientRects().length);
+      const controls = items.map((control) => control.getBoundingClientRect());
       return {
+        order: items.map((control) => control.dataset.headerItem),
         columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
         gaps: controls.slice(1).map((control, index) => control.left - controls[index].right),
         right: element.getBoundingClientRect().right,
         last: controls.at(-1)!.right,
       };
     });
-    expect(layout.gaps).toHaveLength(gap === 4 ? 4 : 3);
+    expect(layout.order, path).toEqual([
+      width < 1024 ? 'search-icon' : 'search', ...(docs ? ['version'] : []), 'address', 'language', 'github', ...(width < 640 ? ['menu'] : []),
+    ]);
+    expect(layout.gaps).toHaveLength((gap === 4 ? 4 : 3) + Number(docs));
     expect(layout.columns).toBe(layout.gaps.length + 1);
     for (const measured of layout.gaps) expect(Math.abs(measured - gap), path).toBeLessThanOrEqual(1);
     expect(Math.abs(layout.last - layout.right), path).toBeLessThanOrEqual(1);
@@ -104,6 +118,14 @@ test('a streamed header keeps the search control in its final position', async (
   const closingTag = item === 'search' ? '</button>' : '</button></div>';
   const split = html.indexOf(closingTag, search) + closingTag.length;
   expect(split).toBeGreaterThan(search);
+  await page.addInitScript(() => {
+    new PerformanceObserver((entries) => {
+      const moved = entries.getEntries().some((entry) =>
+        (entry as PerformanceEntry & { sources: { node?: Node }[] }).sources.some(({ node }) =>
+          document.querySelector('#nd-nav')?.contains(node ?? null)));
+      if (moved) document.documentElement.dataset.headerShift = 'true';
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
   const upstream = new URL(baseURL!).origin;
   let documentResponse: ServerResponse | undefined;
   const server = createServer((incoming, outgoing) => {
@@ -127,12 +149,16 @@ test('a streamed header keeps the search control in its final position', async (
     await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
     const control = page.locator(`#nd-nav [data-header-item="${item}"]`);
     await expect(control).toBeVisible();
+    await expect(page.locator('#nd-nav [data-header-item="version"]')).toHaveCount(0);
     await expect(page.locator('#nd-nav [data-header-item="github"]')).toHaveCount(0);
     const before = await control.boundingBox();
     documentResponse!.end(html.slice(split));
+    await expect(page.locator('#nd-nav [data-header-item="version"]')).toBeVisible();
     await expect(page.locator('#nd-nav [data-header-item="github"]')).toBeVisible();
     await page.waitForLoadState();
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     expect(await control.boundingBox()).toEqual(before);
+    await expect(page.locator('html[data-header-shift]')).toHaveCount(0);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

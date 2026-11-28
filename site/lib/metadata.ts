@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import { locales, localize, type Locale } from './i18n';
 import { siteUrl } from './urls';
 
-export function languageAlternates(hrefFor: (lang: Locale) => string | undefined) {
+export function languageAlternates(hrefFor: (lang: Locale) => string | undefined, defaultHref = hrefFor('en')) {
   const alternates: Record<string, string> = {};
   for (const lang of locales) {
     const href = hrefFor(lang);
     if (href) alternates[lang] = new URL(href, siteUrl).href;
   }
-  if (alternates.en) alternates['x-default'] = alternates.en;
+  if (defaultHref) alternates['x-default'] = new URL(defaultHref, siteUrl).href;
   return alternates;
 }
 
@@ -17,7 +17,7 @@ export function pageMetadata(
   path: string,
   title: string,
   description?: string,
-  page?: { url: string; hrefFor: (lang: Locale) => string | undefined },
+  page?: { url: string; hrefFor: (lang: Locale) => string | undefined; defaultHref?: string; markdown?: boolean },
 ): Metadata {
   const url = page?.url ?? localize(lang, path);
 
@@ -26,8 +26,8 @@ export function pageMetadata(
     description,
     alternates: {
       canonical: url,
-      languages: languageAlternates(page?.hrefFor ?? ((lang) => localize(lang, path))),
-      types: page ? { 'text/markdown': `${page.url}.mdx` } : undefined,
+      languages: languageAlternates(page?.hrefFor ?? ((lang) => localize(lang, path)), page?.defaultHref),
+      types: page && page.markdown !== false ? { 'text/markdown': `${page.url}.mdx` } : undefined,
     },
     openGraph: {
       title,

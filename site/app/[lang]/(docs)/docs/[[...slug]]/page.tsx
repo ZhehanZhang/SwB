@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import { Document } from '@/components/document';
+import { docsLoaders, docsPage, latestPageHref } from '@/lib/source';
+import { latestDocsVersion } from '@/lib/docs-version';
 import { isLocale } from '@/lib/i18n';
 import { pageMetadata } from '@/lib/metadata';
-import { source } from '@/lib/source';
 
 type Props = PageProps<'/[lang]/docs/[[...slug]]'>;
 
@@ -11,24 +12,30 @@ export const dynamicParams = false;
 async function getPage(params: Props['params']) {
   const { lang, slug } = await params;
   if (!isLocale(lang)) notFound();
-  const page = source.getPage(slug, lang);
-  if (!page || page.slugs.join('/') === 'about') notFound();
-  return { lang, page };
+  const doc = docsPage(slug, lang);
+  if (!doc) notFound();
+  return { lang, ...doc };
 }
 
 export function generateStaticParams() {
-  return source.generateParams().filter(({ slug }) => slug.join('/') !== 'about');
+  return [...docsLoaders].flatMap(([version, versionLoader]) =>
+    version === latestDocsVersion
+      ? versionLoader.generateParams().filter(({ slug }) => slug.join('/') !== 'about')
+      : versionLoader.generateParams().map(({ lang, slug }) => ({ lang, slug: [`v${version}`, ...slug] })),
+  );
 }
 
 export async function generateMetadata({ params }: Props) {
-  const { lang, page } = await getPage(params);
+  const { lang, page, version, versionLoader } = await getPage(params);
   return pageMetadata(lang, page.url, page.data.title, page.data.description, {
     url: page.url,
-    hrefFor: (locale) => source.getPage(page.slugs, locale)?.url,
+    hrefFor: (locale) => versionLoader.getPage(page.slugs, locale)?.url,
+    defaultHref: version === latestDocsVersion ? undefined : latestPageHref(page.slugs),
+    markdown: version === latestDocsVersion,
   });
 }
 
 export default async function Page({ params }: Props) {
-  const { page } = await getPage(params);
-  return <Document page={page} />;
+  const { page, version } = await getPage(params);
+  return <Document page={page} version={version} />;
 }

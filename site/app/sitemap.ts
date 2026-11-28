@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
+import { latestDocsVersion } from '@/lib/docs-version';
 import { locales, localize } from '@/lib/i18n';
 import { languageAlternates } from '@/lib/metadata';
-import { siteUrl, source } from '@/lib/source';
+import { docsLoaders, latestPageHref, siteUrl } from '@/lib/source';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
@@ -9,9 +10,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: new URL(localize(lang, '/'), siteUrl).href,
       alternates: { languages: languageAlternates((lang) => localize(lang, '/')) },
     })),
-    ...source.getPages().map((page) => ({
+    ...[...docsLoaders].flatMap(([version, versionLoader]) => versionLoader.getPages().map((page) => ({
       url: new URL(page.url, siteUrl).href,
-      alternates: { languages: languageAlternates((lang) => source.getPage(page.slugs, lang)?.url) },
-    })),
+      alternates: { languages: languageAlternates(
+        (lang) => versionLoader.getPage(page.slugs, lang)?.url,
+        version === latestDocsVersion ? undefined : latestPageHref(page.slugs),
+      ) },
+    }))),
   ];
 }
