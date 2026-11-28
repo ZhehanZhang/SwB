@@ -1,11 +1,14 @@
 'use client';
 
+import { usePathname } from 'fumadocs-core/framework';
 import { Popover, PopoverClose } from 'fumadocs-ui/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { latestDocsVersion } from '@/lib/docs-version';
-import type { Locale } from '@/lib/i18n';
+import { docsRoot, docsVersionAtPath, latestDocsVersion } from '@/lib/docs-version';
+import { isDocsPath, localize, type Locale } from '@/lib/i18n';
+import { headerLinks } from '@/lib/layout.shared';
 import { HeaderControl, HeaderPopover } from './header-controls';
+import { SiteHeader } from './site-header';
 
 const labels = {
   en: { version: 'Docs version', latest: 'latest' },
@@ -18,7 +21,31 @@ const labels = {
   ja: { version: 'ドキュメントのバージョン', latest: '最新版' },
 } satisfies Record<Locale, { version: string; latest: string }>;
 
-export function DocsVersionControl({ lang, version, options }: {
+export function DocsSiteHeader({ lang, repository, versions }: {
+  lang: Locale;
+  repository: string;
+  versions: { version: string; pages: Record<string, string> }[];
+}) {
+  const path = usePathname();
+  const version = docsVersionAtPath(path);
+  const current = versions.find((entry) => entry.version === version);
+  if (!isDocsPath(path) || !current) return <SiteHeader lang={lang} repository={repository} />;
+
+  const root = localize(lang, docsRoot(version));
+  const slug = path.slice(root.length + 1);
+  const links = headerLinks(lang).map((link) => ({
+    ...link,
+    href: link.id === 'docs' ? root : link.id === 'setup' ? current.pages.setup ?? link.href : link.href,
+  }));
+  const options = versions.map(({ version, pages }) => ({
+    version,
+    href: Object.hasOwn(pages, slug) ? pages[slug] : localize(lang, docsRoot(version)),
+  }));
+  return <SiteHeader lang={lang} repository={repository} links={links}
+    docsOnlyControl={<DocsVersionControl lang={lang} version={version} options={options} />} />;
+}
+
+function DocsVersionControl({ lang, version, options }: {
   lang: Locale;
   version: string;
   options: { version: string; href: string }[];

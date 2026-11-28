@@ -18,12 +18,13 @@ test('latest docs show a compact version control with a working current entry', 
   const before = await header.boundingBox();
   const dimension = await button.evaluate((node) => {
     const { left, right, height } = node.getBoundingClientRect();
-    const address = document.querySelector('[data-header-item="address"]')!;
-    const neighbor = address.getBoundingClientRect();
+    const address = document.querySelector('[data-header-item="address"]')!.getBoundingClientRect();
+    const search = [...document.querySelectorAll('[data-header-item="search"], [data-header-item="search-icon"]')]
+      .find((control) => control.getClientRects().length)!.getBoundingClientRect();
     const text = node.querySelector('span > span')!.getBoundingClientRect();
     const icon = node.querySelector('svg')!.getBoundingClientRect();
     const glyphOffset = Math.abs(text.top + text.height / 2 - icon.top - icon.height / 2);
-    return { left, right, height, addressHeight: neighbor.height, gap: left - neighbor.right, glyphOffset, viewport: window.innerWidth };
+    return { left, right, height, addressHeight: address.height, gap: search.left - right, glyphOffset, viewport: window.innerWidth };
   });
   expect(dimension.left).toBeGreaterThanOrEqual(20);
   expect(dimension.right).toBeLessThanOrEqual(dimension.viewport - 20);

@@ -25,7 +25,7 @@ type Copy = {
   positioning: { title: string; lead: string };
   deployment: {
     title: string;
-    local: string; localIntro: string; localAlternative: string; localGuide: string;
+    local: string; localIntro: string; pipxAction: string; localGuide: string;
     server: string; serverIntro: string; serverGuide: string;
     cloud: string; cloudIntro: string; cloudGuide: string;
     freePlan: string;
@@ -59,8 +59,8 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: 'Run SwB where you want',
       local: 'On your computer',
-      localIntro: 'Start SwB and open its sign-in link.',
-      localAlternative: 'Use pipx to keep SwB installed.',
+      localIntro: 'Open the SwB sign-in link.',
+      pipxAction: 'Use pipx',
       localGuide: 'Install guide',
       server: 'On your server',
       serverIntro: 'Run SwB with Docker Compose.',
@@ -107,12 +107,12 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '随处运行 SwB',
       local: '在本机运行',
-      localIntro: '启动 SwB，然后打开它给出的登录链接。',
-      localAlternative: '要长期安装 SwB，可以用 pipx。',
+      localIntro: '打开 SwB 的登录链接。',
+      pipxAction: '使用 pipx',
       localGuide: '安装指南',
       server: '在自己的服务器上运行',
       serverIntro: '用 Docker Compose 启动 SwB。',
-      serverGuide: 'Compose 指南',
+      serverGuide: 'Compose',
       cloud: '在云端运行',
       cloudIntro: '选择一家云服务商。',
       cloudGuide: '自托管指南',
@@ -155,12 +155,12 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '隨處執行 SwB',
       local: '在本機執行',
-      localIntro: '啟動 SwB，然後開啟它提供的登入連結。',
-      localAlternative: '要長期安裝 SwB，可以用 pipx。',
+      localIntro: '開啟 SwB 的登入連結。',
+      pipxAction: '使用 pipx',
       localGuide: '安裝指南',
       server: '在自己的伺服器上執行',
       serverIntro: '用 Docker Compose 啟動 SwB。',
-      serverGuide: 'Compose 指南',
+      serverGuide: 'Compose',
       cloud: '在雲端執行',
       cloudIntro: '選擇一家雲端服務供應商。',
       cloudGuide: '自行託管指南',
@@ -214,9 +214,9 @@ export const landingCopy: Record<Locale, Copy> = {
     "deployment": {
       "title": "Ejecuta SwB donde quieras",
       "local": "En tu ordenador",
-      "localIntro": "Inicia SwB y abre su enlace de inicio de sesión.",
-      "localAlternative": "Usa pipx para mantener SwB instalado.",
-      "localGuide": "Guía de instalación",
+      "localIntro": "Abre el enlace de acceso a SwB.",
+      "pipxAction": "Usa pipx",
+      "localGuide": "Instalación",
       "server": "En tu servidor",
       "serverIntro": "Ejecuta SwB con Docker Compose.",
       "serverGuide": "Compose",
@@ -273,9 +273,9 @@ export const landingCopy: Record<Locale, Copy> = {
     "deployment": {
       "title": "Lancez SwB où vous voulez",
       "local": "Sur votre ordinateur",
-      "localIntro": "Démarrez SwB et ouvrez son lien de connexion.",
-      "localAlternative": "Installez SwB durablement avec pipx.",
-      "localGuide": "Guide d'installation",
+      "localIntro": "Ouvrez le lien de connexion à SwB.",
+      "pipxAction": "Utilisez pipx",
+      "localGuide": "Installer",
       "server": "Sur votre serveur",
       "serverIntro": "Lancez SwB avec Docker Compose.",
       "serverGuide": "Compose",
@@ -331,10 +331,10 @@ export const landingCopy: Record<Locale, Copy> = {
     },
     "deployment": {
       "title": "SwB betreiben, wo Sie möchten",
-      "local": "Auf Ihrem Computer",
-      "localIntro": "Starten Sie SwB und öffnen Sie den Anmeldelink.",
-      "localAlternative": "Mit pipx bleibt SwB dauerhaft installiert.",
-      "localGuide": "Installationsanleitung",
+      "local": "Auf Ihrem Rechner",
+      "localIntro": "Öffnen Sie den Link zur Anmeldung.",
+      "pipxAction": "pipx verwenden",
+      "localGuide": "Installation",
       "server": "Auf Ihrem Server",
       "serverIntro": "Betreiben Sie SwB mit Docker Compose.",
       "serverGuide": "Compose",
@@ -390,8 +390,8 @@ export const landingCopy: Record<Locale, Copy> = {
     "deployment": {
       "title": "원하는 곳에서 SwB 실행",
       "local": "내 컴퓨터",
-      "localIntro": "SwB을 시작하고 로그인 링크를 여세요.",
-      "localAlternative": "SwB을 설치해 두고 쓰려면 pipx를 사용하세요.",
+      "localIntro": "SwB 로그인 링크를 여세요.",
+      "pipxAction": "pipx 사용",
       "localGuide": "설치 가이드",
       "server": "내 서버",
       "serverIntro": "Docker Compose로 SwB을 실행하세요.",
@@ -448,14 +448,14 @@ export const landingCopy: Record<Locale, Copy> = {
     "deployment": {
       "title": "SwB を好きな場所で実行",
       "local": "自分のパソコン",
-      "localIntro": "SwB を起動して、サインインリンクを開いてください。",
-      "localAlternative": "pipx を使うと、SwB をインストールしておけます。",
-      "localGuide": "インストールガイド",
+      "localIntro": "サインインリンクを開きます。",
+      "pipxAction": "pipx を使う",
+      "localGuide": "インストール",
       "server": "自分のサーバー",
-      "serverIntro": "Docker Compose で SwB を実行してください。",
+      "serverIntro": "Docker Compose で SwB を実行します。",
       "serverGuide": "Compose",
       "cloud": "クラウド",
-      "cloudIntro": "クラウドプロバイダーを選んでください。",
+      "cloudIntro": "クラウドプロバイダーを選びます。",
       "cloudGuide": "セルフホスティングガイド",
       "freePlan": "無料"
     },

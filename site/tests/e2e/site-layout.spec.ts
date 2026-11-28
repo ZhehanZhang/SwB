@@ -27,7 +27,7 @@ test('header and all items stay within 0.5px across home and docs without a them
     const tabs = width === 390 ? [] : ['docs', 'setup', 'about'];
     const rest = width === 390 ? ['menu'] : [];
     expect(Object.keys(home)).toEqual([
-      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'language', 'github', ...rest,
+      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'address', 'language', 'github', ...rest,
     ]);
 
     for (const path of ['/docs', '/docs/install']) {
@@ -43,6 +43,36 @@ test('header and all items stay within 0.5px across home and docs without a them
         }
       }
     }
+  }
+});
+
+test('landing, About and docs render matching header control gaps before hydration', async ({ page }) => {
+  await page.route('**/_next/static/**/*.js', (route) => route.abort());
+  const gap = page.viewportSize()!.width === 390 ? 4 : 8;
+  let right: number | undefined;
+  for (const path of ['/', '/about', '/docs/install']) {
+    await page.goto(path);
+    const cluster = page.locator('[data-header-controls]');
+    await expect(cluster.locator('[data-header-item="address"]')).toBeVisible();
+    const docs = path.startsWith('/docs/');
+    await expect(cluster.locator('[data-header-item="version"]')).toHaveCount(docs ? 1 : 0);
+    const layout = await cluster.evaluate((element) => {
+      const controls = [...element.querySelectorAll('[data-header-item]')]
+        .filter((control) => control.getClientRects().length)
+        .map((control) => control.getBoundingClientRect());
+      return {
+        columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
+        gaps: controls.slice(1).map((control, index) => control.left - controls[index].right),
+        right: element.getBoundingClientRect().right,
+        last: controls.at(-1)!.right,
+      };
+    });
+    expect(layout.gaps).toHaveLength((gap === 4 ? 4 : 3) + Number(docs));
+    expect(layout.columns).toBe(layout.gaps.length + 1);
+    for (const measured of layout.gaps) expect(Math.abs(measured - gap), path).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.last - layout.right), path).toBeLessThanOrEqual(1);
+    right ??= layout.right;
+    expect(Math.abs(layout.right - right), path).toBeLessThanOrEqual(1);
   }
 });
 
@@ -461,7 +491,7 @@ test('landing shows supported deployment links and six usage examples in each lo
     await expect(fly).toHaveClass((await render.getAttribute('class'))!);
     const tunnel = deploy.locator('[data-deploy-tunnel]');
     await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/self-hosting#cloudflare-tunnel`);
-    await expect(tunnel).toHaveClass((await render.getAttribute('class'))!);
+    await expect(tunnel).toHaveCSS('border-radius', '6px');
     await expect(deploy.locator(`a[href="${prefix}/docs/install"] > .lucide-book-open`)).toHaveCount(1);
     await expect(deploy.locator(`a[href="${prefix}/docs/self-hosting#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
     const usage = page.locator('#landing-usage').locator('..');
@@ -496,66 +526,87 @@ test('deploy rows show the official service marks in light and dark', async ({ p
   }
 });
 
-test('deploy columns stack below 900px, align at the top and hug their content', async ({ page }) => {
-  await page.goto('/');
-  await page.evaluate(() => document.fonts.ready);
-  const grid = page.locator('[data-deploy-grid]');
-  for (const [width, columns] of [[390, 1], [899, 1], [900, 3], [1024, 3], [1440, 3]]) {
-    await page.setViewportSize({ width, height: 900 });
-    const layout = await grid.evaluate((node) => {
-      const blocks = [...node.children];
-      const boxes = blocks.map((block) => block.getBoundingClientRect());
-      return {
-        columns: getComputedStyle(node).gridTemplateColumns.split(' '),
-        tops: boxes.map(({ top }) => top),
-        heights: boxes.map(({ height }) => height),
-        bodyTops: blocks.map((block) => block.children[2].getBoundingClientRect().top),
-        codeBlocks: [...node.querySelectorAll('pre')].map((code) => {
-          const style = getComputedStyle(code);
-          const chrome = [style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
-            .reduce((sum, value) => sum + parseFloat(value), 0);
-          return { measured: code.getBoundingClientRect().height, natural: chrome + parseFloat(style.lineHeight) * code.textContent!.split('\n').length };
-        }),
-      };
-    });
-    expect(layout.columns).toHaveLength(columns);
-    expect(layout.tops).toHaveLength(3);
-    if (columns === 3) {
-      expect(Math.max(...layout.tops) - Math.min(...layout.tops), `${width}px column tops`).toBeLessThanOrEqual(1);
-      expect(Math.max(...layout.bodyTops) - Math.min(...layout.bodyTops), `${width}px body tops`).toBeLessThanOrEqual(1);
-      if (width >= 1024) expect(Math.max(...layout.heights) - Math.min(...layout.heights), `${width}px column heights`).toBeLessThanOrEqual(24);
+test('deploy columns stack below 900px and align each row on wider screens', async ({ page }) => {
+  for (const path of ['/', '/zh-Hans', '/zh-Hant', '/es', '/fr', '/de', '/ko', '/ja']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    const grid = page.locator('[data-deploy-grid]');
+    for (const width of [390, 899, 900, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await grid.evaluate((node) => {
+        const blocks = [...node.children];
+        const edges = (element: Element) => {
+          const { top, bottom } = element.getBoundingClientRect();
+          return { top, bottom };
+        };
+        const [uvx, compose] = [...node.querySelectorAll('[data-deploy-primary] pre')];
+        const composeStyle = getComputedStyle(compose);
+        const composeChrome = [composeStyle.paddingBlockStart, composeStyle.paddingBlockEnd,
+          composeStyle.borderBlockStartWidth, composeStyle.borderBlockEndWidth]
+          .reduce((sum, length) => sum + parseFloat(length), 0);
+        const center = (element: Element) => {
+          const { top, bottom } = edges(element);
+          return (top + bottom) / 2;
+        };
+        return {
+          columns: getComputedStyle(node).gridTemplateColumns.split(' '),
+          options: blocks.map(edges),
+          intro: blocks.map((block) => edges(block.querySelector('p')!)),
+          primary: blocks.map((block) => edges(block.querySelector('[data-deploy-primary] > *')!)),
+          secondary: blocks.map((block) => edges(block.querySelector('[data-deploy-secondary] :is(summary,a)')!)),
+          internalGaps: blocks.map((block) => [...block.children]
+            .map(edges).slice(1).map(({ top }, index) => top - edges(block.children[index]).bottom)),
+          composeHeight: compose.getBoundingClientRect().height,
+          composeNaturalHeight: composeChrome + parseFloat(composeStyle.lineHeight) * compose.textContent!.split('\n').length,
+          uvxCenterDelta: Math.abs(center(uvx.querySelector('code')!) - center(uvx)),
+        };
+      });
+      expect(layout.columns).toHaveLength(width < 900 ? 1 : 3);
+      expect(layout.options).toHaveLength(3);
+      for (const { top, bottom } of layout.intro) expect(bottom - top, `${path} at ${width}px intro`).toBe(20);
+      expect(layout.composeHeight, `${path} at ${width}px compose height`).toBe(layout.composeNaturalHeight);
+      expect(layout.uvxCenterDelta, `${path} at ${width}px uvx center`).toBeLessThanOrEqual(1);
+      if (width >= 900) {
+        for (const row of ['options', 'intro', 'primary', 'secondary'] as const) {
+          for (const edge of ['top', 'bottom'] as const) {
+            const values = layout[row].map((box) => box[edge]);
+            expect(Math.max(...values) - Math.min(...values), `${path} at ${width}px ${row} ${edge}`).toBe(0);
+          }
+        }
+      } else {
+        expect(layout.options[1].top - layout.options[0].bottom).toBe(24);
+        expect(layout.options[2].top - layout.options[1].bottom).toBe(24);
+      }
+      for (const gap of layout.internalGaps.flat()) expect(gap).toBe(8);
     }
-    expect(layout.codeBlocks).toHaveLength(3);
-    for (const { measured, natural } of layout.codeBlocks) expect(measured).toBeCloseTo(natural, 0);
   }
 });
 
-test('provider and tunnel rows fit a single line in all three locales', async ({ page }) => {
+test('provider and secondary rows fit one line in English and Chinese', async ({ page }) => {
   for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-tunnel]').evaluateAll((links) => links.map((link) => {
+      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-secondary] :is(summary,a)').evaluateAll((links) => links.map((link) => {
         const { width, height, right } = link.getBoundingClientRect();
         const style = getComputedStyle(link);
-        const singleLine = [style.lineHeight, style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
-          .reduce((sum, value) => sum + parseFloat(value), 0);
         return {
-          width, height, singleLine,
+          width, height,
           contained: link.lastElementChild!.getBoundingClientRect().right <= right - parseFloat(style.paddingInlineEnd) + 1,
+          labelHeight: link.children[1].getBoundingClientRect().height,
           whiteSpace: style.whiteSpace,
-          isTunnel: link.hasAttribute('data-deploy-tunnel'),
+          isProvider: link.closest('[data-deploy-providers]') !== null,
         };
       }));
-      expect(rows).toHaveLength(4);
-      const cloud = rows.filter((row) => !row.isTunnel);
+      expect(rows).toHaveLength(6);
+      const cloud = rows.filter((row) => row.isProvider);
       expect(new Set(cloud.map(({ width }) => width)).size).toBe(1);
-      expect(new Set(rows.map(({ height }) => height)).size).toBe(1);
       for (const row of rows) {
         expect(row.whiteSpace).toBe('nowrap');
         expect(row.contained).toBe(true);
-        expect(Math.abs(row.height - row.singleLine), `${path} provider height at ${width}px`).toBeLessThanOrEqual(2);
+        expect(row.height, `${path} action height at ${width}px`).toBeCloseTo(row.isProvider && width >= 900 ? (108 - 2) / 3 : 44, 1);
+        expect(row.labelHeight).toBe(20);
       }
     }
   }
