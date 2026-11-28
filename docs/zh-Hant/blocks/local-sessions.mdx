@@ -1,89 +1,89 @@
 ---
 title: 本機工作階段
-description: 向已配對裝置上的程式開發代理傳送訊息。
+description: 把訊息傳送給在已配對裝置上執行的程式開發代理。
 ---
 
-本機工作階段是程式開發代理在已配對裝置上開啟的工作環境。SwB 會將工作階段列為目標。目標是可接收訊息的位址。
+本機工作階段是程式開發代理在已配對裝置上開啟的工作區。SwB 會把它列為目標。目標是能接收訊息的位址。
 
 ## 配對裝置
 
-依照[配對裝置](/zh-Hant/docs/companion#配對裝置)的說明操作。使用下方對應代理的指令。把 `https://swb.example.com` 換成你的 SwB 位址。每啟用一項功能，加入一個 `--cap` 選項。若要變更已配對裝置的功能，請先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
+依照[配對裝置](/zh-Hant/docs/companion#配對裝置)操作，並使用下方適用於你的代理的指令。把 `https://swb.example.com` 換成你的 SwB 網址。每項功能各用一個 `--cap` 選項。如果要變更已配對裝置上的功能，先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
 
-請以擁有者身分登入的代理呼叫 `targets(block="local")`，確認設定結果。複製工作階段的位址。位址格式為 `local:session:<companion>:<harness>:<session>`。其中 `harness` 是執行代理的程式。
+請以擁有者身分登入的代理呼叫 `targets(block="local")`，檢查每項設定。複製你的工作階段位址，格式為 `local:session:<companion>:<harness>:<session>`。harness 是負責執行代理的程式。
 
 ## 傳送訊息
 
-使用 `send` 時，將工作階段位址填入 `to`。SwB 會嘗試把訊息送到已開啟的工作階段。寄件者有權使用代理信箱時，SwB 會將副本放進信箱。若工作階段缺少對應代理，擁有者傳送的訊息會留在自己的信箱。將傳回的對話 ID 傳給 `result`，讀取回覆。
+把工作階段位址當作 `send` 的 `to` 傳入。SwB 會嘗試把訊息傳遞到開啟中的工作階段。如果工作階段有相符的代理，傳送者要有這個代理信箱的存取權，訊息才會進信箱。在其他工作階段中，擁有者傳送的訊息會進入擁有者的信箱。用回傳的對話識別碼搭配 `result` 讀取回覆。
 
-| 狀態 | 含義 |
+| 狀態 | 意義 |
 | --- | --- |
-| `working` | 代理正在處理工作 |
-| `blocked` | 代理正在等候核准或輸入 |
-| `idle` | 代理可以接收工作 |
+| `working` | 代理正在工作 |
+| `blocked` | 代理正在等待核准或輸入 |
+| `idle` | 代理已準備好接受工作 |
 | `done` | 代理已完成工作 |
-| `unknown` | 狀態待確認 |
+| `unknown` | 狀態有待確認 |
 
-若工作階段正在等候處理，請在該工作階段回應要求。寄件者有權使用信箱時，SwB 會將訊息留在信箱。
+工作階段處於 blocked 狀態時，到工作階段中回應請求。如果傳送者能使用這個信箱，SwB 會把訊息保留在信箱中。
 
-夥伴裝置會向 SwB 伺服器回報工作階段的狀態，也可回報工作階段和資料夾的名稱。對於每則直接送達的訊息，夥伴裝置可傳回一則回覆。其餘內容留在裝置上。
+Companion 會把工作階段狀態回報給你的 SwB 伺服器，也可以回報工作階段名稱和資料夾名稱。Companion 直接傳遞的每則訊息，都可以送回一則回覆。工作階段的其餘內容都留在裝置上。
 
 ## 狀態掛鉤
 
-代理回報變化時，掛鉤會執行指令。macOS 與 Linux 支援狀態掛鉤。
+掛鉤（hook）會在代理回報變更時執行一個指令。狀態掛鉤可在 macOS 和 Linux 上使用。
 
 ```sh
 swb companion connect https://swb.example.com --cap hooks
 ```
 
-用 [pipx](/zh-Hant/docs/install) 安裝 `swb` 指令。確認代理能找到 `swb` 指令。若有設定 `SWB_COMPANION_HOME`，請讓代理與夥伴裝置使用同一個資料夾。
+用 [pipx](/zh-Hant/docs/install) 安裝 `swb` 指令，並讓代理能在指令搜尋路徑中找到 `swb`。如果設定了 `SWB_COMPANION_HOME`，代理和 Companion 要使用同一個資料夾。
 
 | 代理 | 事件指令 | 設定方式 |
 | --- | --- | --- |
-| Claude Code | `swb hook claude-code` | 將 `channel/hooks/hooks.json` 的 `hooks` 合併到 `~/.claude/settings.json` |
-| Gemini CLI | `swb hook gemini` | 用下方指令從本機副本安裝 SwB 擴充功能 |
-| Codex | `swb hook codex` | 將 `integrations/codex/hooks.json` 的 `hooks` 合併到 `~/.codex/hooks.json` |
+| Claude Code | `swb hook claude-code` | 把 `channel/hooks/hooks.json` 中的 `hooks` 合併到 `~/.claude/settings.json` |
+| Gemini CLI | `swb hook gemini` | 依照下方的指令，從本機副本安裝 SwB 擴充功能 |
+| Codex | `swb hook codex` | 把 `integrations/codex/hooks.json` 中的 `hooks` 合併到 `~/.codex/hooks.json` |
 
-請使用 [SwB 發行分支的本機副本](/zh-Hant/docs/self-hosting#docker-compose)中的檔案。Claude Code 的 SwB 外掛也包含這些掛鉤。若 Codex 使用自訂設定資料夾，請使用該資料夾中的 `hooks.json`。
+使用 [SwB 發行版本的本機副本](/zh-Hant/docs/self-hosting#docker-compose)中的檔案。SwB 的 Claude Code 外掛程式也包含這些掛鉤。如果 Codex 使用自訂的設定資料夾，就用這個資料夾中的 `hooks.json`。
 
 ```sh
 gemini extensions install /path/to/SwB/integrations/gemini
 ```
 
-設定掛鉤後，開啟新的工作階段。用 `targets(block="local")` 確認工作階段的位址已列出。單獨啟用狀態掛鉤時，工作階段由信箱接收訊息。
+設定掛鉤後，開啟一個新的工作階段，並在 `targets(block="local")` 中確認它的位址。只啟用 hooks 功能時，工作階段從各自的信箱接收訊息。
 
 ## Herdr
 
-在 Herdr 的窗格開啟程式開發代理。窗格是終端機中的一塊區域。夥伴裝置透過 Herdr 的通訊端接收工作階段事件。通訊端讓同一台裝置上的程式互相通訊。
+在 Herdr 窗格中開啟程式開發代理，窗格是終端機中的一塊區域。Companion 從 Herdr 的 socket 取得工作階段事件。socket 是同一台裝置上的程式之間使用的連線。
 
-若使用具名工作階段或自訂通訊端路徑，請參閱 [Herdr 夥伴裝置設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48)。
+如果要使用具名工作階段或自訂 socket 路徑，參閱 [Herdr Companion 設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48)。
 
 ```sh
 swb companion connect https://swb.example.com --cap herdr --cap hooks
 ```
 
-若要接收窗格中的回覆，請設定對應的[狀態掛鉤](#狀態掛鉤)。確認目標中列出 `local:session:<companion>:herdr:<session>` 位址。傳送一則簡短的測試訊息到該位址。確認訊息出現在窗格中。若有設定狀態掛鉤，請用 `result` 檢視回覆。
+如果要從窗格取得回覆，設定適用的[狀態掛鉤](#狀態掛鉤)。確認出現 `local:session:<companion>:herdr:<session>` 目標，傳送一則簡短的測試訊息給它，再確認訊息出現在窗格中。如果設定了狀態掛鉤，用 `result` 查看回覆。
 
 ## Codex
 
-Codex 應用程式伺服器是一個程序，可讓其他程式存取已開啟的 Codex 工作階段。請在一個終端機啟動它。
+Codex app server 是一個處理程序，讓其他程式能存取開啟中的 Codex 工作階段。在一個終端機中啟動它。
 
 ```sh
 codex app-server --listen unix://
 ```
 
-在另一個終端機開啟工作階段。
+在第二個終端機中開啟工作階段。
 
 ```sh
 codex --remote unix://
 ```
 
-另開一個終端機執行夥伴裝置。在所有終端機中使用同一個 Codex 設定資料夾。使用自訂通訊端時，請在上面兩個指令中都填入 `unix://<path>`。在執行夥伴裝置的終端機中，將 `SWB_CODEX_SOCKET` 設為該路徑。
+另外用一個終端機執行 Companion。所有終端機都要使用同一個 Codex 設定資料夾。如果使用自訂 socket，在上面兩個指令中都改用 `unix://<path>`，並在 Companion 的終端機中把 `SWB_CODEX_SOCKET` 設為這個路徑。
 
 ```sh
 swb companion connect https://swb.example.com --cap codex
 ```
 
-夥伴裝置從應用程式伺服器讀取工作階段事件。確認目標中列出 `local:session:<companion>:codex:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+Companion 從 app server 讀取工作階段事件。確認出現 `local:session:<companion>:codex:<session>` 目標，傳送一則簡短的測試訊息給它，再用 `result` 查看回覆。
 
 ## OpenCode
 
@@ -93,28 +93,28 @@ swb companion connect https://swb.example.com --cap codex
 opencode serve --hostname 127.0.0.1 --port 4096
 ```
 
-在該伺服器開啟工作階段。將 `SWB_OPENCODE_URL` 設為伺服器的本機位址。若伺服器設有密碼，請參閱 [OpenCode 夥伴裝置設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228)。
+在這個伺服器上開啟一個工作階段。把 `SWB_OPENCODE_URL` 設為伺服器的本機網址。如果伺服器有密碼保護，參閱 [OpenCode Companion 設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228)。
 
 ```sh
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
 ```
 
-夥伴裝置從 OpenCode 伺服器讀取工作階段事件。確認目標中列出 `local:session:<companion>:opencode:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+Companion 從 OpenCode 伺服器讀取工作階段事件。確認出現 `local:session:<companion>:opencode:<session>` 目標，傳送一則簡短的測試訊息給它，再用 `result` 查看回覆。
 
 ## DeepSeek Harness
 
-使用 DeepSeek Harness `0.2.2-rc.5`。設定檔是一組應用程式設定。將 SwB 橋接外掛裝到 `web` 設定檔。外掛會將工作階段事件傳給夥伴裝置。
+使用 DeepSeek Harness `0.2.2-rc.5`。profile 是一組應用程式設定。在 `web` profile 中安裝 SwB 橋接程式，它會把工作階段事件傳送給 Companion。
 
-請使用 `release/1.0` 分支的本機副本。將 `/path/to/SwB` 換成副本的完整路徑。
+使用 `release/1.0` 分支的本機副本，並把 `/path/to/SwB` 換成這份副本的完整路徑。
 
 ```sh
 dsh plugin --profile web add /path/to/SwB/integrations/dsh
 ```
 
-使用 `web` 設定檔重新啟動 DeepSeek Harness。開啟一個工作階段。若有設定 `SWB_COMPANION_HOME`，請讓 DeepSeek Harness 與夥伴裝置使用相同的絕對路徑。
+用 `web` profile 重新啟動 DeepSeek Harness，再開啟一個工作階段。如果設定了 `SWB_COMPANION_HOME`，DeepSeek Harness 和 Companion 要使用相同的絕對路徑。
 
 ```sh
 swb companion connect https://swb.example.com --cap dsh
 ```
 
-確認目標中列出 `local:session:<companion>:dsh:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+確認出現 `local:session:<companion>:dsh:<session>` 目標，傳送一則簡短的測試訊息給它，再用 `result` 查看回覆。

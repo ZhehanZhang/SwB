@@ -1,84 +1,84 @@
 ---
 title: Grok Bot
-description: 透過自訂連接器與由 SwB 喚醒的 routine，將 Grok Bot 連線到 SwB。
+description: 用自訂連接器和可由 SwB 喚醒的 routine，把 Grok Bot 連接到 SwB。
 ---
 
-Grok Bot 是 xAI 的桌面代理應用程式。routine 是儲存好的工作。這項連線使用 Webhook。Webhook 是 SwB 用來啟動 routine 的網址。
+Grok Bot 是 xAI 的桌面代理應用程式。routine 是一項儲存起來的任務。這種連線方式使用 Webhook，也就是 SwB 呼叫後就會啟動 routine 的網址。
 
 ## 開始之前
 
-在支援的電腦上安裝 [Grok Bot](https://x.ai/bot)。使用包含 Grok Bot 的方案登入。
+在支援的電腦上安裝 [Grok Bot](https://x.ai/bot)，並用包含 Grok Bot 的方案登入。
 
-為 SwB 設定公開的 HTTPS 位址和擁有者登入。啟用 `grok-routine` 模組。選擇一個 SwB 專案。使用 OAuth 時，你會在瀏覽器核准存取。
+為 SwB 設定公開 HTTPS 網址和擁有者登入。啟用 `grok-routine` 模組，並選定一個 SwB 專案。使用 OAuth 時，由你在瀏覽器中核准存取。
 
 ## 複製設定提示詞
 
 <SetupPrompt name="grok-bot" lang="zh-Hant" />
 
-加入 SwB 後，把提示詞貼到 Bot 對話。
+加入 SwB 後，把提示詞貼到你的 Bot 聊天中。
 
-## 連線到 Grok Bot
+## 連接 Grok Bot
 
 ### 建立 Bot
 
-使用新手引導建立的 Bot，或在側邊欄用 **+** 選擇 **New Bot**。輸入名稱。選擇 **Create**。
+使用初始設定時建立的 Bot，或在側邊欄用 **+** 選取 **New Bot**。輸入名稱，再選取 **Create**。
 
 ### 開啟 Connect apps
 
-在側邊欄開啟 **Connect apps**。選擇 **Add a custom connector**。
+在側邊欄開啟 **Connect apps**，選取 **Add a custom connector**。
 
-### 輸入位址
+### 輸入網址
 
-在 **Name** 填入 `SwB`。在 **Type** 下方選擇 **Remote HTTPS**。在 **Server URL** 填入 `https://swb.example.com/mcp`。選擇 **Add plugin**。
+在 **Name** 中輸入 `SwB`。在 **Type** 下選取 **Remote HTTPS**。在 **Server URL** 中輸入 `https://swb.example.com/mcp`，再選取 **Add plugin**。
 
 ### 登入
 
-請將 OAuth 用戶端選填欄位留空。若 Grok Bot 開啟 SwB 登入頁面，請以擁有者身分登入。接著核准存取。 {/* unverified */}
+選填的 OAuth 用戶端欄位留空。如果 Grok Bot 開啟 SwB 登入頁面，以擁有者身分登入，並核准存取。 {/* unverified */}
 
 ### 開啟 routine
 
-在 Bot 對話的 **Details** 開啟 routine。檢查 **Webhook** 觸發條件。
+在 Bot 聊天的 **Details** 下開啟 routine，檢查 **Webhook** 觸發條件。
 
 ### 儲存 Webhook URL
 
-開啟 Webhook 位址的領取連結。從 routine 複製 **POST to**。把位址貼到 **Webhook URL**。選取 **Save webhook url**。
+開啟 Webhook 網址的認領連結。從 routine 複製 **POST to**，貼到 **Webhook URL**，再選取 **Save webhook url**。
 
 ### 儲存金鑰
 
-開啟 Webhook 金鑰的領取連結。從 routine 複製 **key**。把金鑰貼到 **Token**。選取 **Save token**。
+開啟 Webhook 金鑰的認領連結。從 routine 複製 **key**，貼到 **Token**，再選取 **Save token**。
 
-### 告訴 Grok Bot
+### 告知 Grok Bot
 
-在 Bot 對話中說已完成。Grok Bot 接著會測試該 routine。
+在 Bot 聊天中告知已完成，Grok Bot 隨即測試 routine。
 
-## 代理的工作
+## 代理會做什麼
 
-請具備擁有者權限的代理呼叫 `connect(what="grok-bot")`。SwB 會傳回 MCP 位址、OAuth 狀態和 routine 提示詞。提示詞會用 Webhook 的 `trust` 欄位判斷哪些請求可以執行。routine 用 `reply` 回覆。
+用具備擁有者存取權的代理呼叫 `connect(what="grok-bot")`。SwB 會回傳 MCP 網址、OAuth 狀態和一份 routine 提示詞。提示詞利用 Webhook 的 `trust` 欄位，告訴 routine 可以處理哪些請求。routine 用 `reply` 回覆。
 
-請 Grok Bot 用提示詞建立 routine。在擁有者用戶端呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 登記。SwB 會為位址和金鑰各建立一個領取連結。儲存兩項後，請執行 `connect` 傳回的 `send` 呼叫。
+請 Grok Bot 用這份提示詞建立 routine。在你的擁有者用戶端中，用 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊這個 routine。SwB 會為網址和金鑰各產生一個認領連結。兩者都儲存後，執行 `connect` 回傳的 `send` 呼叫。
 
-傳送訊息時，SwB 會呼叫 webhook 來啟動 routine。
+傳送訊息給 routine 時，SwB 會呼叫它的 Webhook 來啟動它。
 
 ## 憑證
 
-| 權杖 | 顯示位置 | 格式 | 存放位置 |
+| 權杖 | 顯示位置 | 格式 | 去處 |
 | - | - | - | - |
-| Webhook URL | routine **Details** 中 **Webhook** 下方的 **POST to** | HTTPS 位址 | 對應 SwB 領取連結的 **Webhook URL** |
-| Webhook 金鑰 | routine **Details** 中 **Webhook** 下方的 **key** | 隨機文字 | 對應 SwB 領取連結的 **Token** |
-| SwB 登入權杖 | 你登入時由 Grok Bot 取得 | 隨機文字 | 由 Grok Bot 保存 |
+| Webhook URL | routine **Details** 中 **Webhook** 下的 **POST to** | HTTPS 網址 | 對應 SwB 認領連結頁面上的 **Webhook URL** |
+| Webhook 金鑰 | routine **Details** 中 **Webhook** 下的 **key** | 隨機字串 | 對應 SwB 認領連結頁面上的 **Token** |
+| SwB 登入權杖 | 登入時由 Grok Bot 取得 | 隨機字串 | 由 Grok Bot 代為保存 |
 
-領取連結是 SwB 上的一次性私人頁面，一個頁面對應一個權杖。每項內容只貼到對應的領取連結。
+認領連結是 SwB 的一次性私有頁面，一個連結對應一個權杖。每個值都只貼到它自己的認領連結頁面。
 
 ## 檢查連線
 
-開啟 routine 的 **Details**。檢查 **Webhook** 觸發條件。在擁有者用戶端再次呼叫 `connect(what="grok-bot")`。狀態列會顯示該 routine。在傳送測試的用戶端呼叫 `inbox` 查看回覆。
+開啟 routine 的 **Details**，檢查 **Webhook** 觸發條件。從擁有者用戶端再次呼叫 `connect(what="grok-bot")`，狀態行會列出 routine 的名稱。在傳送端的用戶端查看 `inbox`，確認收到測試回覆。
 
-## 排除問題
+## 疑難排解
 
-若 OAuth 登入失敗，請用另一個具備擁有者權限的 SwB 用戶端登記 routine。若連接器接受 bearer 金鑰，請使用[配對金鑰](/zh-Hant/docs/setup/mcp-client#配對用戶端)。
+如果 OAuth 登入失敗，改用另一個 SwB 擁有者用戶端註冊 routine。如果連接器接受 Bearer 金鑰，使用[配對金鑰](/zh-Hant/docs/setup/mcp-client#配對用戶端)。
 
 複製 **key** 的值。使用預設標頭時，SwB 會加上 `Authorization: Bearer`。
 
 用 `grok-routine:routine:<routine>` 啟動 routine。用 `agent:grok` 傳送到 Grok 信箱。
 
-領取連結只能使用一次，30 分鐘後失效。若要取得新連結，請再次呼叫 `connect`。若要更換已儲存的內容，請呼叫 `connect`，並把 `choose.replace` 設為 `url` 或 `secret`。
+認領連結只能使用一次，30 分鐘後過期。需要新連結時，再次呼叫 `connect`。如果要變更已儲存的值，就呼叫 `connect`，並把 `choose.replace` 設為 `url` 或 `secret`。

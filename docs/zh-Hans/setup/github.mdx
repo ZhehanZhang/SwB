@@ -1,65 +1,65 @@
 ---
 title: GitHub
-description: 把 GitHub 事件发送到 SwB，并让智能体处理 issue 和 pull request。
+description: 把 GitHub 事件发送到 SwB，让智能体处理议题和 Pull Request。
 ---
 
-SwB 从 GitHub App 接收仓库事件。事件是 GitHub 发出的操作通知。智能体可以用应用的私钥给议题加标签、评论或新建议题。
+SwB 从 GitHub App 接收仓库事件。事件是 GitHub 上某个操作的通知。有了 App 的私钥，智能体还能给议题加标签、评论议题和创建议题。
 
 ## 开始之前
 
-请使用有权在目标仓库创建并安装应用的 GitHub 账号。请以所有者身份登录 SwB。
+使用能在目标仓库上创建并安装 App 的 GitHub 账号。以所有者身份登录 SwB。
 
-GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook`。
+GitHub 需要能访问你服务器上的 `https://swb.example.com/github/webhook`。
 
 ## 复制设置提示词
 
 <SetupPrompt name="github" lang="zh-Hans" />
 
-把提示词粘贴到 SwB 所有者客户端。
+把提示词粘贴到你的 SwB 所有者客户端中。
 
 ## 设置 GitHub App
 
 ### 打开 GitHub App 设置
 
-点击头像 → **Settings** → **Developer settings** → **GitHub Apps**。点击 **New GitHub App**。
-### 命名应用
+点击你的头像 → **Settings** → **Developer settings** → **GitHub Apps**。点击 **New GitHub App**。
+### 命名 App
 
-填写 **GitHub App name** 和 **Homepage URL**。主页可以填仓库地址。
-### 设置 webhook
+填写 **GitHub App name** 和 **Homepage URL**。主页可以填你的仓库地址。
+### 设置 Webhook
 
-在 **Webhook** 下保持选中 **Active**。Webhook 是 GitHub 用来发送事件的网址。在 **Webhook URL** 填写带 `/github/webhook` 的 SwB 地址。
-### 设置 webhook 密钥
+保持 **Webhook** 下的 **Active** 为选中状态。Webhook 是一个地址，GitHub 把事件发送到这里。在 **Webhook URL** 中填你的 SwB 地址加 `/github/webhook`。
+### 设置 Webhook 密钥
 
-将随机密钥生成到私有文件中。
+在一个仅自己可读的文件中生成密钥。
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
 ```
 
-将生成的密钥存入密码管理器。把密钥填入 **Webhook secret**。SwB 接受至少 16 个字符的密钥。
+把密钥保存到密码管理器，并填入 **Webhook secret**。SwB 接受至少 16 个字符的密钥。
 ### 设置权限
 
-在 **Repository permissions** 中，按下表设置权限。
+在 **Repository permissions** 下，按表中的访问权限设置。
 ### 订阅事件
 
-在 **Subscribe to events** 下，选中下表中的事件。
+在 **Subscribe to events** 下，选择下表中的事件。
 
-### 创建应用
+### 创建 App
 
 在 **Where can this GitHub App be installed?** 下选择 **Only on this account**。点击 **Create GitHub App**。
 ### 生成私钥
 
-在 **Private keys** 下选择 **Generate a private key**。请妥善保管下载的 `.pem` 文件。
+在 **Private keys** 下选择 **Generate a private key**。妥善保管下载的 `.pem` 文件。
 
 ### 保存凭据
 
-通过 SwB 领取链接保存 Webhook 密钥。保存后删除临时密钥文件。SwB 提示时，通过对应链接保存 **App ID** 和 `.pem` 文件。
-### 安装应用
+用对应的 SwB 认领链接保存 Webhook 密钥，保存后删除临时密钥文件。SwB 要求时，再用各自的认领链接保存 **App ID** 和 `.pem` 文件。
+### 安装 App
 
-点击 **Install App** → 你的账号旁边的 **Install**。选择 **Only select repositories**。
+点击 **Install App**，再点击你的账号旁边的 **Install**。选择 **Only select repositories**。
 ### 选择仓库
 
-选中你的仓库。点击 **Install**。
+选择你的仓库，点击 **Install**。
 
 | 仓库资源 | 访问权限 | 事件 |
 | --- | --- | --- |
@@ -72,11 +72,11 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 在组织中，GitHub 可能把 **Install** 显示为 **Request**。这时由组织所有者批准请求。
 
-## 智能体的工作
+## 智能体会做什么
 
-智能体调用 `connect(what="github")`。SwB 显示 Webhook 地址、密钥状态和仓库路由数量。路由把事件发给指定目标。
+智能体调用 `connect(what="github")`。SwB 显示 Webhook 地址、密钥状态和仓库路由的数量。一条路由把事件发往一个目标。
 
-智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces`。空间为仓库指定模式、项目和目标。此示例将项目 `demo` 中仓库 `acme/app` 的观察摘要送到 `agent:beta`。
+智能体在 `config/switchboard.yaml` 的 `blocks.github.spaces` 下添加每个仓库。空间为仓库设定模式、项目和目标。这个示例把 `acme/app` 的 Watch 摘要发送给项目 `demo` 中的 `agent:beta`。
 
 ```yaml
 blocks:
@@ -90,44 +90,44 @@ blocks:
         project: demo
 ```
 
-要用工作模式，智能体将 `mode.mode` 设为 `work`。它将你的 GitHub 数字用户 ID 填入空间的 `owner_ids`。查询方法和示例见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+要使用 Work 模式，智能体把 `mode.mode` 设为 `work`，并把你的 GitHub 数字用户 ID 加入空间的 `owner_ids`。ID 的查找方法和示例见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
-SwB 会检查事件文字的作者。`owner_ids` 中的人所写的文字可以标为 `owner`。SwB 将分支名、引用、工作流标题和检查名称视为 `external`。
+SwB 会核对事件文本的作者。`owner_ids` 中的人写的文本可以获得 `owner` 信任等级。SwB 把分支名、ref、工作流标题和检查名称视为 `external`。
 
-即使所有者触发检查，检查名称仍标为 `external`。来自派生仓库的拉取请求可以改变检查名称。
+即使检查由所有者发起，检查名称仍是 `external`。来自 fork 的 Pull Request 可以更改这个名称。
 
 保存 Webhook 密钥并更新路由后，重启 SwB。
 
-智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。
+智能体再次调用 `connect(what="github")`，获取其余的 App ID 或私钥链接。要从已有的个人访问令牌切换到 App，它选择 `choose={"credential":"app"}`。
 
-重启后，智能体调用 `github_status` 检查安装及其权限。
+重启后，智能体调用 `github_status`，检查安装及其权限。
 
-在分流模式下，调用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`。从 `targets` 中选择地址。协助模式使用 `mode="assist"`。分流模式默认允许的 GitHub 写入操作是 `github_reply`。
+要使用 triage 模式，调用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，并从 `targets` 中选择一个地址。要使用 assist 模式，传入 `mode="assist"`。在 triage 模式下，`github_reply` 是默认的 GitHub 写入操作。
 
-要接收外部用户的事件，请开放 `channel:github/acme/app` 和 `target:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+要允许外部发送方，同时授予 `channel:github/acme/app` 和 `target:beta` 的访问权限。访问规则见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-发送方)。
 
-观察模式按 `modes.digest_minutes` 的间隔将摘要发到目标邮箱。累积到 50 个事件时提前发送。所有者可在控制台的 **Inbox** 查看摘要，也可调用 `inbox` 或 `wait`。
+Watch 模式会在经过 `modes.digest_minutes` 分钟或累计 50 个事件时，向目标邮箱发送一份摘要。所有者可以在控制台的 **Inbox** 中阅读摘要，也可以用 `inbox` 或 `wait` 读取。
 
 ## 凭据
 
-| 令牌 | GitHub 显示位置 | 格式 | 填写位置 |
+| 令牌 | GitHub 中的显示位置 | 格式 | 去向 |
 | --- | --- | --- | --- |
-| Webhook 密钥 | 用 `openssl rand -hex 32` 生成 | 至少 16 个字符 | SwB 领取链接 |
-| App ID | 应用设置中的 **App ID** | 一串数字 | SwB 领取链接 |
-| 私钥 | 点击 **Generate a private key** 后下载一次 | `.pem` 文件 | SwB 领取链接 |
+| Webhook 密钥 | 由你用 `openssl rand -hex 32` 生成 | 至少 16 个字符 | SwB 认领链接 |
+| App ID | App 设置中的 **App ID** | 一串数字 | SwB 认领链接 |
+| 私钥 | 点击 **Generate a private key** 后下载，只能下载一次 | 一个 `.pem` 文件 | SwB 认领链接 |
 
-SwB 用私钥自行生成安装令牌。每个安装令牌有效一小时。
+SwB 用私钥向 GitHub 获取安装令牌。每个安装令牌的有效期为一小时。
 
-请智能体调用 `connect(what="github", choose={"replace":"secret"})` 更换 webhook 密钥。`webhook_secret` 的作用相同。用 `all` 同时更换应用凭据或个人访问令牌。请按返回的提示更新各项凭据。详见[更换凭据](/zh-Hans/docs/credentials#更换凭据)。
+要替换 Webhook 密钥，让智能体调用 `connect(what="github", choose={"replace":"secret"})`。传入 `webhook_secret` 效果相同。传入 `all` 则同时替换 App 凭据或个人访问令牌。按返回的说明逐项操作。参阅[凭据](/zh-Hans/docs/credentials#替换凭据)。
 
 ## 检查连接
 
-请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`github_status` 显示 `secret_present` 和安装的权限。
+让智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`github_status` 会显示 `secret_present` 和安装的权限。
 
-在 GitHub 上打开应用设置 → **Advanced** → **Recent deliveries**。打开最新一次投递，确认 SwB 返回了成功代码。
+在 GitHub 上打开 App 设置 → **Advanced** → **Recent deliveries**。打开最新的一次投递，确认 SwB 返回了成功状态码。
 
-## 解决问题
+## 排查问题
 
-出现签名错误时，请按[设置 webhook 密钥](#设置-webhook-密钥)中的方法生成新密钥。在 GitHub 应用设置中填入新密钥。请智能体调用 `connect(what="github", choose={"replace":"secret"})`。通过领取链接保存同一个密钥。重启 SwB。在 **Recent deliveries** 中重新发送该事件。
+如果出现签名错误，按[设置 Webhook 密钥](#设置-webhook-密钥)生成新密钥，并填入 GitHub App 设置。让智能体调用 `connect(what="github", choose={"replace":"secret"})`，再用认领链接保存同一个密钥。重启 SwB。然后在 **Recent deliveries** 中重新发送事件。
 
-如果 `connect` 要求 **Issues** 写入权限，请打开应用设置 → **Permissions & events**。把 **Issues** 设为 **Read & write**，并在安装上接受这项变更。
+如果 `connect` 要求 **Issues** 的写入权限，打开 App 设置 → **Permissions & events**。把 **Issues** 设为 **Read & write**，并在已安装的 App 上接受这项变更。

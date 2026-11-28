@@ -1,90 +1,90 @@
 ---
 title: 工具
-description: SwB 提供給你的代理的 MCP 工具。
+description: SwB 提供給代理的 MCP 工具。
 ---
 
-`tools/list` 依登入權限顯示可用工具。具備完整權限的擁有者可查看所有已啟用模組的工具。
+`tools/list` 會顯示你的登入身分可以使用的工具。擁有者以完整權限登入時，會看到所有已啟用模組的工具。
 
 ## 配對金鑰
 
-配對金鑰可在擁有者授權的範圍內呼叫下列工具。
+配對金鑰可以使用下列工具，以擁有者授予的存取權為限。
 
-| 用途 | 工具與權限 |
+| 用途 | 工具與限制 |
 | - | - |
-| 訊息 | 用 `send` 傳送，用 `targets` 查看目標。啟用舊版名稱時，可使用 `agent_send`。在金鑰的對話權限範圍內使用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` |
-| 記憶與專案 | 在金鑰允許的權限內呼叫 `context_pack` 和 `project_list`。在取得授權的範圍內使用記憶工具 |
-| 路由 | 可呼叫 `routes_list` 和 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，把自己的代理名稱填入 `agent`。選擇這把金鑰可存取的專案 |
-| 設定 | 用 `switchboard_status` 與 `modes_status` 查看狀態。用 `connect` 取得用戶端設定指引。設定模組和發出配對碼需要擁有者身分 |
-| 模組 | 在授權範圍內使用模組工具，並執行頻道模式允許的動作 |
+| 訊息 | 使用 `send` 和 `targets`。啟用舊版名稱時，使用 `agent_send`。使用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` 時，以金鑰的對話存取權為限 |
+| 記憶與專案 | 使用 `context_pack` 和 `project_list`，能存取多少由金鑰決定。記憶工具用在已授權的範圍 |
+| 路由 | 使用 `routes_list` 和 `routes_resolve`。使用 `routes_set` 和 `routes_remove` 時，把 `agent` 設為你自己的代理名稱，並使用金鑰範圍內的專案 |
+| 設定 | 用 `switchboard_status` 和 `modes_status` 檢查狀態。用 `connect` 取得用戶端的操作說明。設定模組和核發配對碼時，要以擁有者身分登入 |
+| 模組 | 使用模組工具，以你獲授予的存取權和頻道模式允許的動作為限 |
 
-呼叫 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要擁有者的完整權限。`project_create`、`project_update`、`project_sync` 和 `space_mode` 也需要這項權限。擁有者也能呼叫 `memory_promote`、`routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
+`login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要擁有者以完整權限登入。`project_create`、`project_update`、`project_sync` 和 `space_mode` 也一樣。這樣登入後，還能使用 `memory_promote`、`routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
 
-擁有者可用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制傳送對象。`auth.key_scopes` 限制路由、訊息和對話的存取範圍。記憶工具使用 SwB 為各配對金鑰單獨儲存的授權。
+擁有者可以用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制傳送目標。`auth.key_scopes` 設定則限制路由、訊息和對話。記憶工具依據 SwB 為每把配對金鑰儲存的授權運作。
 
 ## 訊息
 
 | 工具 | 用途 |
 | - | - |
-| `send` | 把工作或訊息填入 `task`。用 `to` 指定目標。金鑰權限允許時，可留白以使用路由 |
-| `agent_send` | 舊版工具。在 `to` 中直接填入代理名稱，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設啟用此工具。新的呼叫請使用 `send`，例如 `to="agent:codex"` |
-| `wait` | 等待新訊息或回覆 |
-| `inbox` | 讀取你的收件匣並立即回傳 |
-| `reply` | 將傳送結果或收件匣訊息中的 `handle` 填入 `conversation`。將回覆內容填入 `text` |
-| `status` | 顯示單一對話的狀態。查看 Capy 對話時，用 `messages` 指定回傳的近期訊息則數。用 `include_tools=true` 一併查看工具呼叫記錄 |
-| `switchboard_status` | 顯示你的登入身分、等待時限、模組與執行個體的運作狀況 |
-| `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
-| `cancel` | 停止追蹤對話 |
-| `targets` | 列出可用目標的位址。金鑰權限和目標規則決定可以傳送到哪裡 |
+| `send` | 把工作或訊息放進 `task`。設定 `to` 來選擇目標。金鑰允許時，把 `to` 留空即可套用路由 |
+| `agent_send` | 已淘汰的工具。把代理名稱傳入 `to`，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設會啟用它。新的呼叫改用 `send` 並設定 `to="agent:codex"` |
+| `wait` | 等待新的訊息或回覆 |
+| `inbox` | 讀取你的收件匣並立即返回 |
+| `reply` | 把傳送結果或收件匣項目中的 `handle` 傳入 `conversation`，回覆內容放進 `text` |
+| `status` | 顯示單一對話的狀態。在 Capy 上，用 `messages` 指定近期訊息的數量。設定 `include_tools=true` 可包含工具活動 |
+| `switchboard_status` | 顯示你的登入身分、等待限制、模組和執行個體的健康狀態 |
+| `result` | 取得對話的最終回覆。在支援的情況下，用 `tail` 設定近期回覆或訊息的數量 |
+| `cancel` | 停止追蹤某段對話 |
+| `targets` | 列出可用的目標位址。能傳送到哪裡，由你的金鑰和目標的規則決定 |
 | `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
-### 收件匣游標
+### 收件匣讀取位置
 
-游標記錄收件匣的讀取位置。`inbox` 和 `wait` 傳回項目時會儲存新位置。套用篩選條件時，可以分開記錄位置。再次呼叫 `wait` 時，會從上次儲存的位置接著讀。將 `since_cursor` 設為 `0` 可從頭讀取。也可以把上次傳回的 `cursor` 填入 `since_cursor`，接著讀取。
+讀取位置（cursor）標示收件匣中的一個位置。`inbox` 和 `wait` 工具回傳項目時，會儲存新的位置。篩選條件可以推進另一個獨立的位置。之後的 `wait` 會從已儲存的位置開始讀取。把 `since_cursor=0` 傳給 `inbox`，可以從頭讀取。把回傳的 `cursor` 當作 `since_cursor` 傳入，可以從該位置繼續。
 
-指令碼可用 bearer 金鑰呼叫 `GET /inbox/poll`，等待自己收件匣裡的訊息。將傳回的 `cursor` 填入 `after` 可接著讀取。預設從收件匣末端開始等待。訊息送達或等待時間結束時，端點會傳回結果。MCP 的讀取位置維持原樣。用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)接收新訊息。用 `inbox` 查看你有權讀取的背景訊息和觀察摘要。
+指令碼可以帶著 Bearer 金鑰呼叫 `GET /inbox/poll`，等待自己收件匣中的項目。把回傳的 `cursor` 當作 `after` 傳入即可接續。預設從收件匣目前的結尾開始。有項目抵達或等待時間結束時，呼叫就會返回。MCP 的讀取位置維持原狀。要在訊息抵達時立即接收，使用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)。要讀取你的登入身分可見的脈絡項目和 Watch 摘要，使用 `inbox`。
 
-訊息或對話超出配對金鑰的權限時，SwB 會回傳與 ID 查詢失敗時相同的錯誤。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
+對配對金鑰來說，存取權以外的訊息或對話，回傳的錯誤與查無 ID 時相同。詳見[受限的金鑰](/zh-Hant/docs/security#受限的金鑰)。
 
 ### 傳送選項
 
 | 選項 | 用途 |
 | - | - |
-| `wait_s` | 設定等待模組第一則回覆的秒數。SwB 依代理限制等待時間。代理信箱使用 `wait` |
-| `forward` | 填入收到的對話 ID。對話須允許轉交，且寄件者的信任等級須為 `owner`。SwB 會把最終回覆送給原寄件者 |
-| `new_conversation` | 設為 `true` 時，在 Capy Captain 的專案中開啟新討論串。設為 `false` 時，傳送到 Capy Captain 的討論串 |
-| `files` | 為 Capy 工作附加檔案。每個檔案填寫 `name`，內容使用 `text` 或 `base64`。用 `media_type` 指定檔案類型 |
-| `repos` | 用 `owner/repo` 格式指定 Capy 工作涉及的程式碼庫。請選擇已連結到 SwB 專案的程式碼庫 |
-| `in_reply_to` | 回覆訊息時，改用 `reply`，並填寫 `conversation` |
+| `wait_s` | 設定等待模組第一則回覆的秒數。SwB 會套用該代理的等待限制。代理信箱改用 `wait` |
+| `forward` | 傳入對話識別碼。這段對話要符合條件，而且是你以 `owner` 信任等級收到的。SwB 會把最終回覆傳給原始傳送者 |
+| `new_conversation` | 設為 `true` 會在 Capy Captain 的專案中開啟新的討論串。設為 `false` 則傳送到 Capy Captain 的討論串 |
+| `files` | 為 Capy 任務附加檔案。每個檔案要提供 `name`，以及 `text` 或 `base64` 內容。用 `media_type` 設定檔案類型 |
+| `repos` | 以 `owner/repo` 名稱傳入 Capy 任務的存放庫。使用已連結到 SwB 專案的存放庫 |
+| `in_reply_to` | 要回覆訊息時，改用 `reply` 搭配 `conversation`，取代這個選項 |
 
 ## 記憶與專案
 
-以擁有者身分登入，或使用已取得該記憶範圍授權的憑證。代理更新、移動或刪除項目時，請使用最後寫入該項目的憑證。擁有者可管理所有項目。變更 `general` 內現有的項目需要擁有者權限。
+以擁有者身分登入，或使用持有該記憶範圍授權的憑證。代理要更新、移動或刪除某個項目時，使用最後寫入該項目的憑證。擁有者可以管理任何項目。變更 `general` 中既有的項目需要擁有者存取權。
 
-| 工具 | 用法 |
+| 工具 | 用途 |
 | - | - |
-| `context_pack` | 讀取專案簡報。憑證取得 `general` 存取權時，簡報會納入通用記憶。使用配對金鑰時，Capy 區段顯示該代理在對話範圍內的工作 |
-| `memory_write` | 將項目儲存到已授權的範圍。填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 將同一範圍內的項目分類。名稱使用小寫，最多三層，例如 `notes/meetings`。儲存專案記憶時，在 `project` 和 `scope` 指定同一個專案。寫入 `general` 前，先請擁有者確認。接著設定 `confirm_general=true` |
-| `memory_search` | 用 `query` 搜尋。填寫 `project` 可搜尋該專案和已授權的 `general` 記憶。設為 `include_general=false` 可只搜尋該專案。用 `scopes` 指定已授權的範圍，例如 `agent:<name>` |
+| `context_pack` | 讀取專案概要。只有憑證獲得存取權時，概要才包含 `general`。配對金鑰看到的 Capy 區段，會顯示所屬代理在對話範圍內的工作 |
+| `memory_write` | 儲存到已授權的範圍。傳入 `scope`、`namespace`、`title` 和 `body`。命名空間用來在範圍內將項目分組，最多可用 3 層小寫名稱，例如 `notes/meetings`。寫入專案記憶時，在 `project` 和 `scope` 中傳入同一個專案。要寫入 `general`，先請擁有者確認，再設定 `confirm_general=true` |
+| `memory_search` | 用 `query` 搜尋。傳入 `project` 可搜尋該專案和已授權的 `general` 記憶。設定 `include_general=false` 則只搜尋該專案。用 `scopes` 指定確切的授權，例如 `agent:<name>` |
 | `memory_list` | 列出項目，範圍參數與 `memory_search` 相同 |
-| `memory_read` | 讀取已授權範圍內的一筆記憶和歷史 |
-| `memory_delete` | 刪除已授權範圍內的項目 |
-| `memory_move` | 將項目移到專案或代理範圍。兩個範圍都須取得授權 |
-| `memory_promote` | 將項目移到 `general`。請以擁有者身分登入 |
-| `project_list` | 列出專案與它們的連結 |
+| `memory_read` | 讀取已授權範圍內的單一項目及其歷史記錄 |
+| `memory_delete` | 移除已授權範圍內的項目 |
+| `memory_move` | 把項目移到專案範圍或代理範圍。兩個範圍的授權都要具備 |
+| `memory_promote` | 把項目移到 `general`。要以擁有者身分登入 |
+| `project_list` | 列出專案及其連結 |
 | `project_create` | 建立專案 |
-| `project_update` | 重新命名、連結、封存專案，或把專案設為私人 |
-| `project_sync` | 重新把專案連結到它們的對應項目 |
+| `project_update` | 重新命名、連結或封存專案，或把它設為私有 |
+| `project_sync` | 重新把專案連結到各應用程式中對應的專案 |
 
-在 `project_update` 的 `links` 中填入下列值。可用的專案連結鍵取決於已設定的代理和模組。
+在 `project_update` 中用 `links` 設定下列值。SwB 會依已設定的代理和模組，提供對應的專案連結鍵。
 
 | 鍵 | 值 |
 | - | - |
-| `repos` | 儲存庫名稱清單，格式為 `owner/repo` |
-| `claude_project` | Claude 專案名稱或 ID |
-| `chatgpt_project` | ChatGPT 專案名稱或 ID |
-| `capy_project` | Capy 專案名稱或 ID |
+| `repos` | 存放庫名稱清單，格式為 `owner/repo` |
+| `claude_project` | Claude 專案的名稱或 ID |
+| `chatgpt_project` | ChatGPT 專案的名稱或 ID |
+| `capy_project` | Capy 專案的名稱或 ID |
 
-讀取私人專案需要該專案的單獨授權或擁有者權限。呼叫 `memory_search` 或 `memory_list` 時，將私人專案填入 `project`。如要加入其他已授權的公開專案，請填寫 `scopes`。
+私有專案需要指明該專案的授權，或擁有者存取權。使用 `memory_search` 和 `memory_list` 時，在 `project` 中指定私有專案。你有權存取的其他公開專案，用 `scopes` 指定。
 
 ## 設定
 
@@ -95,120 +95,121 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `connect_list` | 列出代理金鑰 |
 | `connect_revoke` | 移除代理金鑰 |
 | `login_link` | 為擁有者產生一次性登入連結 |
-| `modes_status` | 查看你可以存取的頻道和程式碼庫的模式、目標及設定問題 |
-| `space_mode` | 以擁有者身分設定模式、專案與允許的動作。用 `inherit` 清除設定 |
-| `visibility_list` | 以擁有者身分查看預設存取規則和各項資源的存取規則 |
-| `visibility_set` | 以擁有者身分將資源設為私人或共用。工具一律為私人 |
+| `modes_status` | 顯示你可存取的頻道和存放庫的模式、目標和設定問題 |
+| `space_mode` | 以擁有者身分設定模式、專案和允許的動作。使用 `inherit` 可清除設定 |
+| `visibility_list` | 顯示預設的存取規則和個別資源的規則。要以擁有者身分登入 |
+| `visibility_set` | 以擁有者身分把資源設為私有或共用。工具一律維持私有 |
 
-### 夥伴裝置工具
+### Companion 工具
 
-請以擁有者身分使用這些工具。
+以擁有者身分使用這些工具。
 
-| 工具 | 名稱 | 用途 |
+| 工具 | 標題 | 用途 |
 | - | - | - |
-| `companion_code` | Pair a companion | 建立裝置配對碼 |
-| `companion_list` | List companions | 查看已配對的裝置、連線狀態與可用操作 |
-| `companion_invoke` | Run a companion action | 在已連線的裝置上執行操作。用 `companion_list` 取得裝置 ID 和操作細節 |
-| `companion_revoke` | Disconnect a companion | 撤銷裝置金鑰並結束連線 |
+| `companion_code` | Pair a companion | 為裝置建立配對碼 |
+| `companion_list` | List companions | 查看已配對的裝置、裝置狀態和動作 |
+| `companion_invoke` | Run a companion action | 在已連線的裝置上執行動作。裝置 ID 和動作的詳細資訊從 `companion_list` 取得 |
+| `companion_revoke` | Disconnect a companion | 撤銷裝置金鑰並關閉它的連線 |
 
 ## 路由
 
-路由為 `send` 選擇目標。請使用支援路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。若要直接傳到代理的收件匣，請呼叫 `send` 並指定 `to="agent:<name>"`。傳送到 Muse 收件匣時，請指定 `to="agent:muse"`。[喚醒 Muse](/zh-Hant/docs/setup/muse#即時喚醒-muse)時，請指定 `to="muse:gadget:muse"`。
+路由為 `send` 選出目標。使用接受路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。用 `to="agent:<name>"` 可以直接傳送到代理的信箱，用 `to="agent:muse"` 傳送到 Muse 信箱，用 `to="muse:gadget:muse"` 則會[喚醒 Muse](/zh-Hant/docs/setup/muse#即時喚醒-muse)。
 
 | 工具 | 用途 |
 | - | - |
 | `routes_list` | 列出所有路由，包括信箱路由 |
-| `routes_set` | 儲存路由。將代理信箱（例如 `agent:<name>`）或模組位址（例如 `capy:captain:<name>`）填入 `target`。用 `agent` 或 `project` 限定路由的適用範圍 |
-| `routes_resolve` | 查看單一目的地符合條件的路由。將名稱填入 `block`，例如 `grok-routine` 或 `agent` |
-| `routes_remove` | 依 `agent` 和 `project` 移除指定 `block` 中完全符合條件的路由 |
+| `routes_set` | 儲存一條路由。`target` 可以是代理信箱，例如 `agent:<name>`，也可以是模組位址，例如 `capy:captain:<name>`。用 `agent` 或 `project` 限定路由的適用對象 |
+| `routes_resolve` | 顯示某個目的地適用的路由。傳入 `block`，例如 `grok-routine` 或 `agent` |
+| `routes_remove` | 在選定的 `block` 上，移除與 `agent` 和 `project` 完全相符的路由 |
 
-用 `block` 查看或移除單一目的地的路由。`routes_resolve` 預設依序查找代理與專案的組合、專案、代理和全域路由。在每一層，SwB 依序查找各模組，最後查 `agent`。`routes_remove` 依相同的目的地順序查找，並要求代理和專案完全相符。
+用 `block` 可檢查或移除單一目的地的路由。`routes_resolve` 預設先檢查代理加專案的組合，再依序檢查專案、代理和全域路由。在每一層，它會先依序檢查各個模組，再檢查 `agent`。`routes_remove` 預設也依相同的目的地順序，尋找與代理和專案完全相符的路由。
 
 ## 模組工具
 
 ### Capy
 
-啟用 `blocks.mcp.legacy_aliases` 時，可以使用舊版 Capy 工具名稱。
+`blocks.mcp.legacy_aliases` 開啟時，會出現舊版的 Capy 工具名稱。
+
 | 工具 | 用途 |
 | - | - |
-| `capy_captains` | 列出目前的 Capy 連線可以存取的 Capy Captain |
-| `capy_captain_digest` | 讀取 Capy Captain 的摘要並查看處理中或需要擁有者介入的討論串。此工具需要擁有者身分 |
-| `capy_list` | 列出透過 SwB 交付的工作。也能查看 Capy Captain 團隊或已連結 Capy 專案的討論串。使用配對金鑰時，清單只顯示該代理在授權範圍內的工作 |
-| `capy_delegate` | 把工作交給 Capy。新呼叫請用 `send` 並指定 `to="capy"` |
-| `capy_inbox` | 立即讀取 Capy 收件匣。新呼叫請用 `inbox` 並指定 `block="capy"` |
-| `capy_wait` | 等待收件匣收到下一則訊息。新呼叫請用 `wait` |
-| `capy_status` | 查看 Capy 討論串的狀態和近期訊息。新呼叫請用 `status` |
-| `capy_reply` | 在 Capy 討論串中傳送訊息。新呼叫請用 `reply` |
-| `capy_result` | 取得 Capy 討論串的最新回覆和可用的檔案與 Pull request 連結。新呼叫請用 `result` |
-| `capy_cancel` | 停止追蹤交給 Capy 的工作。Capy 仍可繼續處理工作。新呼叫請用 `cancel` |
+| `capy_captains` | 列出你的 Capy 連線可存取的 Capy Captain |
+| `capy_captain_digest` | 讀取某個 Capy Captain 的摘要，查看團隊中哪些討論串正在工作，哪些需要擁有者處理。要以擁有者身分登入 |
+| `capy_list` | 列出透過 SwB 傳送的工作，或某個 Capy Captain 團隊或已連結 Capy 專案中的討論串。配對金鑰只能看到所屬代理在其範圍內的工作 |
+| `capy_delegate` | 把工作傳送給 Capy。新的呼叫改用 `send` 並設定 `to="capy"` |
+| `capy_inbox` | 讀取你的 Capy 收件匣並立即返回。新的呼叫改用 `inbox` 並設定 `block="capy"` |
+| `capy_wait` | 等待收件匣中的下一個項目。新的呼叫改用 `wait` |
+| `capy_status` | 顯示某個 Capy 討論串的狀態和近期訊息。新的呼叫改用 `status` |
+| `capy_reply` | 向某個 Capy 討論串傳送後續訊息。新的呼叫改用 `reply` |
+| `capy_result` | 取得某個 Capy 討論串的最新回覆，並附上檔案和 Pull Request 的可用連結。新的呼叫改用 `result` |
+| `capy_cancel` | 停止追蹤傳送給 Capy 的工作。Capy 討論串可以繼續進行。新的呼叫改用 `cancel` |
 
 ### Claude Code routine
 
-開啟 `claude-routine` 模組後即可使用這些工具。routine 是 SwB 可以啟動的 Claude Code 工作。
+`claude-routine` 模組開啟時，會出現這些工具。routine 是 SwB 可以啟動的 Claude Code 任務。
 
 | 工具 | 用途 |
 | - | - |
-| `routine_register` | 登記 routine，並取得供擁有者輸入權杖的領取連結 |
+| `routine_register` | 註冊一個 routine，並取得認領連結，讓擁有者輸入它的權杖 |
 | `routine_list` | 列出 SwB 可以啟動的 routine |
-| `routine_pickup` | 在 routine 的啟動提示為空時，領取待處理的訊息 |
-| `routine_add` | 以擁有者身分使用權杖新增 routine |
+| `routine_pickup` | routine 以空白提示詞啟動時，領取訊息 |
+| `routine_add` | 以擁有者身分新增 routine 及其權杖 |
 | `routine_remove` | 以擁有者身分移除透過 SwB 儲存的 routine |
 
 ### Slack
 
 | 工具 | 用途 |
 | - | - |
-| `slack_workspaces` | 列出可用的 Slack 工作區、各工作區可用的帳號與發文規則 |
-| `slack_channels` | 列出所選 Slack 帳號可見的頻道。結果會標示 SwB 正在關注的頻道 |
-| `slack_search` | 使用擁有者的 Slack 帳號搜尋工作區中的訊息 |
-| `slack_history` | 讀取頻道的近期訊息。最新訊息排在前面 |
-| `slack_thread` | 依時間順序讀取討論串的首則訊息與回覆 |
-| `slack_watched` | 查看哪些頻道的新訊息會送到你的 SwB 收件匣 |
-| `slack_events` | 查看關注頻道的近期訊息、對機器人的提及和私訊。最新訊息排在前面 |
-| `slack_wait` | 等待收件匣收到下一則 Slack 訊息 |
-| `slack_personas` | 查看機器人發文時可用的名稱與頭像及預設選項 |
-| `slack_targets` | 列出在 Slack 提及機器人後可填入的目標名稱 |
-| `slack_post` | 以機器人或擁有者的 Slack 帳號發文。用 `thread_ts` 在討論串中回覆。發文規則可能要求擁有者核准 |
-| `slack_react` | 用表情符號回應訊息。此操作適用與 `slack_post` 相同的規則 |
-| `slack_request_write` | 把準備發出的 Slack 訊息送交擁有者核准 |
-| `slack_write_requests` | 查看你送出的 Slack 核准申請。用 `request_id` 查看單筆申請 |
+| `slack_workspaces` | 列出你可以使用的 Slack 工作空間、各工作空間中可用的帳號，以及它們的發文規則 |
+| `slack_channels` | 列出所選 Slack 帳號可見的頻道。清單會標出 SwB 監看的頻道 |
+| `slack_search` | 透過擁有者的 Slack 帳號搜尋工作空間中的訊息 |
+| `slack_history` | 讀取頻道中的近期訊息，最新的排在最前面 |
+| `slack_thread` | 讀取討論串的第一則訊息及其回覆，最舊的排在最前面 |
+| `slack_watched` | 列出新訊息會送進你 SwB 收件匣的頻道 |
+| `slack_events` | 讀取受監看頻道中的近期訊息、機器人提及和私訊。最新的項目排在最前面 |
+| `slack_wait` | 等待收件匣中的下一個 Slack 項目 |
+| `slack_personas` | 顯示機器人發文可用的名稱和頭像，以及預設選項 |
+| `slack_targets` | 列出在 Slack 中可接在機器人提及之後的目標名稱 |
+| `slack_post` | 以機器人或擁有者 Slack 帳號的身分發文。用 `thread_ts` 在討論串中回覆。發文規則可能要求擁有者核准 |
+| `slack_react` | 為訊息加上表情符號回應。適用的規則與 `slack_post` 相同 |
+| `slack_request_write` | 把擬發布的 Slack 貼文送交擁有者核准 |
+| `slack_write_requests` | 檢查你的 Slack 核准請求的狀態。用 `request_id` 讀取單一請求 |
 
 ### Discord
 
 | 工具 | 用途 |
 | - | - |
-| `discord_status` | 查看 Discord 的連線狀態、空間和待完成的設定 |
-| `discord_provision` | 以擁有者身分取得設定連結和一次性的機器人權杖輸入連結 |
-| `discord_post` | 取得擁有者授權後，以機器人身分傳送訊息到頻道或討論串 |
+| `discord_status` | 顯示 Discord 連線、空間和尚待完成的設定 |
+| `discord_provision` | 以擁有者身分取得設定連結，以及用來輸入機器人權杖的一次性連結 |
+| `discord_post` | 取得擁有者的授權後，以機器人的身分在頻道或討論串中發文 |
 
 ### Telegram
 
 | 工具 | 用途 |
 | - | - |
-| `telegram_status` | 查看 Telegram 的連線狀態、空間和待完成的設定 |
-| `telegram_provision` | 以擁有者身分取得設定連結和一次性的機器人權杖輸入連結 |
-| `telegram_post` | 取得擁有者授權後，以機器人身分傳送訊息到聊天室或討論串 |
+| `telegram_status` | 顯示 Telegram 連線、空間和尚待完成的設定 |
+| `telegram_provision` | 以擁有者身分取得設定連結，以及用來輸入機器人權杖的一次性連結 |
+| `telegram_post` | 取得擁有者的授權後，以機器人的身分在聊天或主題中發文 |
 
 ### GitHub
 
-執行 GitHub 對話動作時，將 SwB 對話 ID 填入 `conversation` 或 `handle`。呼叫 `github_reply` 或 `github_notify_owner` 時，將內文填入 `text`。
+執行 GitHub 對話動作時，把 SwB 對話識別碼傳入 `conversation` 或 `handle`。`github_reply` 和 `github_notify_owner` 搭配 `text` 使用。
 
 | 工具 | 用途 |
 | - | - |
-| `github_status` | 檢查 Webhook、程式碼庫模式與 GitHub App 權限 |
-| `github_label` | 為議題或 Pull request 加上現有標籤 |
-| `github_comment` | 在議題或 Pull request 新增留言 |
-| `github_open_issue` | 在程式碼庫建立議題 |
-| `github_link_duplicate` | 將重複議題與同一程式碼庫中的原議題連結。SwB 為重複議題加上 `duplicate` 標籤，並以 `not_planned` 狀態關閉它 |
-| `github_notify_owner` | 在擁有者的收件匣留言，附上啟動對話的議題或 Pull request 連結 |
-| `github_reply` | 在啟動 SwB 對話的 GitHub 討論串中回覆 |
+| `github_status` | 檢查 Webhook、存放庫模式和 GitHub App 權限 |
+| `github_label` | 為議題或 Pull Request 加上既有的標籤 |
+| `github_comment` | 在議題或 Pull Request 上留言 |
+| `github_open_issue` | 在存放庫中建立議題 |
+| `github_link_duplicate` | 把議題連結到同一個存放庫中的原始議題。SwB 會加上 `duplicate`，並以 `not_planned` 關閉重複的議題 |
+| `github_notify_owner` | 傳送一則收件匣通知給擁有者，並附上發起這段對話的議題或 Pull Request 連結 |
+| `github_reply` | 在發起 SwB 對話的 GitHub 議題或 Pull Request 中回覆 |
 
-### [Webhook](/zh-Hant/docs/blocks/webhooks)
+### [Webhooks](/zh-Hant/docs/blocks/webhooks)
 
 | 工具 | 用途 |
 | - | - |
-| `webhook_create` | 建立有名稱的傳入或傳出 Webhook |
-| `webhook_list` | 查看 Webhook 的位址、次數和金鑰狀態 |
-| `webhook_rotate` | 取得儲存新金鑰的領取連結，可保留舊金鑰的有效期 |
-| `webhook_revoke` | 停用 Webhook 並刪除已儲存的金鑰 |
-| `webhook_test` | 傳送範例事件或範例訊息 |
+| `webhook_create` | 建立一個具名的傳入或傳出 Webhook |
+| `webhook_list` | 列出 Webhook，以及各自的網址、計數和密鑰狀態 |
+| `webhook_rotate` | 取得用來設定新密鑰的認領連結，並可選擇設定寬限期 |
+| `webhook_revoke` | 停止某個 Webhook，並刪除它已儲存的密鑰 |
+| `webhook_test` | 傳送一個範例傳入事件或一則範例傳出訊息 |

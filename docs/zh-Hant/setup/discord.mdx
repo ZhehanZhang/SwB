@@ -3,69 +3,69 @@ title: Discord
 description: 用機器人把 Discord 伺服器連接到 SwB。
 ---
 
-SwB 以機器人身分登入 Discord。它透過 Discord Gateway 接收新訊息。Gateway 是 SwB 主動連到 Discord 的連線。
+SwB 以機器人身分登入 Discord，並經由 Discord Gateway 接收新訊息。Gateway 是一條由 SwB 主動向 Discord 建立的連線。
 
 ## 開始之前
 
-請使用在目標伺服器具備 **Manage Server** 權限的 Discord 帳號。請以擁有者身分登入 SwB。
+準備一個 Discord 帳號，它在要連接的伺服器上要有 **Manage Server** 權限。以擁有者身分登入 SwB。
 
 ## 複製設定提示詞
 
 <SetupPrompt name="discord" lang="zh-Hant" />
 
-把提示詞貼到 SwB 擁有者用戶端。
+把提示詞貼到你的 SwB 擁有者用戶端。
 
 ## 設定 Discord 機器人
 
 ### 建立應用程式
 
-開啟 [https://discord.com/developers/applications](https://discord.com/developers/applications)。點選 **New Application**。
-### 替應用程式命名
+開啟 https://discord.com/developers/applications 並按一下 **New Application**。
+### 為應用程式命名
 
-輸入名稱。點選 **Create**。
-### 重設機器人權杖
+輸入名稱，再按一下 **Create**。
+### 重設 Bot 權杖
 
-點選 **Bot** → **Reset Token**。確認重設。
+按一下 **Bot** → **Reset Token**，並確認重設。
 
-### 複製機器人權杖
+### 複製 Bot 權杖
 
-權杖顯示時點選 **Copy**。Discord 只顯示一次。
-### 開啟 Message Content Intent
+趁 Discord 還顯示權杖時按一下 **Copy**。Discord 只顯示這一次。
+### 啟用 Message Content Intent
 
-在 **Bot** 頁面的 **Privileged Gateway Intents** 下開啟 **Message Content Intent**。點選 **Save Changes**。
+在 **Bot** 頁面的 **Privileged Gateway Intents** 下啟用 **Message Content Intent**，再按一下 **Save Changes**。
 
 ### 儲存權杖
 
-開啟代理給你的 SwB 領取連結。把權杖貼到欄位中。
+開啟代理提供的 SwB 認領連結，把權杖貼到欄位中。
 ### 邀請機器人
 
-開啟代理給你的邀請連結。若 Discord 要求選擇伺服器，請選擇你的伺服器。點選 **Authorize**。
+開啟代理提供的邀請連結。如果 Discord 詢問，選取你的伺服器，再按一下 **Authorize**。
 
-## 代理的工作
+## 代理會做什麼
 
-代理呼叫 `connect(what="discord")`。視需要先啟用 `discord` 模組。模組啟用後，`connect` 或 `discord_provision` 會傳回機器人權杖的領取連結。
+代理呼叫 `connect(what="discord")`，必要時會啟用 `discord` 模組。模組啟用後，`connect` 或 `discord_provision` 會回傳 Bot 權杖的認領連結。
 
-儲存權杖後，代理呼叫 `discord_status` 檢查機器人、Gateway 連線和伺服器。代理會提供 `setup.invite_url` 中的邀請連結。
+你儲存權杖後，代理呼叫 `discord_status`，檢查機器人、Gateway 連線和伺服器，再把 `setup.invite_url` 中的邀請連結交給你。
 
-代理在 `config/switchboard.yaml` 的 `blocks.discord.spaces` 下設定伺服器。空間會把伺服器連到一個 SwB 專案。代理會設定 `guild_id` 和 `owner_ids`。若要讓代理呼叫 `discord_post`，請在 `blocks.discord.agents` 授予存取權。更改檔案後，請重新啟動 SwB。
+代理在 `config/switchboard.yaml` 的 `blocks.discord.spaces` 下設定伺服器。空間（space）把一個伺服器對應到一個 SwB 專案。代理會設定 `guild_id` 和 `owner_ids`。如果要讓某個代理呼叫 `discord_post`，在 `blocks.discord.agents` 下授予它存取權。編輯檔案後，重新啟動 SwB。
 
 ## 憑證
 
-| 權杖 | Discord 顯示位置 | 格式 | 填寫位置 |
+| 權杖 | Discord 顯示的位置 | 格式 | 去處 |
 | --- | --- | --- | --- |
-| 機器人權杖 | **Bot** → **Reset Token**，只顯示一次 | 三段文字，以句點相連 | SwB 領取連結 |
-| 應用程式 ID | **General Information** → **Application ID** | 一串數字 | `blocks.discord.application_id`，或由 SwB 自動取得 |
+| Bot 權杖 | **Bot** → **Reset Token**，只顯示一次 | 三段字串，中間以句點分隔 | SwB 認領連結 |
+| 應用程式 ID | **General Information** → **Application ID** | 一串數字 | `blocks.discord.application_id`，或由 SwB 自行找出 |
 
 ## 檢查連線
 
-請代理再次呼叫 `connect`。設定完成後，它會回報 `connected`。`discord_status` 顯示 Gateway 已就緒，機器人也已在你的伺服器中。
+請代理再次呼叫 `connect`。設定完成時，它會回報 `connected`。`discord_status` 會顯示 Gateway 已就緒，而且機器人已在你的伺服器中。
 
-請使用 `owner_ids` 中的 Discord 帳號。在頻道提及機器人。加上 `targets` 傳回的目標名稱和測試訊息。確認回覆出現在同一個頻道。
+使用列在 `owner_ids` 中的 Discord 帳號，在頻道中提及機器人，並加上 `targets` 中的目標名稱和一則測試訊息。確認同一個頻道中出現回覆。
 
-## 排解問題
+## 疑難排解
 
-看到 Gateway 代碼 `4014` 時，請開啟 **Message Content Intent**。若要用提及來觸發機器人，請設定 `message_content: false`，並在每則訊息提及機器人。
+如果出現 Gateway 代碼 `4014`，啟用 **Message Content Intent**。如果要以提及作為觸發方式，設定 `message_content: false`，並在每則訊息中提及機器人。
 
-看到 Gateway 代碼 `4004` 時，請重設 Discord 機器人權杖。如果權杖來自伺服器環境，請在該處更換權杖並重新啟動 SwB。透過領取連結儲存的權杖可用新連結更換。
+如果出現 Gateway 代碼 `4004`，重設 Discord Bot 權杖。如果權杖來自伺服器環境，在那裡更換權杖，再重新啟動 SwB。其他情況下，使用新的認領連結。
 
-如果機器人已在伺服器中，卻在某個頻道保持沉默，請檢查該頻道的權限。
+如果機器人已在伺服器中，卻在某個頻道保持沉默，檢查這個頻道的權限。

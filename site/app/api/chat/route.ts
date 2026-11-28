@@ -14,7 +14,7 @@ const bodySchema = z.object({
 });
 
 const model = '@cf/meta/llama-4-scout-17b-16e-instruct';
-const unavailable = { en: 'Ask again in a minute', 'zh-Hans': '请稍后再问', 'zh-Hant': '請稍後再問', es: 'Vuelve a preguntar en un minuto', fr: 'Réessayez dans une minute', de: 'Fragen Sie in einer Minute erneut', ko: '잠시 후 다시 질문해 주세요', ja: '少し時間をおいて、もう一度お試しください' };
+const unavailable = { en: 'Ask again in a minute', 'zh-Hans': '请稍后再试', 'zh-Hant': '請稍後再試', es: 'Vuelve a preguntar en un minuto', fr: 'Réessayez dans une minute', de: 'Fragen Sie in einer Minute erneut', ko: '잠시 후 다시 질문해 주세요', ja: '少し時間をおいて、もう一度お試しください' };
 
 
 export async function POST(request: Request) {

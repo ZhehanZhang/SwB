@@ -1,27 +1,27 @@
 ---
 title: 频道模式
-description: 设置 SwB 在各空间中如何处理消息。
+description: 选择 SwB 在每个空间中处理消息的方式。
 ---
 
-**空间**是接收消息的地方。Slack 频道、Discord 频道和话题串、Telegram 群组及 GitHub 仓库都是空间。
+**空间**是消息到达的地方，包括 Slack 频道、Discord 频道和子区、Telegram 群组以及 GitHub 仓库。
 
-| 模式 | SwB 的行为 |
+| 模式 | SwB 的处理方式 |
 | - | - |
-| `off` | 丢弃所有 GitHub 事件，包括所有者的事件。在 Slack、Discord 和 Telegram 中丢弃其他人发来的消息 |
-| `watch` | 把近期消息汇总成摘要 |
-| `assist` | 唤醒智能体，让它参考上下文并在原话题串回复 |
-| `triage` | 唤醒分流智能体。它会查看事件并选择处理方式。默认操作是在原话题串回复 |
+| `off` | 丢弃所有 GitHub 事件，包括所有者的事件。在 Slack、Discord 和 Telegram 上丢弃其他人发来的消息 |
+| `watch` | 把消息汇集成摘要，也就是近期事件的概述 |
+| `assist` | 唤醒一个智能体，由它阅读上下文并在原消息下回复 |
+| `triage` | 唤醒一个智能体，由它审查事件并选择响应方式。默认操作是在原消息下回复 |
 | `work` | 处理所有者发来的消息 |
 
-在 Slack、Discord 和 Telegram 中，所有者的提及和私信始终按 `work` 处理。频道和目标的访问范围由可见性设置决定。
+在 Slack、Discord 和 Telegram 上，你发出的提及和私信在任何模式下都按 `work` 处理。频道和目标的访问权限仍由可见性设置控制。
 
-要使用 GitHub 的 `work` 模式，请把你的 GitHub 用户 ID 加入空间的[所有者列表](/zh-Hans/docs/blocks/github#所有者账号)。
+要在 GitHub 上使用 `work` 模式，把你的账号编号添加到该空间的[所有者列表](/zh-Hans/docs/blocks/github#所有者账号)。
 
 ## 设置模式
 
-在连接或项目页面的 **Channel modes** 中设置模式。也可以在 YAML 中设置。所有者可以用 `space_mode` 指定模式、目标、项目和允许的操作。
+在连接页面或项目页面的 **Channel modes** 下设置模式，也可以在 YAML 中设置。所有者可以用 `space_mode` 设置模式、目标、项目和允许的操作。
 
-YAML 是 SwB 配置文件使用的文本格式。请在 YAML 中用引号括住 `"off"`。
+YAML 是 SwB 配置文件采用的文本格式。在 YAML 中，`"off"` 要带引号。
 
 ```yaml
 blocks:
@@ -32,69 +32,69 @@ blocks:
         mode: "off"
 ```
 
-SwB 先查找已保存的设置，再查找频道和空间设置。接着查找模块的旧版设置、项目模式和 `modes.default`。默认模式为 `off`。
+SwB 先检查已保存的设置，再检查频道设置和空间设置，然后依次检查旧版模块设置、项目模式和 `modes.default`。默认值为 `off`。
 
 ## 绑定目标
 
-在 GitHub、Slack、Discord 和 Telegram 中，`assist`、`triage` 和 `work` 模式可以通过项目路由唤醒智能体。SwB 按以下顺序选择第一个适用的目标。
+在 GitHub、Slack、Discord 和 Telegram 上，项目路由可以在 `assist`、`triage` 或 `work` 模式下唤醒智能体。SwB 使用第一个适用的目标。
 
 | 顺序 | 目标 |
 | - | - |
-| 首先 | 通过 `space_mode` 保存的设置中的目标。频道设置会整体替代空间设置 |
-| 其次 | YAML 中的 `target`。依次查看频道、空间和项目的模式设置 |
-| 其次 | 在 `triage` 模式下，选用名为 `claude-<project>-triage` 的可用目标，例如 Claude routine |
-| 再次 | 空间设置中的 `default_target` 或 `target` |
-| 最后 | 项目路由 |
+| 最先 | 已保存的 `space_mode` 设置中的目标。频道设置会整体替换空间设置 |
+| 其次 | YAML 中的 `target`，依次取自频道设置、空间设置和项目模式设置 |
+| 其次 | 在 `triage` 模式下，名为 `claude-<project>-triage` 的可用目标，例如一个 Claude routine |
+| 其次 | 空间的 `default_target`，或它的别名 `target` |
+| 最后 | 项目的路由 |
 
-从 `targets` 返回的列表中选择目标。以下示例将智能体邮箱绑定到已有的 GitHub 空间。
+从 `targets` 中选择一个目标。下面的示例把一个智能体邮箱绑定到已有的 GitHub 空间。
 
 ```python
 space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
 ```
 
-使用 `mode="assist"` 可切换到协助模式。省略 `target` 可保留绑定。设为 `target=""` 可清除绑定。
+要使用 assist 模式，传入 `mode="assist"`。省略 `target` 会保留现有绑定。设置 `target=""` 会清除绑定。
 
-调用 `routes_set` 为关联项目指定备用目标地址。若要锁定 Capy 路由，请使用 `capy:captain:<name>` 这样的目标，并保留 `allow_override=false`。
+要设置后备路由，调用 `routes_set`，传入关联的项目和目标地址。如果要使用锁定的 Capy 路由，目标填 `capy:captain:<name>` 这样的地址，并保持 `allow_override=false`。
 
-## 允许外部 GitHub 用户访问
+## 允许外部 GitHub 发送方
 
-调用 `visibility_list` 查看准确的资源名称。`visibility_set` 只接受列表中的名称。`agent:beta` 是邮箱地址。`target:beta` 控制谁能访问该邮箱。
+调用 `visibility_list`，查看可以在 `visibility_set` 中使用的名称。地址 `agent:beta` 指向邮箱，规则 `target:beta` 控制谁可以向它发送消息。
 
 ```python
 visibility_set(resource="channel:github/acme/app", visibility="shared")
 visibility_set(resource="target:beta", visibility="shared")
 ```
 
-如果只允许一位发送者访问，请为两项资源填写同一个已验证的用户 ID，例如 `visibility=["github:1234"]`。
+要把访问权限限定给某一个发送方，在两个资源上使用同一个经过验证的发送方 ID。例如，在两者上都设置 `visibility=["github:1234"]`。
 
-## 查看观察摘要
+## 阅读 Watch 摘要
 
-用 `modes.digest_minutes` 设置间隔。默认间隔为 60 分钟。间隔结束或累积到 50 个事件时，SwB 将摘要送入目标邮箱。所有者邮箱是备用收件处。
+用 `modes.digest_minutes` 设置间隔，默认值为 60 分钟。间隔结束或一批事件达到 50 个时，SwB 把摘要放入目标邮箱。后备邮箱是所有者邮箱。
 
-所有者可以在控制台的 **Inbox** 中查看所有摘要，也可以调用 MCP 工具 `inbox` 或 `wait`。摘要列出事件总数、各事件的作者和节选，以及可用的链接。摘要的信任等级为 `external`。
+以所有者身份在控制台的 **Inbox** 中阅读每一份摘要，也可以用 MCP 的 `inbox` 和 `wait` 阅读。摘要列出事件数量，以及每个事件的作者、摘录和可用的链接。它的信任等级为 `external`。
 
-观察模式让智能体保持休眠。摘要仅供收件箱查询。已配置的 [GitHub 事件接收方](/zh-Hans/docs/blocks/github)仍会收到各个事件的副本。
+Watch 模式让智能体保持休眠。摘要在收件箱中阅读。[GitHub 事件的接收目标](/zh-Hans/docs/blocks/github)仍会收到每个事件的副本。
 
 ## 分流操作
 
-分流智能体可以读取事件相关信息。默认操作是在原话题串中执行 `reply`。在 GitHub 话题串中，请使用 `github_reply`。在 `handle` 中填入会话 ID。在 `text` 中填入回复内容。
+分流智能体可以读取事件的相关信息。默认情况下，它唯一的操作是 `reply`，也就是在原消息下回复。在 GitHub 议题或 Pull Request 下回复时使用 `github_reply`，在 `handle` 中传入对话标识，在 `text` 中填写回复内容。
 
-要开放更多操作，请在 `space_mode` 或 YAML 中设置 `actions`。将 `reply` 加入列表可保留回复功能，例如 `actions=["reply", "notify_owner"]`。
+要给智能体更多操作，在 `space_mode` 或 YAML 中设置 `actions`。列表中要包含 `reply`，回复才会保持启用。例如，使用 `actions=["reply", "notify_owner"]`。
 
-| 操作 | 用途 |
+| 操作 | 作用 |
 | - | - |
-| `label` | 为 GitHub 议题或拉取请求添加标签 |
-| `comment` | 在 GitHub 上添加评论 |
-| `open_issue` | 创建 GitHub 议题 |
+| `label` | 为 GitHub 议题或 Pull Request 添加标签 |
+| `comment` | 添加一条 GitHub 评论 |
+| `open_issue` | 创建一个 GitHub 议题 |
 | `link_duplicate` | 关联并关闭重复的 GitHub 议题 |
-| `notify_owner` | 给所有者发一条说明 |
+| `notify_owner` | 给所有者发送一条通知 |
 
-修改 GitHub 内容需要具有写入权限的 GitHub 凭据。SwB 将分流操作记入审计日志。
+修改 GitHub 上的内容需要具有写入权限的 GitHub 凭据。SwB 会把分流操作记入审计日志。
 
-## 检查消息投递
+## 检查投递
 
-调用 `modes_status` 查看模式、已绑定的目标、操作和配置问题。控制台的模式一栏显示已绑定的智能体。分流模式启用备用目标时才会提示使用默认智能体。分流需要指定目标时，`space_mode` 和 `modes_status` 都会提示选择分流智能体。
+用 `modes_status` 检查模式、模式的目标和操作，以及设置中存在的问题。控制台的模式行会显示已绑定的智能体。在 triage 模式下，只有 SwB 使用后备路由时，才会出现默认智能体的提示。如果 triage 需要目标，`space_mode` 和 `modes_status` 都会提示你选择一个分流智能体。
 
-SwB 会在审计日志中记录 Slack、Discord 和 Telegram 事件被丢弃的原因。同一模块、空间、频道和原因的组合每 10 分钟最多记一条。
+SwB 会把 Slack、Discord 和 Telegram 消息的丢弃原因记入审计日志。同一模块、空间、频道和原因的记录，每 10 分钟最多写入一条。
 
-SwB 也会记录丢弃 GitHub webhook 的原因。打开 **Audit** 或运行 `swb log` 查看原因。
+SwB 也会记录丢弃 GitHub Webhook 的原因。打开 **Audit** 或运行 `swb log` 可以查看原因。

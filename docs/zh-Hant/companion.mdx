@@ -1,9 +1,9 @@
 ---
-title: 夥伴裝置
-description: 連接一台裝置，讓代理使用裝置的本機功能。
+title: Companion
+description: 連接一台裝置，讓代理使用裝置上的本機功能。
 ---
 
-**夥伴裝置**是連到 SwB 伺服器的裝置。代理可以使用這台裝置上的功能。
+**Companion** 是在你自己的裝置上執行的 SwB 程式，會連接到你的 SwB 伺服器。連上之後，代理就能使用這台裝置上的功能。
 
 ## 複製設定提示詞
 
@@ -11,72 +11,72 @@ description: 連接一台裝置，讓代理使用裝置的本機功能。
 
 ## 配對裝置
 
-請以擁有者身分登入的代理呼叫 `companion_code`。請代理將配對碼存入權限為 `0600` 的檔案。只有檔案擁有者可以存取。
+請一個以擁有者身分登入的代理呼叫 `companion_code`，並請它把配對碼存進權限為 `0600` 的檔案。這組權限只允許檔案擁有者存取。
 
-若要在主控台取得配對碼，請[用通行金鑰登入](/zh-Hant/docs/owner-login#通行金鑰)。開啟 **Settings**。在 **Connections** 中選取 **Pair a device**。使用 Cloudflare Access 時，請改用 `companion_code` 工具。
+要在主控台取得配對碼，先[用密碼金鑰登入](/zh-Hant/docs/owner-login#密碼金鑰)，開啟 **Settings**，再到 **Connections** 中選取 **Pair a device**。如果使用 Cloudflare Access，改用 `companion_code` 工具。
 
-在裝置上執行下方指令。將範例位址換成你的 SwB HTTPS 位址。如果 SwB 也在這台裝置上執行，可以使用 `http://127.0.0.1:8870`。
+在裝置上執行下面的指令，並把範例網址換成你的 SwB HTTPS 網址。如果 SwB 就在這台裝置上，可以使用 `http://127.0.0.1:8870`。
 
 ```sh
 uvx swb-one companion connect https://swb.example.com --cap notify
 ```
 
-依提示輸入配對碼。輸入內容會隱藏。配對碼限用一次，有效時間為 10 分鐘。稽核記錄會記下配對碼的建立者。
+看到提示後輸入配對碼，輸入的內容會隱藏。配對碼只能使用一次，10 分鐘後過期。稽核記錄會記下配對碼由誰產生。
 
-裝置會將自己的金鑰儲存在私密檔案中。
+裝置會把自己的金鑰存進私有檔案。
 
 ## 選擇功能
 
-每啟用一項功能，加入一個 `--cap` 選項。
+每啟用一項功能，就加上一個 `--cap` 選項。
 
 | 選項 | 功能 |
 | --- | --- |
-| `--cap notify` | 在裝置桌面顯示通知 |
-| `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限為 10 MiB |
-| `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器提供的工具 |
+| `--cap notify` | 在裝置上顯示桌面通知 |
+| `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器的工具 |
 | `--cap herdr` | [Herdr](/zh-Hant/docs/blocks/local-sessions#herdr) |
-| `--cap codex` | [Codex 應用程式伺服器](/zh-Hant/docs/blocks/local-sessions#codex) |
+| `--cap codex` | [Codex app server](/zh-Hant/docs/blocks/local-sessions#codex) |
 | `--cap opencode` | [OpenCode 伺服器](/zh-Hant/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/zh-Hant/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [狀態掛鉤](/zh-Hant/docs/blocks/local-sessions#狀態掛鉤) |
-| `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙與 Muse 配對 |
+| `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙配對 Muse |
 
-Linux 上的通知功能使用 `notify-send`。在 Debian 與 Ubuntu 上，請安裝 `libnotify-bin` 套件。
+在 Linux 上，通知使用 `notify-send`。在 Debian 和 Ubuntu 上，安裝 `libnotify-bin` 套件即可取得。
 
-請使用 Python 3.13 配對 Muse 裝置。參閱 [Muse 配對指南](/zh-Hant/docs/setup/muse)。配對完成後，由 SwB 伺服器維持與 Muse 的連線。
+配對 Muse gadget 要使用 Python 3.13，步驟見 [Muse 配對指南](/zh-Hant/docs/setup/muse)。配對完成後，SwB 伺服器會讓 Muse 的連線保持開啟。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-為每個 MCP 伺服器加入一個 `--mcp` 選項。若要啟動程式，請用 `--mcp 'NAME=COMMAND'`。將 `NAME` 換成伺服器名稱。將 `COMMAND` 換成啟動程式的指令。若使用裝置上的 HTTP 伺服器，請填入本機位址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+每個 MCP 伺服器各加一個 `--mcp` 選項。如果是程式，使用 `--mcp 'NAME=COMMAND'`，把 `NAME` 換成伺服器的名稱，把 `COMMAND` 換成程式的啟動指令。如果是裝置上的 HTTP 伺服器，使用它的本機網址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
-代理用 `companion_list` 檢視已配對的裝置及其操作。代理用 `companion_invoke` 執行操作。
+代理用 `companion_list` 查看每台已配對的裝置及其動作，用 `companion_invoke` 執行動作。
 
-夥伴裝置回傳的文字上限為 1 MiB。請從 `structuredContent.result.content_b64` 讀取 Drop 檔案資料。
+Companion 的文字結果上限為 1 MiB。Drop 的檔案資料從 `structuredContent.result.content_b64` 讀取。
 
 ## 本機工作階段
 
-**本機工作階段**是裝置上的程式開發代理正在進行的對話。SwB 會顯示工作階段狀態和 `local:session:<companion>:<harness>:<session>` 位址。
+**本機工作階段**是程式開發代理在裝置上開啟中的對話。SwB 會列出它的狀態和 `local:session:<companion>:<harness>:<session>` 位址。
 
-配對前，請依表格中的連結設定本機代理。配對後，讓夥伴裝置持續執行。請以擁有者身分登入的代理呼叫 `targets(block="local")`。確認結果中列出你的工作階段位址。
+在「選擇功能」的表格中找到你的程式開發代理，開啟對應的連結。配對前先設定好這個代理，配對後讓 Companion 持續執行。然後請一個以擁有者身分登入的代理呼叫 `targets(block="local")`，確認你的工作階段位址出現在結果中。
 
-SwB 會嘗試把訊息送到已開啟的工作階段。寄件者有權使用代理信箱時，SwB 也會把訊息放進信箱。回覆會回到原本的 SwB 對話。
+SwB 會嘗試把每則訊息送到開啟中的工作階段。傳送者可以使用該代理的信箱時，SwB 會把訊息放進信箱。回覆會回到同一段對話中。
 
-從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
+使用 `targets` 回傳的工作階段位址，在 `visibility_list` 中找到該位址對應的資源，再用 `visibility_set` 分享這項資源。
 
-如需指令與適用的代理，請參閱[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
+指令和支援的代理見[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
 
 ## 保持執行
 
-配對後，夥伴裝置就會開始執行。執行 `swb companion run` 可重新啟動。執行 `swb companion status` 可檢視本機裝置編號和功能。
+配對時會啟動 Companion 程式。要再次啟動，執行 `swb companion run`。執行 `swb companion status` 可查看本機的裝置 ID 和功能。
 
-透過 `uvx` 執行時，將指令中的 `swb` 換成 `uvx swb-one`。配對 Muse 時，請保留 [Muse 指南](/zh-Hant/docs/setup/muse)中的套件和 Python 選項。
+要用 `uvx` 執行這些指令，把 `swb` 換成 `uvx swb-one`。如果用於 Muse，保留 [Muse 指南](/zh-Hant/docs/setup/muse)中的套件和 Python 選項。
 
-每次連線都由裝置發起。
+每一條通往 SwB 的連線都由裝置發起。
 
 ## 中斷連線
 
-在裝置上執行 `swb companion disconnect`，以移除裝置金鑰。也可以在主控台的 **Settings** 中開啟 **Connections**。在該裝置旁選取 **Disconnect**，以撤銷金鑰。
+在裝置上執行 `swb companion disconnect` 可移除它的金鑰。要在主控台撤銷金鑰，開啟 **Settings** 中的 **Connections**，選取該裝置的 **Disconnect**。
 
-執行中的夥伴裝置發現金鑰已遭撤銷時，會刪除本機金鑰。若裝置上仍有金鑰，請先執行 `swb companion disconnect`，再重新配對。
+執行中的 Companion 偵測到金鑰已撤銷時，會移除本機的金鑰。如果裝置上還留著金鑰，先執行 `swb companion disconnect`，再重新配對。

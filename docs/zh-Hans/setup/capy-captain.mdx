@@ -1,91 +1,91 @@
 ---
 title: Capy Captain
-description: 把 SwB 的工作发给 Capy Captain，并把答复带回来。
+description: 把 SwB 的任务路由给 Capy Captain，并把回复带回来。
 ---
 
-Capy Captain 是负责协调一组线程的 Capy 智能体。SwB 把任务发给 Captain，再将回复交给发送方。
+Capy Captain 是指挥一组线程的 Capy 智能体。SwB 把任务发给 Captain，再把每条回复送回发送方。
 
 ## 开始之前
 
-请在同一个 Capy 组织中准备账号、项目和 Captain。服务用户是供软件使用的 Capy 账号。
+需要同一个组织下的 Capy 账号、项目和 Captain。服务用户是供软件使用的 Capy 账号。
 
-启用 `capy` 模块。在 Capy 的 **Settings** → **MCP & plugins** 中添加 SwB。请使用具有完整所有者权限的 SwB 客户端。
+启用 `capy` 模块。在 Capy 的 **Settings** → **MCP & plugins** 下添加 SwB。使用一个拥有完整所有者权限的 SwB 客户端。
 
 ## 复制设置提示词
 
 <SetupPrompt name="capy-captain" lang="zh-Hans" />
 
-把提示词粘贴到 SwB 所有者客户端。
+把提示词粘贴到你的 SwB 所有者客户端中。
 
 ## 设置 Captain 路由
 
 ### 打开 API 设置
 
-在 Capy 中打开 **Settings** → **API**。确认当前是正确的组织。
+在 Capy 中打开 **Settings** → **API**，确认打开的是正确的组织。
 
 ### 创建读取密钥
 
-创建一个可访问 Captain 的个人 API 密钥。趁 Capy 显示密钥时复制。
+创建一个能访问你的 Captain 的个人 API 密钥。趁 Capy 还显示着密钥，把它复制下来。
 
 ### 保存读取密钥
 
-打开智能体给你的领取链接。把密钥粘贴到 **Token**。然后选择 **Save token**。
+打开智能体给出的认领链接。把密钥粘贴到 **Token** 中，选择 **Save token**。
 
 ### 重启 SwB
 
-智能体提示时，重启 SwB。SwB 随后加载该密钥。
+智能体提示时，重启 SwB。SwB 随后会加载这个密钥。
 
 ### 创建 Capy Captain
 
-按需创建 Capy Captain。选择项目和 Captain 运行所用的设备。
+如有需要，创建一个 Capy Captain。选择项目，以及运行 Captain 的机器。
 
 ### 选择 Capy Captain
 
-告诉智能体由哪个 Capy Captain 接收工作。
+告诉智能体由哪个 Capy Captain 接收任务。
 
 ### 创建发送密钥
 
-在 **Settings** → **API** 中创建角色为 `read_write` 的服务用户。给它授予项目访问权限。为它创建密钥。
+在 **Settings** → **API** 中创建一个角色为 `read_write` 的服务用户。授予它项目的访问权限。为这个服务用户创建一个密钥。
 
 ### 共享 Capy Captain
 
-打开 Capy Captain 菜单。选择 **Share**。授予服务用户访问权限。如果 Captain 使用已配对设备，也给服务用户授予该设备的访问权限。 {/* unverified */}
+打开 Capy Captain 的菜单，选择 **Share**，向服务用户授予访问权限。如果 Captain 运行在已配对的设备上，还要向服务用户授予这台设备的访问权限。 {/* unverified */}
 
 ### 保存发送密钥
 
-打开第二个领取链接。把密钥粘贴到 **Token**。然后选择 **Save token**。
+打开第二个认领链接。把密钥粘贴到 **Token** 中，选择 **Save token**。
 
 ### 再次重启 SwB
 
-重启 SwB。然后告诉智能体已完成。
+重启 SwB，然后告诉智能体你已完成。
 
-## 智能体的工作
+## 智能体会做什么
 
-在具有完整所有者权限的客户端中调用 `connect(what="capy-captain")`。如果需要读取密钥，SwB 会返回领取链接。领取链接是用来提交凭据的私密页面。
+从一个拥有完整所有者权限的客户端调用 `connect(what="capy-captain")`。如果 SwB 需要读取密钥，它会返回一个认领链接。认领链接是用来填写凭据的私密页面。
 
-重启后，`connect` 会列出可用的 Captain。确认由哪个 Captain 接收任务。调用 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。需要项目路由时，在 `choose` 中加入 `"project":"<project>"`。路由指定任务的去向。
+重启后，`connect` 会列出可用的 Captain。确认由哪个 Captain 接收任务，然后调用 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。要设置项目路由，在 `choose` 中加上 `"project":"<project>"`。路由告诉 SwB 把任务发往何处。
 
-如果智能体需要服务密钥才能发送，SwB 会要求提供密钥。用 `capy_captains`、`routes_list` 和 `routes_resolve` 检查路由。
+如果智能体需要服务密钥才能发送，SwB 会要求提供。用 `capy_captains`、`routes_list` 和 `routes_resolve` 检查路由。
 
-如果应用支持 MCP 事件，请订阅 `switchboard.message.created`。要主动读取消息，请调用 `wait` 或 `inbox`。
+如果你的应用支持 MCP Events，订阅 `switchboard.message.created`。要按需读取，调用 `wait` 或 `inbox`。
 
 ## 凭据
 
 | 令牌 | 显示位置 | 格式 | 去向 |
 | - | - | - | - |
-| 读取密钥 | **Settings** → **API**，只显示一次 | `capy_` 加 43 个随机字符 | 对应 SwB 领取链接中的 **Token** |
-| 发送密钥 | **Settings** → **API**，只显示一次 | `capy_` 加 43 个随机字符 | 对应 SwB 领取链接中的 **Token** |
+| 读取密钥 | **Settings** → **API**，只显示一次 | `capy_` 加 43 个随机字符 | 对应 SwB 认领链接页面上的 **Token** |
+| 发送密钥 | **Settings** → **API**，只显示一次 | `capy_` 加 43 个随机字符 | 对应 SwB 认领链接页面上的 **Token** |
 
 ## 检查连接
 
-请智能体再次调用 `connect(what="capy-captain")`。确认结果为 `connected`。向路由发送简短的测试任务。在 Captain 的线程中查看任务。用 `result` 或 `inbox` 读取回复。以所有者身份打开 `/healthz`，查看发送密钥的名称和状态。
+让智能体再次调用 `connect(what="capy-captain")`，确认返回 `connected`。向这条路由发送一个简短的测试任务，确认任务出现在 Captain 线程中。用 `result` 或 `inbox` 读取回复。以所有者身份访问 `/healthz`，查看已配置的发送密钥的名称和状态。
 
-## 解决问题
+## 排查问题
 
-Capy 密钥使用对应账号的权限。如果 `connect` 请求新的读取密钥，请创建一把有权访问 Captain 的密钥。
+Capy 密钥沿用所属账号的权限。如果 `connect` 要求提供新的读取密钥，创建一个能访问 Captain 的密钥。
 
-如果发送时出现访问错误，请检查服务用户是否有权访问项目、Captain 和配对设备。
+如果发送失败并报访问错误，检查服务用户对项目、Captain 和已配对设备的访问权限。
 
-服务器环境中的值优先于领取链接保存的值。请在服务器环境中修改该值，然后重启 SwB。
+服务器环境中的值优先于用认领链接保存的值。要修改这个值，在服务器环境中更改，然后重启 SwB。
 
-更换丢失的密钥时，请在 **Settings** → **API** 撤销旧密钥。然后创建新密钥。每个领取链接可用一次，30 分钟后失效。
+要替换丢失的密钥，先在 **Settings** → **API** 中撤销它，再创建新密钥。每个认领链接只能使用一次，30 分钟后过期。
