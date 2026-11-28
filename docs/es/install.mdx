@@ -1,0 +1,93 @@
+---
+title: Instalación
+description: Instala SwB con uvx, pipx o Docker.
+---
+
+{/* prepublication */}
+
+SwB funciona en Linux, macOS y Windows. Para compilar SwB desde el código fuente, sigue [Docker Compose](/es/docs/deploy#docker-compose). Usa los métodos siguientes cuando se publiquen el paquete o la imagen.
+
+## Instalar e iniciar
+
+Usa una carpeta vacía para tus archivos de SwB. La clave de propietario permite al comando `swb` iniciar sesión en tu nombre.
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    [Instala uv](https://docs.astral.sh/uv/getting-started/installation/). SwB necesita Python 3.12 o una versión posterior.
+
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx descarga e inicia SwB. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal en un plazo de cinco minutos. En los demás ejemplos, cambia el `swb` inicial por `uvx swb-one`.
+  </Tab>
+  <Tab value="pipx">
+    [Instala pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB necesita Python 3.12 o una versión posterior.
+
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx instala el comando `swb` para tu cuenta de usuario. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal en un plazo de cinco minutos.
+
+    Si pipx usa una versión anterior de Python, usa `pipx install --python 3.12 swb-one`.
+  </Tab>
+  <Tab value="Docker">
+    [Instala Docker](https://docs.docker.com/get-started/get-docker/).
+
+    ```bash
+    (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
+    docker run -d --name swb --env-file .env \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    Estos comandos crean un archivo `.env` privado e inician el contenedor. La imagen guarda sus datos en `/data`. Ejecuta `docker exec swb swb login-link` para obtener un enlace de inicio de sesión. Para ejecutar otro comando de SwB dentro del contenedor, empieza el comando con `docker exec -it swb swb`.
+  </Tab>
+</Tabs>
+
+En el primer arranque local, `swb up` crea `.env`, `config/switchboard.yaml` y `data/` en la carpeta de la instancia. Ejecuta `swb login-link` más tarde para obtener un enlace nuevo.
+
+Para crear los archivos antes de iniciar el servidor, ejecuta `swb init`. Después ejecuta `swb up`. Ejecuta `swb login-link` en una segunda terminal desde la misma carpeta.
+
+De forma predeterminada, `swb up` escucha en `127.0.0.1`, en el puerto `8870`. La dirección MCP local predeterminada es `http://localhost:8870/mcp`. Define `SWB_PORT` en la shell o en `.env` para usar otro puerto.
+
+Usa `swb up --dir ./my-swb` para elegir una carpeta de instancia. Usa el mismo `--dir` con `swb init`, `swb status`, `swb login-link`, `swb connect` y `swb claim`. Consulta [Configuración](/es/docs/config) para las direcciones de escucha, los archivos de configuración y las carpetas de datos.
+
+## Comprobar el servidor
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+Esta petición anónima muestra `status` y `version`. Ejecuta `swb status` o llama a `/healthz` con la clave de propietario para ver los bloques, su estado y las variables que faltan.
+
+## Comandos del servidor
+
+Ejecuta `swb --help` para ver los grupos de comandos. Añade `--help` a un comando para ver sus opciones.
+
+| Comando | Uso |
+| - | - |
+| `swb init` | Escribe una clave de propietario privada y una configuración mínima. |
+| `swb up` | Inicia SwB en este ordenador. |
+| `swb connect PLATFORM` | Muestra los pasos para conectar una plataforma. |
+| `swb companion` | Empareja, ejecuta o desconecta un companion. |
+| `swb hook HARNESS` | Reenvía al companion un evento de un agente local. |
+| `swb status` | Muestra el estado y los siguientes pasos. |
+| `swb login-link` | Crea un enlace de inicio de sesión de propietario de un solo uso. |
+| `swb claim` | Guarda una credencial desde un enlace o un código de entrega. |
+| `swb serve` | Ejecuta el servidor con el host y el puerto configurados. |
+| `swb export DIR` | Escribe la memoria guardada en archivos Markdown dentro de la carpeta de salida `DIR`. |
+| `swb log [--limit N]` | Muestra las entradas recientes de auditoría. El límite predeterminado es `50`. |
+| `swb config migrate` | Muestra una configuración de la versión 1 en el formato de la versión 2. |
+| `swb blocks list` | Lista los bloques configurados. |
+| `swb blocks show BLOCK` | Muestra los ajustes de un bloque. |
+| `swb blocks check` | Comprueba la configuración de los bloques. |
+| `swb targets` | Lista los destinos de `send`. |
+
+## Versiones
+
+{/* prepublication */}
+
+Tras la publicación, PyPI aloja el paquete `swb-one`. GitHub Container Registry aloja la imagen `ghcr.io/zhehanzhang/swb`. Para elegir una versión concreta, usa un número como `1.0.0`. La etiqueta de imagen `latest` apunta siempre a la versión estable más reciente.

@@ -1,0 +1,69 @@
+---
+title: ChatGPT
+description: Connectez ChatGPT à SwB pour que ChatGPT lise les messages SwB et y réponde.
+---
+
+Ajoutez SwB à ChatGPT comme serveur MCP personnalisé. Un serveur MCP donne à une application l'accès à des outils externes. ChatGPT se connecte à SwB sous le nom `chatgpt`.
+
+## Avant de commencer
+
+Les offres Business, Enterprise et Edu prennent en charge les outils MCP en écriture. L'offre Pro prend en charge les outils en lecture. Consultez [l'accès MCP personnalisé](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) de votre espace de travail.
+
+Avec Business, un administrateur ou un propriétaire crée et publie le plugin. Avec Enterprise et Edu, un administrateur peut accorder aux membres l'autorisation **Create plugins with MCPs**.
+
+Configurez une adresse publique HTTPS et la connexion propriétaire pour SwB. Avec OAuth, vous approuvez l'accès sur une page SwB dans votre navigateur.
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="chatgpt" lang="fr" />
+
+Après avoir ajouté SwB, collez le prompt dans une discussion ChatGPT.
+
+## Ajouter SwB à ChatGPT
+
+### Ouvrir Plugins
+
+Ouvrez [chatgpt.com/plugins](https://chatgpt.com/plugins) dans un navigateur sur ordinateur.
+
+### Ajouter le serveur
+
+Sélectionnez **+**. Sélectionnez ensuite **Add custom MCP server**.
+
+### Saisir l'adresse
+
+Saisissez `SwB` comme nom. Dans **Server URL**, saisissez votre adresse MCP SwB, par exemple `https://swb.example.com/mcp`.
+
+### Créer le plugin
+
+Sélectionnez **OAuth**. Sélectionnez **I understand and want to continue**. Sélectionnez ensuite **Create as a plugin**.
+
+### Installer et se connecter
+
+Installez le plugin. Connectez-vous à SwB en tant que propriétaire. Approuvez l'accès.
+
+### Publier pour votre espace de travail
+
+Pour un espace de travail partagé, demandez à un administrateur de [publier le plugin](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
+
+## Ce que fait l'agent
+
+ChatGPT appelle `connect(what="chatgpt")`. SwB renvoie l'adresse MCP et l'état OAuth. Une fois la connexion faite, `connect` indique que le client est connecté.
+
+ChatGPT envoie un message de test avec `send` et le lit avec `inbox`. Une boîte aux lettres conserve les messages d'un agent. Si le client prend en charge MCP Events, il peut s'abonner à `switchboard.message.created` pour la boîte aux lettres `chatgpt`. Un événement signale au client l'arrivée d'un message. ChatGPT lit le message avec `get_message` et répond avec `reply`. Dans une discussion ouverte, utilisez `wait` ou `inbox` pour récupérer les messages.
+
+## Identifiants
+
+| Jeton | Où il apparaît | Format | Destination |
+| - | - | - | - |
+| Jeton de connexion SwB | ChatGPT l'obtient à votre connexion | Texte aléatoire | ChatGPT le conserve pour vous |
+| Secret de signature des événements | Le client l'envoie avec l'abonnement | `whsec_` suivi de texte Base64 | SwB le stocke chiffré |
+
+## Vérifier la connexion
+
+Dans une discussion où SwB est activé, demandez à ChatGPT d'appeler `connect(what="chatgpt")`. Demandez ensuite à un autre agent d'exécuter `send(to="agent:chatgpt", task="SwB setup test: reply pong")`. Dans ChatGPT, récupérez le message avec `inbox` et demandez à ChatGPT d'y répondre. Pour tester un réveil, fermez la discussion, envoyez le message, puis vérifiez la réponse.
+
+## Résoudre les problèmes
+
+Ajoutez SwB depuis la [page Plugins](https://chatgpt.com/plugins) dans un navigateur sur ordinateur.
+
+Si le plugin vous demande de vous reconnecter, approuvez la connexion dans SwB.

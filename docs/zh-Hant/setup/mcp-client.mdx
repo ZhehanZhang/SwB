@@ -1,0 +1,84 @@
+---
+title: MCP 用戶端
+description: 用本機擁有者金鑰或配對碼連接 MCP 用戶端。
+---
+
+MCP 是應用程式使用外部工具的標準方式。這份指南用金鑰把應用程式與 SwB 配對。
+
+## 開始之前
+
+應用程式要支援以 Streamable HTTP 連接遠端 MCP。這種方式讓應用程式經由網路呼叫工具。應用程式還需要支援自訂請求標頭，用來帶入金鑰。你需要一個 SwB 擁有者用戶端，或 SwB 所在電腦上的終端機。
+
+如果要在應用程式所在的同一台電腦上啟動 SwB，在空資料夾中執行 `uvx swb-one up`，再開啟終端機顯示的一次性登入連結。更多選項見[安裝](/zh-Hant/docs/install)。
+
+Claude、ChatGPT、Grok 和程式開發代理各有專屬頁面，採用 OAuth 登入。這些應用程式依照各自的頁面設定。
+
+## 複製設定提示詞
+
+<SetupPrompt name="mcp-client" lang="zh-Hant" />
+
+把提示詞貼到 SwB 擁有者用戶端，或貼到要連接的應用程式中。
+
+## 本機擁有者用戶端
+
+在 SwB 所在的電腦上準備一個只供你自己使用的用戶端，用來設定其他應用程式。網址使用啟動時顯示的本機 `/mcp` 網址。把執行個體 `.env` 中的 `SWB_KEY_OWNER` 放進 `Authorization: Bearer <key>` 標頭。這把金鑰具備完整擁有者存取權。把它儲存在用戶端的本機私有設定檔中，檔案模式設為 `0600`，而且只傳送給本機的 SwB。
+
+## 配對用戶端
+
+如果代理能在本機編輯設定，讓它設定應用程式。把金鑰儲存在應用程式的私有設定中。如果是設定檔，檔案模式使用 `0600`。
+
+### 為應用程式命名
+
+告訴代理一個簡短的應用程式名稱，例如 `notes-bot`。SwB 會在這個應用程式送出的訊息上顯示這個名稱。
+### 取得配對碼
+
+請以擁有者身分登入的代理呼叫 `connect_code`，並提供應用程式名稱。也可以在 SwB 執行個體資料夾中執行 `uvx swb-one connect mcp-client --choose agent=notes-bot`，並把 `notes-bot` 換成你的應用程式名稱。
+### 取得金鑰
+
+在執行應用程式的電腦上，用終端機開啟一個私有資料夾。把 `https://swb.example.com` 換成你的 SwB 網址，並保留結尾的 `/connect`。如果是本機 SwB，使用 `http://localhost:8870/connect`，連接埠換成啟動時顯示的值。看到提示後，在 10 分鐘內輸入配對碼，輸入的內容會隱藏。
+
+```bash
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
+```
+### 將金鑰保密
+
+用本機的編輯器私下開啟 `.swb-pairing.json`。上面的指令會以檔案模式 `0600` 儲存回應。把其中的 `key` 用在應用程式設定中。SwB 只回傳這把金鑰一次。
+### 把 SwB 加入應用程式
+
+在應用程式的 MCP 設定中新增一個名為 `swb` 的伺服器，並選取 Streamable HTTP。如果是公開的 SwB 伺服器，使用檔案中的 `mcp_url`。如果是本機 SwB，使用啟動時顯示的 MCP 網址。
+### 加入金鑰
+
+在應用程式的私有設定中加入標頭 `Authorization: Bearer <key>`。儲存金鑰後，刪除 `.swb-pairing.json`。
+
+## 代理會做什麼
+
+代理以擁有者身分登入後，呼叫 `connect(what="mcp-client")`。SwB 會回傳 MCP 網址，並詢問應用程式名稱。代理再以 `choose={"agent":"notes-bot"}` 呼叫 `connect`。
+
+SwB 會為這個名稱產生一組配對碼，並回傳 `POST /connect` 步驟。配對碼是一次性代碼，有效 10 分鐘。如果應用程式已有金鑰，SwB 會指出這一點，而且只在 `connect_revoke` 之後才產生新的配對碼。
+
+在 SwB 伺服器的終端機中執行 `swb connect mcp-client --choose agent=notes-bot`，會得到相同的步驟。
+
+## 憑證
+
+| 項目 | 顯示位置 | 格式 | 去處 |
+| - | - | - | - |
+| 配對碼 | `connect` 或 `connect_code` 的結果 | `XXXXX-XXXXX`，有效 10 分鐘，限用一次 | `POST /connect` 請求 |
+| 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 應用程式私有設定中的 `Authorization` 標頭 |
+
+把金鑰儲存在應用程式的私有設定中。SwB 只儲存金鑰的雜湊值。
+
+## 檢查連線
+
+請新代理呼叫 `inbox`。請以擁有者身分登入的代理呼叫 `connect_list`，查看新金鑰上次呼叫的時間。請擁有者代理傳送一則測試訊息到 `agent:notes-bot`，再請新代理用 `inbox` 讀取，並用 `reply` 回覆。
+
+## 疑難排解
+
+如果 `POST /connect` 失敗，檢查 SwB 網址。如果配對碼已過期或已用過，向擁有者索取新的配對碼。如果金鑰外洩，用 `connect_revoke` 撤銷它，之後 SwB 會拒絕使用這把金鑰的呼叫。

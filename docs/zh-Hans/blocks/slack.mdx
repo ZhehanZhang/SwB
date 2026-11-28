@@ -1,0 +1,133 @@
+---
+title: Slack
+description: 把 Slack 消息路由给智能体，并在消息列中发布回复。
+---
+
+## 创建 Slack 应用
+
+打开 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)。选择同时使用机器人账号和用户账号的清单，或只使用用户账号的清单。清单是包含 Slack 应用设置的文件。
+
+把应用安装到你的工作区。让智能体连接 Slack，或运行 `swb connect slack`。用认领链接保存工作区令牌。重启 SwB 以加载已保存的令牌。
+
+| 令牌 | 查找位置 |
+| - | - |
+| Bot 令牌，`xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| 用户令牌，`xoxp-` | OAuth & Permissions → User OAuth Token |
+| 应用级令牌，`xapp-` | Basic Information → App-Level Tokens，带 `connections:write` |
+
+## 从 Slack 发送
+
+提及机器人，并写上目标的简称。用 `targets` 查询名称。
+
+```text
+@swb claude check the release notes
+```
+
+SwB 去掉目标名称，发送消息的其余部分。普通的机器人回复由 SwB 以目标的名称和头像发布在消息列中。在后续消息中，SwB 可以沿用消息列的目标。工作区的 `default_target` 作为后备。
+
+## 以智能体身份发布
+
+智能体用 `slack_post` 发布消息。用 `blocks.slack.agents.<agent>.workspaces` 指定智能体可以在哪些工作区、用哪些账号发布。每个账号有一项写入策略。
+
+| 策略 | 效果 |
+| - | - |
+| `free` | 智能体立即发布 |
+| `approval` | 每条消息先由所有者批准 |
+| `never` | 这个身份只读 |
+
+所有者在 Slack 私信或 SwB 页面中批准消息。MCP 工具只能发起审批请求。
+
+## 形象
+
+形象（persona）是机器人消息上显示的名称和头像。SwB 为每个 Capy Captain 分配一个形象。让智能体调用 `slack_personas` 查看可用的形象。智能体可以在 `slack_post` 中选用获准的形象。自定义头像文件放在 `<data>/avatars` 中。
+
+## 按频道指定项目
+
+`workspace_projects` 把工作区映射到项目。`channel_projects` 把单个频道映射到项目。这项映射决定 `@swb claude` 使用的项目记忆和主 routine。
+
+## 模块设置
+
+| 键 | 用途 |
+| - | - |
+| `blocks.slack` | Slack 模块及其工作区的设置 |
+| `blocks.slack.use` | 加载 `slack` 模块 |
+| `blocks.slack.enabled` | 设为 `true` 加载模块，设为 `false` 关闭模块 |
+| `blocks.slack.refresh_minutes` | 目标列表的更新间隔，单位为分钟。默认为 `30` |
+| `blocks.slack.target_aliases` | 把额外的目标名称映射到已有的目标 |
+| `blocks.slack.workspace_projects` | 为每个工作区设定默认的 SwB 项目 |
+| `blocks.slack.channel_projects` | 按工作区和频道名称或 ID 设定 SwB 项目 |
+| `blocks.slack.listen_channels` | 按频道名称或 ID，为每个工作区中的频道设定 `assist` 模式。频道模式可以覆盖它 |
+| `blocks.slack.max_text_chars` | 每条传入消息保留的最大字符数。默认为 `4000` |
+| `blocks.slack.event_retention_days` | Slack 事件的保留天数。默认为 `14` |
+
+要通过项目路由唤醒智能体，使用[频道模式](/zh-Hans/docs/channel-modes)。
+
+## 工作区和账号
+
+| 键 | 用途 |
+| - | - |
+| `blocks.slack.workspaces` | 把 SwB 中使用的工作区名称映射到各自的 Slack 设置 |
+| `blocks.slack.workspaces.*.team_id` | Slack 工作区 ID |
+| `blocks.slack.workspaces.*.app_id` | Slack 应用 ID。SwB 用它跳过自身应用发出的消息 |
+| `blocks.slack.workspaces.*.intake` | 填 `socket` 接收实时事件，填 `poll` 读取频道历史，填 `none` 关闭消息接收 |
+| `blocks.slack.workspaces.*.app_token_env` | Socket Mode 所用应用令牌的环境变量名 |
+| `blocks.slack.workspaces.*.identities` | SwB 在这个工作区中可以使用的 Slack 账号 |
+| `blocks.slack.workspaces.*.identities.bot` | 机器人账号的设置 |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | Bot 令牌的环境变量名 |
+| `blocks.slack.workspaces.*.identities.bot.write` | 机器人账号的写入策略。默认为 `free` |
+| `blocks.slack.workspaces.*.identities.user` | Slack 用户账号的设置 |
+| `blocks.slack.workspaces.*.identities.user.token_env` | 用户令牌的环境变量名 |
+| `blocks.slack.workspaces.*.identities.user.write` | 用户账号的写入策略。默认为 `approval` |
+| `blocks.slack.workspaces.*.user_only` | 设为 `true` 时只使用用户账号。同时把它的写入策略设为 `approval` 或 `never` |
+| `blocks.slack.workspaces.*.watched` | 为列出的频道设定 `watch` 模式。填 `*` 表示机器人已加入的所有频道 |
+| `blocks.slack.workspaces.*.default_target` | 发给 SwB 的新消息省略目标名称时使用的目标 |
+| `blocks.slack.workspaces.*.ack_reaction` | 用来确认收到提及和私信的 Slack 表情符号名称。机器人默认用 `eyes` |
+| `blocks.slack.workspaces.*.owner_user_ids` | 视为所有者的 Slack 用户 ID。默认为工作区的审批人 |
+| `blocks.slack.workspaces.*.known` | 把已知的 Slack 用户 ID 或机器人 ID 映射到显示名称。用它帮助判断接受哪些人的消息 |
+| `blocks.slack.workspaces.*.sender_rate` | 限制所有者以外每个发送方的消息接收量。适用于 `assist`、`triage` 和用作上下文的消息 |
+| `blocks.slack.workspaces.*.sender_rate.count` | 时间窗口内每个发送方的最大消息数。默认为 `5` |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | 时间窗口的长度，单位为秒。默认为 `600` |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | 机器人一小时内可在每个消息列中发布的消息数，超出后需要审批。默认为 `20` |
+
+## 智能体访问和审批
+
+| 键 | 用途 |
+| - | - |
+| `blocks.slack.agents` | 把 SwB 智能体映射到各自的 Slack 权限 |
+| `blocks.slack.agents.*.workspaces` | 设定智能体在每个工作区中可以使用的账号 |
+| `blocks.slack.agents.*.allow_persona_override` | 设为 `true` 时，智能体可以为机器人消息选择形象 |
+| `blocks.slack.agents.*.allowed_personas` | 智能体有权选择形象时可选的形象 ID |
+| `blocks.slack.approvals` | Slack 消息审批请求的默认设置 |
+| `blocks.slack.approvals.approver_user_id` | 接收并处理默认审批请求的 Slack 用户 ID |
+| `blocks.slack.approvals.notify_workspace` | 由哪个工作区的机器人向默认审批人发送审批请求 |
+| `blocks.slack.approvals.ttl_minutes` | 审批请求的有效期，单位为分钟。默认为 `60` |
+| `blocks.slack.workspaces.*.approver_user_id` | 接收并处理这个工作区审批请求的 Slack 用户 ID。它优先于默认值 |
+
+## 名称和头像
+
+在设置中打开 Slack，修改机器人发消息时显示的名称和头像。每个工作区可以使用自己的名称和头像。Slack 通过 `chat:write.customize` 授权。应用图标在 Slack 应用设置中修改。
+
+开启 **Post every agent as this bot** 后，智能体通过机器人的回复会显示工作区设定的名称和头像。审计记录保留回复的智能体。使用用户令牌发送的消息会显示用户资料。
+
+| 键 | 用途 |
+| - | - |
+| `blocks.slack.personas` | 定义机器人发布消息时可以使用的名称和头像 |
+| `blocks.slack.personas.*.name` | 使用这个形象的机器人消息所显示的名称 |
+| `blocks.slack.personas.*.avatar` | 形象的头像文件名。设置 `blocks.slack.public_base_url`，让 Slack 能获取它 |
+| `blocks.slack.personas.*.emoji` | 代替形象头像的后备 Slack 表情符号 |
+| `blocks.slack.avatar_dirs` | 额外的头像文件夹。SwB 先搜索它们，再搜索内置头像 |
+| `blocks.slack.public_base_url` | Slack 获取头像文件所用的公网 HTTPS 地址，例如 `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | 这个工作区中机器人消息的默认形象 ID |
+
+## 事件投递
+
+| 键 | 用途 |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | 设置把 Slack 事件发送到其他服务的 Webhook |
+| `blocks.slack.workspaces.*.sinks.*.name` | 在日志和状态中标识这个 Webhook 的名称 |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | Webhook URL 的环境变量名 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | 设为 `stripe` 时按 Stripe 格式为请求签名 |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 签名密钥的环境变量名 |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | 要发送的事件类型。可选 `watched`、`mention` 和 `dm`。默认三种都发送 |
+| `blocks.slack.workspaces.*.sinks.*.targets` | 只发送这些目标名称的事件 |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 合并事件的收集时长，单位为秒，这段时间内的事件合并为一次请求。默认为 `0`，即每个事件单独发送 |

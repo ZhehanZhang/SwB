@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "swb-site",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_names": false,
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets",
+    "html_handling": "none",
+    "run_worker_first": ["/cdn-cgi/swb-docs/*"]
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ASK_DO", "class_name": "AskLimiter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AskLimiter"] }],
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "NEXT_PUBLIC_ASK_AI": "1"
+  },
+  "env": {
+    "local": {
+      "durable_objects": {
+        "bindings": [{ "name": "ASK_DO", "class_name": "AskLimiter" }]
+      },
+      "vars": {
+        "NEXT_PUBLIC_ASK_AI": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,134 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { connectorKind } from "../src/lib/connector-kind.js"
+import { getAgentDetail, listAgents } from "../src/pages/agents/data.js"
+import { auditActorKind, auditText, isAuditPage, type AuditEvent } from "../src/pages/audit/events.js"
+import { participants, senderLogoKind, type Conversation } from "../src/pages/inbox/data.js"
+
+const jam = "jam_CAPTAIN123"
+const captain = `capy:captain:${jam}`
+
+function event(action: string, overrides: Partial<AuditEvent> = {}): AuditEvent {
+  return {
+    id: 1, at: null, origin: "mcp", source: "codex", action,
+    destination: "capy", outcome: "ok", target: null, ref: null, ...overrides,
+  }
+}
+
+test("audit uses discovered labels and hides older raw Captain metadata", () => {
+  const discovered = event("delegate", { target: captain, metadata: { target_label: "Conductor" } })
+  assert.ok(isAuditPage({ items: [discovered], next_cursor: null }))
+  assert.equal(auditText(discovered), "Delegated to Conductor")
+  assert.equal(auditText(event("delegate", { target: captain })), "Delegated to Capy Captain")
+  assert.equal(auditText(event("delegate", { target: `captain Conductor (${jam})` })), "Delegated to Conductor")
+  assert.equal(auditText(event("route_set", { metadata: { agent: "github", repo_count: 1, target_name: captain } })),
+    "Routed 1 GitHub repository to Capy Captain")
+  assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: jam } })), "Routed Slack to Capy Captain")
+  assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: "Conductor" } })), "Routed Slack to Conductor")
+})
+
+test("audit hides jam ids from fallback sentences", () => {
+  assert.equal(auditText(event("turn_cap", { ref: captain, metadata: { turn_cap: 8 } })), "Paused conversation Capy Captain at 8 turns")
+  assert.equal(auditText(event("conversation_resume", { ref: jam, metadata: { ref_label: "Conductor" } })), "Resumed conversation Conductor")
+  for (const row of [
+    event("unknown_event", { destination: captain, outcome: `failed for ${jam}` }),
+    event("webhook", { destination: jam }),
+    event("request_write", { target: captain, outcome: "queued" }),
+    event("route_remove", { destination: jam, project: jam, metadata: { agent: jam, state: jam } }),
+  ]) assert.doesNotMatch(auditText(row), /jam_/i)
+})
+
+test("audit displays the key from project and general memory paths", () => {
+  assert.equal(auditText(event("memory_write", { target: "project:context/notes/x" })), "Wrote memory x")
+  assert.equal(auditText(event("memory_delete", { target: "general/research/archive/quick-start.md" })),
+    "Deleted memory quick-start.md")
+})
+
+test("audit accepts refusal detail and describes the refusal", () => {
+  const refused = event("webhook", { destination: "example", outcome: "refused", detail: "invalid signature" })
+  assert.ok(isAuditPage({ items: [refused], next_cursor: null }))
+  assert.ok(isAuditPage({ items: [{ ...refused, detail: null }], next_cursor: null }))
+  assert.ok(!isAuditPage({ items: [{ ...refused, detail: { example: "invalid signature" } }], next_cursor: null }))
+  assert.equal(auditText(refused), "Refused webhook for example")
+  assert.equal(auditText(event("tool_refused", { target: "routes_set", outcome: "refused" })), "Refused routes_set")
+})
+
+test("Audit Who uses explicit connector origins without overwriting MCP personas", () => {
+  for (const origin of ["slack", "discord", "telegram", "github", "chatgpt", "muse"]) {
+    assert.equal(auditActorKind(event("post", { source: "Alex", origin })), origin)
+  }
+  assert.equal(auditActorKind(event("post", { source: "codex", origin: "mcp" })), "codex")
+  assert.equal(auditActorKind(event("post", { source: "unrelated", origin: "discord-tools" })), "unrelated")
+  assert.equal(connectorKind("OpenAI"), "chatgpt")
+  assert.equal(connectorKind("dots"), "dots")
+  assert.equal(connectorKind("muse_code"), "muse")
+})
+
+test("inbox participants prefer the Captain label and keep a human fallback", () => {
+  const row: Conversation = {
+    owner: "codex", handle: "h_test", destination: "capy", ref: jam, target: captain, project: null,
+    title: null, status: null, open: true, created_at: null, updated_at: null,
+  }
+  assert.equal(participants({ ...row, first_target: "Conductor" }).to, "Conductor")
+  assert.equal(participants(row).to, "Capy Captain")
+  assert.equal(participants({ ...row, target: null }).to, "Capy thread")
+})
+
+test("inbox preserves participant labels and uses provider and agent identities for logos", () => {
+  const row: Conversation = {
+    owner: "chatgpt", handle: "h_chat", destination: "release-bot", destination_kind: "discord",
+    ref: "ops", target: null, project: null, title: null, status: null, open: true, created_at: null, updated_at: null,
+  }
+  assert.deepEqual(participants(row), { from: "chatgpt", to: "ops", fromKind: "chatgpt", toKind: "discord" })
+  const sender = { kind: "agent", label: "Ops helper", agent: "chatgpt" }
+  assert.deepEqual(participants({ ...row, destination: "mailbox", destination_kind: null, target: "agent:codex",
+    first_target: "Code reviewer", first_sender: sender }),
+  { from: "Ops helper", to: "Code reviewer", fromKind: "chatgpt", toKind: "codex" })
+  assert.equal(senderLogoKind({ kind: "telegram", user_name: "Ops helper" }), "telegram")
+  assert.equal(senderLogoKind({ kind: "capy_thread", title: "ChatGPT" }), "capy_thread")
+})
+
+test("agent deep links resolve server names and keep registered links disambiguated", async (t) => {
+  const origin = "https://switchboard.example.test"
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "location")
+  Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("/agents/alpha", origin) })
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "location", previous)
+    else Reflect.deleteProperty(globalThis, "location")
+  })
+  const paths: string[] = []
+  const dot = { id: "dot-one", name: "Alpha", block: "team-dots", online: true, projects: ["context"] }
+  const captainTarget = { id: jam, name: jam, block: "capy", online: true }
+  const detail = { keys: [], routines: [], audit: [] }
+  const expected = {
+    "/api/agents/alpha": { kind: "mailbox", agent: { id: "alpha", name: "alpha", agent: "alpha" }, ...detail },
+    "/api/agents/Alpha": { kind: "dot", agent: dot, ...detail },
+    "/api/agents": { keys: [], routines: [], captains: [captainTarget], dots: [dot], pending_claims: [] },
+    "/api/agents/detail?kind=dot&id=dot-one&block=team-dots": { kind: "dot", agent: dot, ...detail },
+  }
+  t.mock.method(globalThis, "fetch", async (url: URL) => {
+    const path = url.pathname + url.search
+    paths.push(path)
+    assert.equal(url.origin, origin)
+    return Object.hasOwn(expected, path)
+      ? Response.json(expected[path as keyof typeof expected])
+      : Response.json({ error: "agent_not_found" }, { status: 404 })
+  })
+
+  const signal = new AbortController().signal
+  const mailbox = await getAgentDetail("alpha", signal)
+  assert.equal(mailbox?.agent.name, "alpha")
+  assert.equal(mailbox?.agent.type, "mailbox")
+  const named = await getAgentDetail("Alpha", signal)
+  assert.equal(named?.agent.name, "Alpha")
+  assert.deepEqual(named?.agent.projects, ["context"])
+  const registeredAgents = await listAgents(signal)
+  const registered = registeredAgents.find(agent => agent.type === "dot")!
+  const registeredCaptain = registeredAgents.find(agent => agent.type === "captain")!
+  assert.equal(registered.id, "dot:team-dots:dot-one")
+  assert.equal(registeredCaptain.id, `captain:capy:${jam}`)
+  assert.equal(registeredCaptain.name, "Capy Captain")
+  assert.deepEqual(await getAgentDetail(registered, signal), named)
+  assert.equal(await getAgentDetail("missing", signal), null)
+  assert.deepEqual(paths, [...Object.keys(expected), "/api/agents/missing"])
+})

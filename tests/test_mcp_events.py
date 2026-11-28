@@ -148,6 +148,7 @@ async def test_subscribe_delivery_get_message_and_reply(amake, caplog):
     message = {"name": "get_message", "arguments": {"message_id": event_data["message_id"]}}
     result = (await rpc(client, "tools/call", message, modern=True))["result"]["structuredContent"]
     assert result["text"] == "private inbox body"
+    assert result["subject"] == "Capy asks: private inbox body"
     assert result["from"]["agent"] == "capy" and result["from"]["trust"] == "owner"
     reply = await core.verb(principal("second"), "reply", sent["conversation"], text="reply")
     assert reply["in_reply_to"] == sent["conversation"]
@@ -188,8 +189,9 @@ async def test_refresh_rotates_secrets_and_caches_verification(amake):
 
 async def test_visibility_scope_and_get_message_ownership(amake, monkeypatch):
     scoped_key = "r" * 32
+    owner_key = "o" * 32
     core, client = await amake(base_config(auth={"key_scopes": {"restricted": ["project:example"]}}),
-                               env={**default_env(), "SWITCHBOARD_KEY_RESTRICTED": scoped_key})
+                               env={**default_env(), "SWITCHBOARD_KEY_RESTRICTED": scoped_key, "SWITCHBOARD_KEY_FIXTURE_OWNER": owner_key})
     receiver = Receiver()
     receiver.bind(core)
     original = core.auth.verify_bearer
@@ -217,16 +219,36 @@ async def test_visibility_scope_and_get_message_ownership(amake, monkeypatch):
     assert (await rpc(client, "tools/call", args))["result"]["isError"]
     assert (await rpc(client, "tools/call", args, token=STATIC_KEY))["result"]["structuredContent"]["owner"] == "capy"
     core.visibility.set("target:capy", "shared", "config", core.clock())
-    assert (await rpc(client, "tools/call", args))["result"]["structuredContent"]["owner"] == "capy"
-    assert (await subscribe(client, params("capy")))["result"]["id"]
+    assert (await rpc(client, "tools/call", args))["result"]["isError"]
+    pairing = core.connections.mint(agent="paired", project=None, client=None, by="owner")
+    paired_key = core.connections.redeem(pairing["code"])["key"]
+    assert (await subscribe(client, params("capy"), paired_key))["error"]["code"] == -32024
+    assert (await subscribe(client, params("capy")))["error"]["code"] == -32024
+    assert (await subscribe(client, params("capy"), owner_key))["result"]["id"]
     await send(core, mailbox="capy", sender="gemini")
     await eventually(lambda: len(receiver.calls) == 2 and not pending(core))
     assert receiver.calls[-1][1]["data"]["mailbox_id"] == "capy"
-    core.visibility.set("target:capy", "private", "config", core.clock())
+    core.cfg.key_scopes["fixture-owner"] = ("*",)
+    assert (await subscribe(client, params("capy"), owner_key))["error"]["code"] == -32024
     await send(core, mailbox="capy", sender="gemini")
-    await eventually(lambda: subscription(core)["active"] == 0)
+    assert not core.blocks["mcp"].events._active(subscription(core))
     assert not pending(core) and len(receiver.calls) == 2
     assert (await rpc(client, "tools/call", args))["result"]["isError"]
+
+
+async def test_webhook_sends_only_ids_from_the_subscribers_allowed_scope(amake):
+    cfg = base_config()
+    cfg["auth"]["key_scopes"] = {"second": ["project:allowed"]}
+    core, client = await amake(cfg)
+    core.projects.create(slug="allowed", name="Allowed")
+    core.projects.create(slug="excluded", name="Excluded")
+    receiver = Receiver()
+    receiver.bind(core)
+    assert (await subscribe(client))["result"]["id"]
+    await send(core, project="excluded")
+    allowed = await send(core, project="allowed")
+    await eventually(lambda: len(receiver.calls) == 2 and not pending(core))
+    assert receiver.calls[-1][1]["data"]["conversation"] == allowed["handle"]
 
 
 @pytest.mark.parametrize("url, addresses, reason", [

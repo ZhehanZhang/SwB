@@ -1,0 +1,110 @@
+---
+title: Cloudflare
+description: Usa Cloudflare Tunnel para tener una dirección pública de SwB y Cloudflare Access para el inicio de sesión del propietario.
+---
+
+Cloudflare Tunnel da a SwB una dirección HTTPS pública fija. Un **túnel** conecta tu servidor con Cloudflare. Cloudflare Access limita la consola de SwB a tu cuenta.
+
+<span id="túnel-rápido" />
+
+## Túnel rápido [#quick-tunnel]
+
+Usa un túnel rápido para probar SwB en una dirección temporal. Ejecuta este comando en el host con `cloudflared`, el programa que conecta SwB con Cloudflare.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+Asigna a `SWB_PUBLIC_URL` la dirección HTTPS que aparece en la terminal. Si tu configuración contiene `public_url`, actualiza también ese ajuste. Reinicia SwB. La dirección cambia cada vez que inicias el túnel. Los inicios de sesión OAuth y las llaves de acceso usan esa dirección. Usa un túnel con nombre para tener una dirección permanente.
+
+<span id="túnel-con-nombre" />
+
+## Túnel con nombre [#named-tunnel]
+
+Usa una cuenta gratuita de Cloudflare con tu dominio.
+
+### Antes de empezar
+
+Sigue [Docker Compose](/es/docs/deploy#docker-compose) para iniciar SwB. Usa una cuenta de Cloudflare que pueda gestionar túneles y aplicaciones de Access para tu dominio. Permite que tu servidor se conecte a Cloudflare por el puerto 7844.
+
+### Crear el túnel
+
+Sigue [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Copia el token del túnel del comando de instalación. Ponlo en la entrada de `.env` de SwB que indica [el archivo Compose](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39). Mantén el token en privado.
+
+Para el túnel de Compose, apunta su dirección de servicio a `http://switchboard:8000`. Guarda el token del túnel en `.env` como `TUNNEL_TOKEN`. Añade la dirección o la red dedicada del conector a `trusted_proxies`.
+
+Inicia el conector del túnel en el servidor de SwB.
+
+```sh
+docker compose --profile tunnel up -d
+```
+
+Para un túnel en el host de SwB, apunta su dirección de servicio a `http://localhost:8870`. Asigna a `SWB_TRUSTED_PROXIES` la dirección del conector, como `127.0.0.1/32` para una conexión de loopback IPv4.
+
+Selecciona **Continue** cuando el conector aparezca en Cloudflare.
+
+<span id="proteger-la-consola" />
+
+### Proteger la consola [#cloudflare-access]
+
+[Crea una aplicación de Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) para el nombre de host de SwB. Elige **Allow** como acción de la política. En **Include** → **Emails**, escribe tu dirección de correo.
+
+Crea otra aplicación de Access en el mismo nombre de host para las rutas marcadas como **Bypass**. Elige **Bypass** como acción de su política. En **Include**, selecciona **Everyone**.
+
+| Ruta | Política de Access |
+| --- | --- |
+| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
+| `/healthz`, `/connect`, `/avatars/*` | Bypass |
+| `/inbox/poll`, `/inbox/events` | Bypass |
+| `/companion/*` | Bypass |
+| `/github/webhook` | Bypass para GitHub |
+| `/hooks/*` | Bypass para Webhooks |
+| Todas las demás rutas, incluidas `/pairing/companion`, `/authorize` e `/inbox` | Propietario |
+
+SwB comprueba los códigos de emparejamiento en `/companion/pair`. Comprueba la clave del dispositivo en las demás peticiones del companion. Si usas Access, pide a un agente con acceso de propietario que llame a `companion_code`.
+
+### Definir la dirección de SwB
+
+Define `SWB_PUBLIC_URL` en `.env` con tu dirección pública. Por ejemplo, usa `https://swb.example.com`. Añade el dominio de tu equipo y la etiqueta de audiencia de la aplicación del propietario a `config/switchboard.yaml`. La etiqueta indica a SwB qué aplicación emitió el token.
+
+Si tu configuración contiene `public_url`, actualiza también esa dirección.
+
+| Valor | Dónde encontrarlo | Clave de configuración |
+| --- | --- | --- |
+| Dominio del equipo | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
+| Application Audience (AUD) Tag | Aplicación del propietario → **Additional settings** | `auth.cloudflare_access.aud` |
+| Tu dirección de correo | Política del propietario → **Emails** | `auth.owner_emails` |
+
+```yaml
+auth:
+  owner_emails: [owner@swb.example.com]
+  cloudflare_access:
+    team_domain: example.cloudflareaccess.com
+    aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+Ejecuta `docker compose --profile tunnel up -d` otra vez para aplicar los ajustes.
+
+<span id="proxies-de-confianza" />
+
+### Proxies de confianza [#trusted-proxies]
+
+Un proxy inverso reenvía las peticiones a SwB. Añade la dirección del proxy o su red dedicada a `trusted_proxies` en `config/switchboard.yaml`. Escribe los rangos de red en formato CIDR, como `192.0.2.0/24`.
+
+También puedes definir `SWB_TRUSTED_PROXIES` en `.env`. Separa las entradas con comas. El ajuste de YAML tiene prioridad.
+
+Para un Cloudflare Tunnel en el host de SwB o en la red de Docker, añade la dirección o la red dedicada del conector del túnel. El conector se conecta directamente a SwB. Usa la entrada `cloudflare` para las conexiones directas desde los servidores perimetrales de Cloudflare.
+
+### Publicar el nombre de host
+
+Abre la pestaña **Routes** del túnel. Selecciona **Add route**. Elige **Published application**. Escribe tu nombre de host público. En **Service URL**, escribe `http://switchboard:8000`. Selecciona **Add route** para guardar la ruta.
+
+### Comprobar la conexión
+
+Abre `https://swb.example.com` en un navegador. Inicia sesión en Cloudflare Access. Abre `https://swb.example.com/healthz` para comprobar que SwB responde.
+
+Abre `https://swb.example.com/mcp` en una ventana privada del navegador. SwB devuelve `401` con una cabecera `WWW-Authenticate`. Si Cloudflare muestra su página de inicio de sesión, revisa la política de bypass.
+
+## Configurar una app
+
+Cuando el nombre de host funcione, usa [Conectar tus agentes](/es/docs/connect) para configurar una app. Usa la dirección MCP pública, por ejemplo `https://swb.example.com/mcp`. Pide a tu agente que llame a `switchboard_status` para comprobar su identidad en SwB.

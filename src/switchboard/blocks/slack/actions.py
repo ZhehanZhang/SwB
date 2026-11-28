@@ -1,6 +1,6 @@
 """The Slack block's out side: reads and writes in the owner's Slack workspaces, through the shared Slack engine.
 
-Ported from slackgate's MCP tools. A caller is a switchboard agent (OAuth agent or bearer key name), and
+A caller is a switchboard agent (OAuth agent or bearer key name), and
 slack.agents.<agent> says which workspaces and identities it may use. Writes follow each identity's policy: free,
 approval (queued until the owner approves out of band: the Slack DM buttons or the switchboard page), or never.
 No caller of this destination can approve a write.
@@ -13,7 +13,8 @@ import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .. import Action, Block, BlockError, Call
+from .. import Action, Block, BlockError, BlockRefused, Call
+from ...refusals import CONVERSATION_REQUIRED, GRANT_REQUIRED
 from ...slack.config import Grant, WorkspaceConfig
 from ...slack.personas import USER_POST_NOTE, PersonaError
 from ...slack.slack import WorkspaceRuntime, slack_error
@@ -54,7 +55,7 @@ class SlackActions(Block):
     def grant(self, call: Call) -> Grant:
         g = self.need().config.grant(call.principal.source)
         if g is None:
-            raise DestinationError(f"agent {call.principal.source!r} has no Slack access; the owner adds it under slack.agents.{call.principal.source}")
+            raise BlockRefused(GRANT_REQUIRED, f"agent {call.principal.source!r} has no Slack access; the owner adds it under slack.agents.{call.principal.source}")
         return g
 
     def scope(self, g: Grant, workspace: str, identity: str | None = None) -> tuple[WorkspaceConfig, WorkspaceRuntime, str]:
@@ -62,10 +63,10 @@ class SlackActions(Block):
         ws = engine.config.workspaces.get(workspace)
         allowed = g.identities_for(workspace)
         if ws is None or not allowed:
-            raise DestinationError(f"unknown workspace {workspace!r} for {g.id}; see slack_workspaces")
+            raise BlockRefused(GRANT_REQUIRED, f"unknown workspace {workspace!r} for {g.id}; see slack_workspaces")
         if identity:
             if identity not in allowed:
-                raise DestinationError(f"{g.id} may not use identity {identity!r} in {workspace!r} (allowed: {list(allowed)})")
+                raise BlockRefused(GRANT_REQUIRED, f"{g.id} may not use identity {identity!r} in {workspace!r} (allowed: {list(allowed)})")
         else:
             identity = "bot" if "bot" in allowed else allowed[0]
         rt = engine.runtimes.get(workspace)
@@ -218,8 +219,11 @@ class SlackActions(Block):
         _, rt, ident = self.scope(g, workspace, identity or None)
         params["channel"] = await self.slack(rt.resolve_channel(params["channel"]))
         call.note(target=f"{workspace}/{params['channel']}" + (f"/{params['thread_ts']}" if params.get("thread_ts") else ""), excerpt=params.get("text") or params.get("name") or "")
+        from .intake import slack_requester
+
         try:
-            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force)
+            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force,
+                                                requester=slack_requester(call.principal))
         except (WriteError, PersonaError) as exc:
             raise DestinationError(str(exc)) from exc
         call.note(ref=out.get("request_id") or out.get("ts"), detail=f"as {ident}: {out['status']}", outcome="queued" if out["status"] == "pending_approval" else None)
@@ -236,7 +240,7 @@ class SlackActions(Block):
         answer in a shared channel goes to the owner's DM."""
         h = self.core.inbox.handle(ref)
         if h is None or h["owner"] != call.principal.source:
-            raise DestinationError(f"no conversation {ref!r}")
+            raise BlockRefused(CONVERSATION_REQUIRED, f"no conversation {ref!r}")
         src: dict[str, Any] | None = None
         target = None
         for row in self.core.store.q("SELECT data FROM inbox WHERE handle = ? AND kind = 'slack_event' ORDER BY id DESC LIMIT 50", (ref,)):

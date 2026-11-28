@@ -1,0 +1,20 @@
+---
+title: Operate SwB
+description: Back up and upgrade SwB or export its memory.
+---
+
+## Backups and upgrades [#backups-and-upgrades]
+
+Stop SwB. Copy the full data folder. This keeps the database and its keys together. The keys include `mcp-events.key` and `claim-key`. Copy your config files and `.env`. Keep the backup private.
+
+Install or build the new version. Start SwB with the same data folder.
+
+## Export memory [#export-memory]
+
+Run the export inside the Compose container.
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+The export saves Markdown files by scope under `./data/export` on the host. Open `INDEX.md` to find the files. Set `memory.mirror_dir` to keep a current Markdown copy.

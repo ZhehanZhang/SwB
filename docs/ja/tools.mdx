@@ -1,0 +1,230 @@
+---
+title: ツール
+description: SwB がエージェントに提供する MCP ツールです。
+---
+
+`tools/list` は、現在のサインインで使えるツールを表示します。無制限のオーナーのサインインでは、有効なすべてのブロックのツールが表示されます。
+
+## ペアリング済みのキー
+
+ペアリング済みのキーは、オーナーが与えたアクセスの範囲で、次のツールを使えます。
+
+| 用途 | ツールと制限 |
+| - | - |
+| メッセージ | `send` と `targets` を使います。以前の名前が有効なときは `agent_send` を使えます。`inbox`、`wait`、`reply`、`status`、`result`、`cancel`、`get_message` は、キーの会話アクセスの範囲で使います |
+| メモリとプロジェクト | `context_pack` と `project_list` は、キーが許す範囲で使います。メモリのツールは、グラントのあるスコープで使います |
+| ルート | `routes_list` と `routes_resolve` を使います。`routes_set` と `routes_remove` では、`agent` に自分のエージェント名を設定します。プロジェクトは、キーのスコープにあるものを使います |
+| セットアップ | 状態の確認には `switchboard_status` と `modes_status` を使います。クライアント向けの手順には `connect` を使います。ブロックのセットアップとペアリングコードの発行には、オーナーのサインインを使います |
+| ブロック | ブロックのツールは、与えられたアクセスと、チャンネルモードが許す操作の範囲で使います |
+
+`login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list`、`visibility_set` には、無制限のオーナーのサインインが必要です。`project_create`、`project_update`、`project_sync`、`space_mode` にもこのサインインを使ってください。このサインインでは、`memory_promote`、`routine_register`、`routine_add`、`routine_remove`、`discord_provision`、`telegram_provision` も使えます。
+
+オーナーは、`auth.key_tools` でツールを、`auth.key_targets` で送信先を制限できます。`auth.key_scopes` の設定は、ルーティング、メッセージ、会話を制限します。メモリのツールは、SwB がペアリング済みのキーごとに保存したグラントを使います。
+
+## メッセージ
+
+| ツール | 用途 |
+| - | - |
+| `send` | 作業かメッセージを `task` に入れます。送信先を選ぶときは `to` を設定します。キーが許すときは、`to` を空にしてルートを使えます |
+| `agent_send` | 非推奨のツールです。`to="codex"` のように、`to` にエージェント名を渡します。`blocks.mcp.legacy_aliases` により既定で有効です。新しい呼び出しでは、`to="agent:codex"` を付けて `send` を使ってください |
+| `wait` | 新しいメッセージか返信を待ちます |
+| `inbox` | インボックスを読み、すぐに戻ります |
+| `reply` | 送信かインボックスの項目にある `handle` を `conversation` に渡します。返信の本文を `text` に入れます |
+| `status` | 1 つの会話の状態を表示します。Capy では、`messages` で最近のメッセージの件数を指定します。ツールの動作も含めるときは `include_tools=true` を設定します |
+| `switchboard_status` | サインイン中の ID、待ち時間の上限、ブロック、インスタンスの状態を表示します |
+| `result` | 会話の最終的な返信を取得します。対応している場合は、`tail` で最近の返信かメッセージの件数を指定できます |
+| `cancel` | 会話の追跡をやめます |
+| `targets` | 使える送信先のアドレスを一覧表示します。送れる相手は、キーと送信先のルールで決まります |
+| `get_message` | インボックスか MCP イベントにある `message_id` を使って、保存済みのメッセージを読みます |
+
+### インボックスのカーソル
+
+カーソルは、インボックス内の位置を示します。`inbox` と `wait` のツールは、項目を返すときに新しい位置を保存します。フィルターを使うと、別の位置が進むことがあります。その後の `wait` は、保存済みの位置から読みます。最初から読むときは、`inbox` に `since_cursor=0` を渡します。返ってきた `cursor` を `since_cursor` に渡すと、その位置から続けて読めます。
+
+スクリプトは、ベアラーキーを付けて `GET /inbox/poll` を呼び出すと、自分のインボックスに項目が届くのを待てます。再開するときは、返ってきた `cursor` を `after` に渡します。既定では、インボックスの現在の末尾から始まります。この呼び出しは、項目が届くか、待ち時間が終わると戻ります。MCP のカーソルはそのままです。メッセージを届いた順に受け取るときは、[インボックスのイベントストリーム](/ja/docs/connect#インボックスのイベントストリーム)を使ってください。サインインで見られるコンテキスト項目と Watch のダイジェストは、`inbox` で読んでください。
+
+ペアリング済みのキーでアクセス範囲外のメッセージや会話を指定すると、不明な ID と同じエラーを返します。詳しくは[制限付きのキー](/ja/docs/security#制限付きのキー)をご覧ください。
+
+### 送信のオプション
+
+| オプション | 用途 |
+| - | - |
+| `wait_s` | ブロックからの最初の返信を待つ時間を秒で設定します。SwB は、エージェントの待ち時間の上限を適用します。エージェントのメールボックスには `wait` を使います |
+| `forward` | `owner` の信頼レベルで受け取った、対象となる会話の ID を渡します。SwB は、最終的な返信を元の送信者に送ります |
+| `new_conversation` | `true` にすると、Capy Captain のプロジェクトで新しいスレッドを始めます。`false` にすると、Capy Captain のスレッドに送ります |
+| `files` | Capy のタスクにファイルを添付します。各ファイルに `name` と、`text` か `base64` の内容を指定します。ファイルの種類は `media_type` で設定します |
+| `repos` | Capy のタスクのリポジトリを、`owner/repo` の形の名前で渡します。SwB のプロジェクトにリンクしたリポジトリを使ってください |
+| `in_reply_to` | メッセージに返信するときは、このオプションの代わりに、`conversation` を付けて `reply` を使ってください |
+
+## メモリとプロジェクト
+
+オーナーのサインインか、メモリスコープのグラントを持つ認証情報を使ってください。エージェントとして項目を更新、移動、削除するときは、最後にその項目を書き込んだ認証情報を使ってください。オーナーはどの項目も管理できます。`general` にある既存の項目を変更するには、オーナー権限が必要です。
+
+| ツール | 用途 |
+| - | - |
+| `context_pack` | プロジェクトの概要を読みます。`general` は、認証情報にアクセス権があるときだけ含みます。ペアリング済みのキーでは、Capy のセクションに、会話スコープの範囲にあるそのエージェントの作業が表示されます |
+| `memory_write` | グラントのあるスコープに保存します。`scope`、`namespace`、`title`、`body` を渡します。ネームスペースは、スコープ内の項目をまとめるグループです。`notes/meetings` のように、小文字で 3 階層まで使えます。プロジェクトのメモリでは、`project` と `scope` に同じプロジェクトを渡します。`general` に書き込むときは、オーナーに確認を求めてください。そのあと `confirm_general=true` を設定します |
+| `memory_search` | `query` で検索します。`project` を渡すと、そのプロジェクトと、グラントのある `general` のメモリを検索します。そのプロジェクトだけを検索するときは `include_general=false` を設定します。`agent:<name>` のような特定のグラントには `scopes` を使います |
+| `memory_list` | `memory_search` と同じスコープの入力で、項目を一覧表示します |
+| `memory_read` | グラントのあるスコープで、1 つの項目を履歴とともに読みます |
+| `memory_delete` | グラントのあるスコープで、項目を削除します |
+| `memory_move` | 項目をプロジェクトかエージェントのスコープに移します。両方のスコープのグラントが必要です |
+| `memory_promote` | 項目を `general` に移します。オーナーのサインインを使います |
+| `memory_summary` | セッションの開始時に、グラントのあるメモリの短い索引を読み込みます |
+| `memory_view` | `/memories` の下のフォルダーかファイルを表示します。[メモリ](/ja/docs/memory)を参照してください |
+| `memory_create` | トピックのフォルダーにファイルを作ります |
+| `memory_str_replace` | ファイル内の 1 つの文字列を正確に置き換えます |
+| `memory_insert` | 行の後にテキストを追加します |
+| `memory_rename` | ファイルかトピックのフォルダーを新しいパスに移します |
+| `memory_history` | 項目の変更をすべて表示します |
+| `memory_restore` | 項目を以前のバージョンに戻します |
+| `memory_sync` | エージェント自身のメモリにある記憶を SwB にコピーします |
+| `memory_settings` | メモリ同期をオンまたはオフにします。オーナーのサインインを使います |
+| `memory_export` | すべてのメモリを zip ファイルでダウンロードします。オーナーのサインインを使います |
+| `memory_import` | zip ファイルからメモリを読み込みます。オーナーのサインインを使います |
+| `memory_backup_configure` | Git バックアップのリポジトリを設定します。オーナーのサインインを使います |
+| `memory_backup_status` | Git バックアップの状態を表示します。オーナーのサインインを使います |
+| `memory_backup_now` | 今すぐ Git バックアップを開始します。オーナーのサインインを使います |
+| `memory_backup_restore` | Git バックアップからメモリを読み込みます。オーナーのサインインを使います |
+| `project_list` | プロジェクトとそのリンクを一覧表示します |
+| `project_create` | プロジェクトを作成します |
+| `project_update` | プロジェクトの名前の変更、リンク、アーカイブ、非公開化を行います |
+| `project_sync` | プロジェクトを、対応するプロジェクトに再びリンクします |
+
+これらの値を設定するときは、`project_update` の `links` を使います。SwB は、設定済みのエージェントとブロックに応じたプロジェクトのリンクのキーを示します。
+
+| キー | 値 |
+| - | - |
+| `repos` | `owner/repo` の形のリポジトリ名のリスト |
+| `claude_project` | Claude のプロジェクト名か ID |
+| `chatgpt_project` | ChatGPT のプロジェクト名か ID |
+| `capy_project` | Capy のプロジェクト名か ID |
+
+非公開のプロジェクトを使うには、そのプロジェクトを指定したグラントか、オーナー権限が必要です。`memory_search` と `memory_list` では、`project` に非公開のプロジェクトを指定してください。ほかにアクセスできる公開のプロジェクトには `scopes` を使ってください。
+
+## セットアップ
+
+| ツール | 用途 |
+| - | - |
+| `connect` | プラットフォームの次のセットアップ手順を取得します |
+| `connect_code` | 新しいエージェント用のペアリングコードを作成します |
+| `connect_list` | エージェントのキーを一覧表示します |
+| `connect_revoke` | エージェントのキーを削除します |
+| `login_link` | オーナー用のワンタイムのサインインリンクを作成します |
+| `modes_status` | アクセスできるチャンネルとリポジトリについて、モード、送信先、セットアップの問題を表示します |
+| `space_mode` | オーナーとして、モード、プロジェクト、許可する操作を設定します。設定を消すときは `inherit` を使います |
+| `visibility_list` | 既定のアクセスルールと、個別のリソースのルールを表示します。オーナーのサインインを使います |
+| `visibility_set` | オーナーとして、リソースを非公開か共有に設定します。ツールは常に非公開です |
+
+### コンパニオンのツール
+
+これらのツールはオーナーとして使ってください。
+
+| ツール | タイトル | 用途 |
+| - | - | - |
+| `companion_code` | Pair a companion | デバイス用のペアリングコードを作成します |
+| `companion_list` | List companions | ペアリング済みのデバイスと、その状態と操作を表示します |
+| `companion_invoke` | Run a companion action | 接続中のデバイスで操作を実行します。デバイス ID と操作の詳細は `companion_list` で取得します |
+| `companion_revoke` | Disconnect a companion | デバイスのキーを取り消し、その接続を閉じます |
+
+## ルート
+
+ルートは、`send` の送信先を選びます。`capy`、`claude-routine`、`grok-routine` など、ルートを受け付けるブロックを使ってください。エージェントのメールボックスに直接届けるときは `to="agent:<name>"` を使います。Muse のメールボックスに送るときは `to="agent:muse"` を使います。[Muse を起こす](/ja/docs/setup/muse#muse-をリアルタイムで起こす)ときは `to="muse:gadget:muse"` を使います。
+
+| ツール | 用途 |
+| - | - |
+| `routes_list` | メールボックスのルートも含め、すべてのルートを一覧表示します |
+| `routes_set` | ルートを保存します。`target` には、`agent:<name>` のようなエージェントのメールボックスか、`capy:captain:<name>` のようなブロックのアドレスを指定します。ルートを絞るときは `agent` か `project` を使います |
+| `routes_resolve` | 1 つの配信先に一致するルートを表示します。`grok-routine` や `agent` などの `block` を渡します |
+| `routes_remove` | 選んだ `block` で、`agent` と `project` が完全に一致するルートを削除します |
+
+1 つの配信先のルートを確認または削除するときは、`block` を使います。既定では、`routes_resolve` はエージェントとプロジェクトの組み合わせ、プロジェクト、エージェント、全体のルートの順に確認します。各段階では、ブロックを順に確認し、次に `agent` を確認します。既定では、`routes_remove` も、指定したエージェントとプロジェクトについて同じ順番で配信先を確認します。
+
+## ブロックのツール
+
+### Capy
+
+`blocks.mcp.legacy_aliases` が有効なときは、以前の Capy のツール名が表示されます。
+| ツール | 用途 |
+| - | - |
+| `capy_captains` | Capy の接続でアクセスできる Capy Captain を一覧表示します |
+| `capy_captain_digest` | Capy Captain の要約を読み、作業中のクルーのスレッドと、オーナーの対応が必要なスレッドを確認します。オーナーのサインインを使います |
+| `capy_list` | SwB から送った作業か、Capy Captain のクルーやリンク済みの Capy プロジェクトにあるスレッドを一覧表示します。ペアリング済みのキーで見えるのは、スコープの範囲にある、そのエージェントの作業だけです |
+| `capy_delegate` | Capy に作業を送ります。新しい呼び出しでは、`to="capy"` を付けて `send` を使ってください |
+| `capy_inbox` | Capy のインボックスを読み、すぐに戻ります。新しい呼び出しでは、`block="capy"` を付けて `inbox` を使ってください |
+| `capy_wait` | インボックスの次の項目を待ちます。新しい呼び出しでは `wait` を使ってください |
+| `capy_status` | Capy のスレッドの状態と最近のメッセージを表示します。新しい呼び出しでは `status` を使ってください |
+| `capy_reply` | Capy のスレッドにフォローアップのメッセージを送ります。新しい呼び出しでは `reply` を使ってください |
+| `capy_result` | Capy のスレッドの最新の返信を、ファイルとプルリクエストへのリンクとともに取得します。新しい呼び出しでは `result` を使ってください |
+| `capy_cancel` | Capy に送った作業の追跡をやめます。Capy のスレッドはそのまま続けられます。新しい呼び出しでは `cancel` を使ってください |
+
+### Claude Code のルーティン
+
+これらのツールは、`claude-routine` ブロックが有効なときに表示されます。ルーティンとは、SwB が開始できる Claude Code のタスクです。
+
+| ツール | 用途 |
+| - | - |
+| `routine_register` | ルーティンを登録し、オーナーがトークンを入力するための受け取りリンクを取得します |
+| `routine_list` | SwB が開始できるルーティンを一覧表示します |
+| `routine_pickup` | ルーティンが空のプロンプトで始まったときに、メッセージを受け取ります |
+| `routine_add` | オーナーとして、トークン付きでルーティンを追加します |
+| `routine_remove` | オーナーとして、SwB で保存したルーティンを削除します |
+
+### Slack
+
+| ツール | 用途 |
+| - | - |
+| `slack_workspaces` | 使える Slack ワークスペース、それぞれで使えるアカウント、その投稿ルールを一覧表示します |
+| `slack_channels` | 選んだ Slack アカウントから見えるチャンネルを一覧表示します。SwB が監視しているチャンネルには印が付きます |
+| `slack_search` | オーナーの Slack アカウントを使って、ワークスペース内のメッセージを検索します |
+| `slack_history` | チャンネルの最近のメッセージを、新しい順に読みます |
+| `slack_thread` | スレッドの最初のメッセージとその返信を、古い順に読みます |
+| `slack_watched` | 新しいメッセージが SwB のインボックスに届くチャンネルを一覧表示します |
+| `slack_events` | 監視中のチャンネル、ボットへのメンション、ダイレクトメッセージの最近のメッセージを読みます。新しい項目が先に来ます |
+| `slack_wait` | インボックスに次の Slack の項目が届くのを待ちます |
+| `slack_personas` | ボットの投稿で使える名前と画像、既定の選択を表示します |
+| `slack_targets` | Slack でボットへのメンションの後ろに書く送信先の名前を一覧表示します |
+| `slack_post` | ボットか、オーナーの Slack アカウントとして投稿します。スレッドに返信するときは `thread_ts` を使います。投稿ルールによっては、オーナーの承認が必要です |
+| `slack_react` | メッセージに絵文字のリアクションを付けます。`slack_post` と同じルールが適用されます |
+| `slack_request_write` | Slack の投稿案を、承認を求めてオーナーに送ります |
+| `slack_write_requests` | Slack の承認リクエストの状態を確認します。1 つのリクエストを読むときは `request_id` を使います |
+
+### Discord
+
+| ツール | 用途 |
+| - | - |
+| `discord_status` | Discord の接続、スペース、残りのセットアップを表示します |
+| `discord_provision` | オーナーとして、セットアップ用のリンクと、ボットトークンを入力するワンタイムのリンクを取得します |
+| `discord_post` | オーナーのグラントを使い、ボットとしてチャンネルかスレッドに投稿します |
+
+### Telegram
+
+| ツール | 用途 |
+| - | - |
+| `telegram_status` | Telegram の接続、スペース、残りのセットアップを表示します |
+| `telegram_provision` | オーナーとして、セットアップ用のリンクと、ボットトークンを入力するワンタイムのリンクを取得します |
+| `telegram_post` | オーナーのグラントを使い、ボットとしてチャットかスレッドに投稿します |
+
+### GitHub
+
+GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handle` に渡してください。`github_reply` と `github_notify_owner` では `text` を使います。
+
+| ツール | 用途 |
+| - | - |
+| `github_status` | Webhook、リポジトリのモード、GitHub App の権限を確認します |
+| `github_label` | Issue かプルリクエストに既存のラベルを付けます |
+| `github_comment` | Issue かプルリクエストにコメントします |
+| `github_open_issue` | リポジトリに Issue を作成します |
+| `github_link_duplicate` | 同じリポジトリにある元の Issue に、Issue をリンクします。SwB は `duplicate` を付け、重複した Issue を `not_planned` としてクローズします |
+| `github_notify_owner` | 会話のきっかけになった Issue かプルリクエストへのリンクを付けて、オーナーのインボックスにメモを送ります |
+| `github_reply` | SwB の会話のきっかけになった GitHub のスレッドに返信します |
+
+### [Webhooks](/ja/docs/blocks/webhooks)
+
+| ツール | 用途 |
+| - | - |
+| `webhook_create` | 名前付きの受信用か送信用の Webhook を作成します |
+| `webhook_list` | Webhook を、アドレス、件数、シークレットの状態とともに一覧表示します |
+| `webhook_rotate` | 新しいシークレット用の受け取りリンクを取得し、必要に応じて猶予期間を設定します |
+| `webhook_revoke` | Webhook を止め、保存したシークレットを削除します |
+| `webhook_test` | 受信用のサンプルイベントか、送信用のサンプルメッセージを送ります |

@@ -1,6 +1,7 @@
 import json
 from urllib.parse import urlparse
 
+import httpx
 import pytest
 
 from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OTHER_PROJECT, OWNER, SERVICE_KEY, STATIC_KEY, base_config, call, default_env, new_core, payload
@@ -17,6 +18,35 @@ def config(**capy_config):
 
 def connect(client, what, *, project=None, choose=None):
     return payload(call(client, STATIC_KEY, "connect", {"what": what, "project": project, "choose": choose}))
+
+
+@pytest.mark.parametrize("paired", [False, True], ids=["owner", "paired"])
+@pytest.mark.parametrize("public_url", [None, "https://swb.example.com"])
+def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired, public_url):
+    cfg = base_config(version=2, blocks={"mcp": {}}, public_url=public_url)
+    if public_url:
+        cfg["public_url_aliases"] = ["https://alias.example.com"]
+    core, client = make(config=cfg)
+    key = STATIC_KEY
+    if paired:
+        pairing = core.connections.mint(agent="fixture-agent", project=None, client=None, by="owner")
+        key = core.connections.redeem(pairing["code"])["key"]
+
+    async def unexpected_request(*args, **kwargs):
+        pytest.fail("Cloudflare setup should only return a link.")
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", unexpected_request)
+
+    result = payload(call(client, key, "connect", {"what": " Cloudflare "}))
+
+    link = "https://swb.one/docs/cloudflare"
+    if public_url:
+        link += "#swb=https%3A%2F%2Fswb.example.com"
+    assert result == {"what": "cloudflare", "complete": False, "done": [], "next": [{
+        "by": "person", "do": "Follow the Cloudflare setup guide.", "link": link,
+    }]}
+    assert not core.routes.list()
+    assert not core.store.q("SELECT * FROM secrets")
 
 
 def claim(client, link, token):
@@ -36,10 +66,12 @@ def test_capy_claim_resume_and_restart(make, tmp_path, capy):
     assert "Capy Settings" in core.health()["blocks"]["capy"]["next_step"]
     response = connect(client, "capy-captain")
     step = response["next"][0]
+    assert response["complete"] is False
     assert response["done"] == ["Capy API key: absent."]
     assert step["by"] == "person"
     assert step["link"].rsplit("/", 1)[-1] not in step["do"]
-    assert client.get(urlparse(step["link"]).path).status_code == 403
+    refused = client.get(urlparse(step["link"]).path)
+    assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
     claim(client, step["link"], CAPY_KEY)
     response = connect(client, "capy-captain")
     assert response["done"] and "restart" in response["next"][0]["do"].lower()
@@ -83,13 +115,15 @@ def test_capy_lists_choices_and_routes_once(make, capy):
     core, client = make(config())
     result = connect(client, "capy-captain")
     assert result["done"][0] == "Capy API key: present."
+    assert result["complete"] is False
     assert all(any(captain in item for item in result["done"]) for captain in (CAPTAIN, CAPTAIN2))
     step, = result["next"]
     assert step["by"] == "you" and step["call"] == {
         "tool": "connect", "arguments": {"what": "capy-captain", "choose": {"captain": "<Captain ID>"}},
     }
     assert not core.routes.list("capy")
-    assert connect(client, "capy-captain", choose={"captain": CAPTAIN})["state"] == "connected"
+    completed = connect(client, "capy-captain", choose={"captain": CAPTAIN})
+    assert completed["complete"] is True and completed["state"] == "connected" and completed["next"] == []
     route, = core.routes.list("capy")
     assert not route.agent and not route.project and route.target["captain"] == CAPTAIN
     assert core.health()["blocks"]["capy"]["next_step"] is None
@@ -120,8 +154,11 @@ def test_claude_dedupes_resumes_and_completes(make):
     assert "register" in core.health()["blocks"]["claude-routine"]["next_step"]
     detail = {"claude_project": "Demo Web", "fire_url": "trig_01EXAMPLE"}
     instructions = connect(client, "claude-project", project="demo", choose={"claude_project": "Demo Web"})
-    assert '\n\n> Call routine_pickup(claude_project="Demo Web")' in instructions["next"][0]["do"]
-    assert instructions["next"][-1]["call"] == {
+    create, register = instructions["next"]
+    assert create["by"] == "person" and "API trigger" in create["do"]
+    assert '\n\n> Call routine_pickup(claude_project="Demo Web")' in create["do"]
+    assert register["by"] == "you" and "private claim link for token entry" in register["do"]
+    assert register["call"] == {
         "tool": "connect",
         "arguments": {"what": "claude-project", "choose": {
             "fire_url": "<fire URL or trigger ID>", "claude_project": "Demo Web", "project": "demo",

@@ -1,0 +1,99 @@
+---
+title: Companion
+description: Connect a device so your agents can use its local features.
+---
+
+A **companion** is a SwB program that runs on your own device. It connects to your SwB server. Agents can then use features on that device.
+
+## Copy the setup prompt
+
+<SetupPrompt name="companion" lang="en" />
+
+## Pair a device
+
+Ask an agent signed in as the owner to call `companion_code`. Ask the agent to save the code in a file with permissions `0600`. These permissions give only the file owner access.
+
+To get a code in the console, [sign in with a passkey](/docs/owner-login#passkey). Open **Settings**. In **Connections**, select **Pair a device**. If you use Cloudflare Access, use the `companion_code` tool.
+
+Run this command on the device. Replace the example address with your SwB HTTPS address. For SwB on this device, you can use `http://127.0.0.1:8870`.
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+Enter the pairing code at the hidden prompt. The code works once and expires after 10 minutes. The audit log records who made it.
+
+The device saves its own key in a private file.
+
+## Choose features
+
+Add one `--cap` option for each feature you want to enable.
+
+| Option | Feature |
+| --- | --- |
+| `--cap notify` | Shows desktop notifications on the device |
+| `--cap drop` | Shares files up to 10 MiB each through the `~/SwB Drop` folder |
+| `--cap mcp --mcp NAME=COMMAND` | Gives your agents access to tools on an MCP server on the device |
+| `--cap herdr` | [Herdr](/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex app server](/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode server](/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [Status hooks](/docs/blocks/local-sessions#status-hooks) |
+
+On Linux, notifications use `notify-send`. On Debian and Ubuntu, install it with the `libnotify-bin` package.
+
+Add one `--mcp` option per MCP server. For a program, use `--mcp 'NAME=COMMAND'`. Replace `NAME` with a name for your server. Replace `COMMAND` with the program's start command. For an HTTP server on the device, use its local address, such as `--mcp notes=http://127.0.0.1:8000/mcp`.
+
+Your agents use `companion_list` to see each paired device and its actions. They use `companion_invoke` to run an action.
+
+Companion text results have a 1 MiB limit. Read Drop file data from `structuredContent.result.content_b64`.
+
+## Local sessions
+
+A **local session** is a coding agent's open conversation on the device. SwB lists its status with its `local:session:<companion>:<harness>:<session>` address.
+
+Use the link for your coding agent in the feature table. Set up the agent before pairing. After pairing, keep the companion running. Ask an agent signed in as the owner to call `targets(block="local")`. Check that your session address appears.
+
+SwB tries to deliver each message to the open session. It puts the message in the agent's mailbox when the sender can use that mailbox. The answer comes back in the same conversation.
+
+Use the session address from `targets`. Find the resource for that address in `visibility_list`. Share the resource with `visibility_set`.
+
+For commands and supported agents, see [Local sessions](/docs/blocks/local-sessions).
+
+## Keep it running
+
+Pairing starts the companion. Use `swb companion run` to start it again. Use `swb companion status` to see the local device ID and features.
+
+If you paired with `uvx`, use `uvx swb-one` in place of `swb`. In the foreground, the companion runs directly in Python.
+
+The device starts each connection to SwB.
+
+## Run in the background
+
+Install a background service to start the companion automatically. Install SwB with `uv tool install swb-one`.
+
+For a new pairing, run `swb companion connect` with your pairing options and add `--no-run`. This pairs the device and exits. If the companion is running in your terminal, stop it before you install the service. Use the installed `swb` for the service commands.
+
+```sh
+swb companion service install
+```
+
+On Linux, `systemd --user` runs the service under your account. Run `loginctl enable-linger "$USER"` to start at boot and keep running after sign-out.
+
+On macOS, install the service from your desktop session. The SwB release automatically installs and verifies the signed **SwB Companion** app in `~/Applications`. `launchd` uses the app to start the service.
+
+On Windows, Task Scheduler starts the service when you sign in.
+
+Set the variables your local tools need in your service manager.
+
+Use `swb companion service start` to start the service. Use `swb companion service status` to check the service. Use `swb companion service logs` to read its logs.
+
+Use `swb companion status` to check the connection, the SwB address and whether the companion is running.
+
+Use `swb companion service stop` to stop the service now. Use `swb companion service uninstall` to remove automatic starts. This keeps the device key.
+
+## Disconnect
+
+Run `swb companion disconnect` on the device to remove its key. To revoke the key in the console, open **Connections** in **Settings**. Select **Disconnect** for the device.
+
+A running companion removes its local key when it detects the revocation. If a key remains on the device, run `swb companion disconnect` before pairing it again.

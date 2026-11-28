@@ -1,0 +1,247 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  min-width: 0;
+}
+
+.title {
+  margin: 0 0 .75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -.02em;
+}
+
+.runSection > [data-block-header] {
+  margin-bottom: .75rem;
+}
+
+.runSection > [data-block-header] .title {
+  margin: 0;
+}
+
+.runGuide[data-active='false'] {
+  display: none;
+}
+
+.runHelp {
+  color: var(--color-fd-muted-foreground);
+  font-size: .875rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.runHelp {
+  margin: -.25rem 0 .75rem;
+}
+
+.segments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(max-content, 1fr));
+  gap: .25rem;
+  overflow-x: auto;
+  padding: .25rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: .625rem;
+  background: var(--color-fd-muted);
+}
+
+.segments button {
+  min-height: 2.5rem;
+  border: 1px solid transparent;
+  border-radius: .375rem;
+  padding: .25rem;
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.segments button:hover {
+  background: var(--color-fd-background);
+}
+
+.segments button[aria-pressed='true'] {
+  border-color: var(--color-fd-border);
+  background: var(--color-fd-background);
+}
+
+.segments button,
+.alternative summary {
+  cursor: pointer;
+}
+
+.segments button:focus-visible,
+.alternative summary:focus-visible,
+.command pre:focus-visible,
+.prompt pre:focus-visible {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: 2px;
+}
+
+.segments button:focus-visible {
+  outline-offset: -2px;
+}
+
+.runPanels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  margin-top: .875rem;
+}
+
+.runPanel {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 0;
+}
+
+.runPanel[data-active='false'] {
+  visibility: hidden;
+  grid-template-rows: 0fr;
+}
+
+.runContent {
+  display: grid;
+  align-content: start;
+  gap: .625rem;
+  min-width: 0;
+  min-height: 0;
+  overflow: clip;
+  overflow-clip-margin: 5px;
+}
+
+.command,
+.prompt {
+  border: 1px solid var(--color-fd-border);
+  border-radius: .625rem;
+  background: var(--color-fd-card);
+  min-width: 0;
+}
+
+.command pre,
+.prompt pre {
+  border-top: 1px solid var(--color-fd-border);
+  margin: 0;
+  overflow: auto;
+  padding: .75rem;
+  font: .8125rem/1.5 var(--font-mono);
+  tab-size: 2;
+}
+
+.command pre {
+  max-height: 9.5rem;
+}
+
+.prompt pre {
+  max-height: 12rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.alternative {
+  font-size: .875rem;
+}
+
+.alternative summary {
+  width: fit-content;
+  font-weight: 550;
+}
+
+.alternative .command {
+  margin-top: .5rem;
+}
+
+.address {
+  display: grid;
+  gap: .5rem;
+  margin-top: 1.5rem;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.mark:global(.swb-mark-tile) {
+  width: 1.625rem;
+  height: 1.625rem;
+}
+
+@media (max-width: 430px) {
+  .segments {
+    gap: .125rem;
+    padding: .125rem;
+  }
+
+  .segments button {
+    padding-inline: .0625rem;
+    font-size: .8125rem;
+  }
+}
+
+@media (max-width: 374px) {
+  .segments button {
+    font-size: .75rem;
+  }
+}
+
+.agents {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 0;
+}
+
+.agent[data-active='false'] {
+  grid-template-rows: 0fr;
+  visibility: hidden;
+}
+
+.page[data-animate='true'] .agent,
+.page[data-animate='true'] .runPanel {
+  transition: grid-template-rows .2s ease;
+}
+
+.page[data-animate='true'] .agent[data-active='false'] {
+  transition: grid-template-rows .2s ease, visibility 0s .2s;
+}
+
+.agentBody {
+  min-height: 0;
+  overflow: hidden;
+  scroll-margin-top: calc(var(--fd-nav-height, 3.75rem) + 1rem);
+}
+
+.agent[data-active='false'] .agentBody {
+  contain: paint;
+}
+
+.agentTitle {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  margin: 1.5rem 0 .625rem;
+  border-top: 1px solid var(--color-fd-border);
+  padding-top: 1rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.procedure {
+  margin: .75rem 0 .5rem;
+  font-size: .9375rem;
+  line-height: 1.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page[data-animate='true'] .agent,
+  .page[data-animate='true'] .agent[data-active='false'],
+  .page[data-animate='true'] .runPanel {
+    transition: none;
+  }
+}

@@ -1,0 +1,55 @@
+---
+title: Claude
+description: Connectez Claude et Claude Projects, puis réveillez-les avec des routines.
+---
+
+## Ajouter le connecteur
+
+Suivez la [configuration de Claude](/fr/docs/setup/claude) pour ajouter votre adresse MCP SwB comme connecteur personnalisé. Activez le connecteur dans votre Project ou votre discussion. Claude se connecte avec OAuth sous le nom `claude`.
+
+## Connecter un Claude Project
+
+Collez le [prompt de configuration de Claude Project](/fr/docs/setup/claude-project) dans une discussion du Project.
+
+L'agent trouve le projet SwB et crée une routine avec un déclencheur API. Il appelle `connect` pour obtenir un lien de saisie à usage unique, valable 30 minutes. Ouvrez le lien. Collez le jeton de la routine dans le formulaire. Enregistrez le jeton. L'agent envoie un message de test et vérifie la réponse.
+
+## Routines
+
+Une **routine** est une tâche Claude Code que SwB peut lancer. SwB dépose aussi le message dans la boîte aux lettres de Claude. La routine répond à l'expéditeur avec `reply`.
+
+| Envoyer à | Destination |
+| - | - |
+| `claude` avec `project=<slug>` | Routine principale du projet |
+| `claude:<slug>` | Routine principale du projet |
+| `<routine name>` | Cette routine |
+| `agent:claude` | Boîte aux lettres seule |
+
+Un projet peut avoir plusieurs routines. Par défaut, SwB choisit la première routine de cet agent et de ce projet. Ajoutez `primary=true` à l'enregistrement d'une routine pour la choisir en premier.
+
+Si Claude signale un projet en pause, SwB réessaie avec une requête vide. La routine lit alors le message avec `routine_pickup`.
+
+## Configuration
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+Pour une configuration manuelle, définissez `token_env` sur une variable qui contient le jeton de la routine. L'exemple utilise `SWB_EXAMPLE_CLAUDE_TOKEN`.
+
+| Clé | Usage |
+| - | - |
+| `blocks.claude-routine` | Paramètres pour réveiller les routines Claude Code |
+| `blocks.claude-routine.use` | Type de bloc. Indiquez `claude-routine` |
+| `blocks.claude-routine.enabled` | Indiquez `false` pour ignorer ce bloc |
+| `blocks.claude-routine.routines` | Table qui associe chaque nom de routine à ses paramètres |
+| `blocks.claude-routine.routines.*.agent` | Agent qui reçoit le message. Valeur par défaut `claude` |
+| `blocks.claude-routine.routines.*.kind` | Indiquez `project` pour une routine liée à un projet. Indiquez `general` pour une routine générale |
+| `blocks.claude-routine.routines.*.project` | Nom du projet SwB d'une routine de projet |
+| `blocks.claude-routine.routines.*.name` | Nom affiché de la routine |
+| `blocks.claude-routine.routines.*.primary` | Indiquez `true` pour choisir cette routine en premier pour son agent et son projet |
+| `blocks.claude-routine.routines.*.routine_id` | ID du déclencheur API Claude, par exemple `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | Noms courts supplémentaires utilisables comme destination |
+| `blocks.claude-routine.routines.*.token_env` | Nom de la variable qui contient le jeton de la routine |

@@ -3,12 +3,24 @@ tools use. A block registers its own tools through Block.mcp_tools(mcp, kit) and
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import ToolAnnotations
+from mcp.shared.tool_name_validation import TOOL_NAME_REGEX
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
+from pydantic_core import to_json
+
+from ... import USER_AGENT
+from ...audit import iso
+from ...companion.caps.base import CapabilityError
+from ...companion.caps.drop import decode_file_content, valid_name
+from ...companion.mcp_config import NAME as LOCAL_MCP_NAME
+from ...companions import COMPANION_ID, DEVICE_OUTPUT_ERROR, DEVICE_OUTPUT_LIMIT, SLUG
+from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
+from ...trust import neutralize, wrap
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -21,9 +33,134 @@ WRITE_IDEMPOTENT = ToolAnnotations(readOnlyHint=False, destructiveHint=False, id
 SEND = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True)
 DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
 
-ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
+ProjectArg = Annotated[str | None, Field(description="Project slug (project_list)")]
 Conversation = Annotated[str, Field(description="The conversation: its handle (h_...) from send or an inbox item, or the block's own id (a jam_ thread id)")]
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
+
+
+DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "size"})
+DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema"})
+SCHEMA_PROSE = frozenset({"title", "description", "$comment"})
+SCHEMA_TEXT = SCHEMA_PROSE | {"examples"}
+SCHEMA_MAPS = frozenset({"properties", "patternProperties", "dependentSchemas", "dependencies", "$defs", "definitions"})
+SCHEMA_SUBSCHEMAS = frozenset({
+    "additionalItems", "additionalProperties", "allOf", "anyOf", "contains", "contentSchema", "else", "if", "items",
+    "not", "oneOf", "prefixItems", "propertyNames", "then", "unevaluatedItems", "unevaluatedProperties",
+})
+DEVICE_TOKEN = re.compile(r"[A-Za-z0-9_.+/:#@=-]{1,256}")
+DEVICE_VERSION = re.compile(r"unknown|[0-9][A-Za-z0-9_.+-]{0,31}")
+DEVICE_BASE64 = re.compile(r"[A-Za-z0-9+/_-]*={0,2}")
+DEVICE_ROW_IDS = {
+    ("id",): COMPANION_ID.fullmatch,
+    ("last_seen",): DEVICE_TOKEN.fullmatch,
+    ("capabilities", None): SLUG.fullmatch,
+}
+DEVICE_LIST_IDS = {
+    **DEVICE_ROW_IDS,
+    ("platform",): SLUG.fullmatch,
+    ("version",): DEVICE_VERSION.fullmatch,
+    ("capabilities", None, "id"): SLUG.fullmatch,
+    ("capabilities", None, "version"): DEVICE_VERSION.fullmatch,
+    ("capabilities", None, "actions", None, "name"): SLUG.fullmatch,
+}
+DEVICE_LIST_SCHEMA = ("capabilities", None, "actions", None, "schema")
+DEVICE_ACTION_IDS = {
+    ("mcp", "servers"): {("servers", None, "name"): LOCAL_MCP_NAME.fullmatch},
+    ("mcp", "tools"): {("tools", None, "name"): TOOL_NAME_REGEX.fullmatch},
+    ("drop", "list"): {("files", None, "name"): valid_name},
+    ("drop", "get"): {("name",): valid_name},
+    ("drop", "put"): {("name",): valid_name},
+}
+
+
+def frame_device(value: Any, where: str, *, sender: str | None = None,
+                 exact: dict[tuple[str | None, ...], Callable[[str], Any]] | None = None,
+                 schema_path: tuple[str | None, ...] | None = None, limit: int = DEVICE_OUTPUT_LIMIT) -> Any:
+    """Frame device strings and bound the fields before building the full response."""
+    remaining = limit
+
+    def charge(size: int) -> None:
+        nonlocal remaining
+        remaining -= size
+        if remaining < 0:
+            raise ToolError(DEVICE_OUTPUT_ERROR)
+
+    def frame(item: Any, path: tuple[str | None, ...], key: str = "", schema: bool = False) -> Any:
+        if len(path) > 64:
+            raise ToolError("Companion output contains too many nested fields.")
+        if isinstance(item, dict):
+            charge(2)
+            out = {}
+            binary = item.get("type") in ("image", "audio")
+            for name, child in item.items():
+                display = neutralize(str(name))[:128]
+                charge(len(to_json(display)) + 1 + bool(out))
+                next_path = (*path, name)
+                if next_path == schema_path:
+                    out[display] = frame_schema(child, next_path, "node")
+                else:
+                    out[display] = frame(child, next_path, "text" if name == "data" and not binary else name,
+                                         schema or name in DEVICE_SCHEMAS)
+            return out
+        if isinstance(item, list):
+            charge(2 + max(0, len(item) - 1))
+            return [frame(child, (*path, None), key, schema) for child in item]
+        if isinstance(item, str) and item:
+            if len(item) > remaining:
+                raise ToolError(DEVICE_OUTPUT_ERROR)
+            check = exact.get(path) if exact else None
+            machine = key in DEVICE_VALUES or (schema and key not in SCHEMA_TEXT)
+            binary = not schema and (key == "data" or key.lower().endswith(("base64", "b64")))
+            if not ((check and check(item)) or (machine and DEVICE_TOKEN.fullmatch(item))
+                    or (binary and DEVICE_BASE64.fullmatch(item))):
+                item = wrap(item, "companion" if sender else None, sender, "external", where)
+        charge(len(to_json(item)))
+        return item
+
+    def frame_schema(item: Any, path: tuple[str | None, ...], mode: Literal["node", "map", "literal"]) -> Any:
+        if len(path) > 64:
+            raise ToolError("Companion output contains too many nested fields.")
+        if isinstance(item, dict):
+            charge(2)
+            out = {}
+            for name, child in item.items():
+                charge(len(to_json(name)) + 1 + bool(out))
+                next_path = (*path, name)
+                if mode == "node" and name in SCHEMA_PROSE and isinstance(child, str):
+                    out[name] = frame(child, next_path)
+                    continue
+                if mode == "map" or (mode == "node" and name in SCHEMA_SUBSCHEMAS):
+                    out[name] = frame_schema(child, next_path, "node")
+                elif mode == "node" and name in SCHEMA_MAPS:
+                    out[name] = frame_schema(child, next_path, "map")
+                else:
+                    out[name] = frame_schema(child, next_path, "literal")
+            return out
+        if isinstance(item, list):
+            charge(2 + max(0, len(item) - 1))
+            return [frame_schema(child, (*path, None), mode) for child in item]
+        if isinstance(item, str) and len(item) > remaining:
+            raise ToolError(DEVICE_OUTPUT_ERROR)
+        charge(len(to_json(item)))
+        return item
+
+    try:
+        return frame(value, ())
+    except ValueError:
+        raise ToolError("Companion output contains invalid text.") from None
+
+
+def device_output(out: dict[str, Any], file_data: str | None = None) -> CallToolResult:
+    text = to_json(out if file_data is None else {**out, "file_data": "Read result.content_b64 in structuredContent."})
+    if len(text) > DEVICE_OUTPUT_LIMIT:
+        raise ToolError(DEVICE_OUTPUT_ERROR)
+    structured = out if file_data is None else {**out, "result": {**out["result"], "content_b64": file_data}}
+    return CallToolResult(content=[TextContent(type="text", text=text.decode("utf-8"))], structured_content=structured)
+
+
+def frame_companion(row: dict[str, Any], *, details: bool = False, limit: int = DEVICE_OUTPUT_LIMIT) -> dict[str, Any]:
+    return frame_device(row, "", sender=row["id"], exact=DEVICE_LIST_IDS if details else DEVICE_ROW_IDS,
+                        schema_path=DEVICE_LIST_SCHEMA, limit=limit)
 
 
 class FileIn(BaseModel):
@@ -35,10 +172,10 @@ class FileIn(BaseModel):
 
 class Kit:
     def __init__(self, block: "MCPBlock", who: Callable[[Context], "Principal"], run: Callable[[Any], Any], need: Callable[["Principal", str], None],
-                 pscope: Callable[[str], str], unrestricted: Callable[["Principal", str], None]):
+                 pscope: Callable[[str], str]):
         self.block = block
         self.core = block.core
-        self.who, self.run, self.need, self.pscope, self.unrestricted = who, run, need, pscope, unrestricted
+        self.who, self.run, self.need, self.pscope = who, run, need, pscope
         self.wait_caps = block.wait_caps
         self.aliases = block.legacy_aliases
         self.FileIn = FileIn
@@ -49,19 +186,11 @@ class Kit:
     def deprecated(self, new: str, text: str) -> str:
         return DEPRECATED.format(new=new) + text
 
-    def owner(self, ctx: Context, what: str) -> "Principal":
-        p = self.who(ctx)
-        if p.kind == "connect":
-            raise ToolError(f"a connected agent can't {what}; use the owner's sign-in")
-        if not p.is_unrestricted_owner:
-            raise ToolError(f"only an unrestricted owner can {what}; this caller is limited")
-        return p
-
     def mint_pairing(self, p: "Principal", agent: str, project: str | None, client: str | None) -> dict[str, Any]:
         from ...connect import ConnectError
 
         if not p.is_unrestricted_owner:
-            raise ToolError("only an unrestricted owner can mint pairing codes")
+            raise PolicyRefusal(OWNER_REQUIRED)
         if project:
             self.core.project(project)
         try:
@@ -89,7 +218,7 @@ class Kit:
         if project:
             self.need(p, self.pscope(project))
         elif p.scopes is not None and "*" not in p.scopes:
-            raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes)}; pass project")
+            raise PolicyRefusal(SCOPE_REQUIRED, f"the {p.source} key is limited to {', '.join(p.scopes)}; pass project")
 
     async def send(self, p: "Principal", *, wait_s: float = 0, **kw: Any) -> dict[str, Any]:
         from . import TASK_MODE
@@ -100,23 +229,38 @@ class Kit:
             out["replies"], out["cursor"], out["timed_out"] = got["items"], got["cursor"], got["timed_out"]
         return out
 
-    async def wait(self, p: "Principal", *, handle: str | None, timeout_s: float | None, project: str | None, block: str | None = None) -> dict[str, Any]:
-        got = await self.core.inbox.wait(owner=p.source, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s), project=project, destination=block)
+    async def wait(self, p: "Principal", *, handle: str | None, timeout_s: float | None, project: str | None, block: str | None = None,
+                   owner_facing: bool = False) -> dict[str, Any]:
+        handle = handle.strip() if handle else None
+        h = self.core.inbox.handle(handle) if handle else None
+        owner, reader = self.inbox_reader(p, h)
+        got = await self.core.inbox.wait(owner=owner, reader=reader, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s),
+                                         project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         if handle:
             h = self.core.inbox.handle(handle)
-            h = h if h and h["owner"] == p.source else None
+            h = h if h and (p.is_unrestricted_owner or self.core.inbox.participant(h, p.source)) else None
             got["handle_status"] = (h["status"] if h else "unknown") if (h is None or not h["open"]) else "following"
         if got["timed_out"]:
-            got["next"] = "Nothing new yet. Tell the owner it is still working; call wait again or inbox later."
+            got["next"] = ("Tell the owner the work is still in progress. " if owner_facing else "") + "Check again with wait or inbox."
         return got
 
-    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None) -> dict[str, Any]:
-        out = self.core.inbox.read(owner=p.source, handle=handle, since=since_cursor, limit=limit, project=project, destination=block)
+    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None,
+              peek: bool = False) -> dict[str, Any]:
+        handle = handle.strip() if handle else None
+        owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
+        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit, advance=not peek,
+                                   project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
-        open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True, project=project, limit=20)]
+        open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
+                                                                      project=project, scopes=p.scopes, limit=20)]
         out["open"] = [{"handle": h["handle"], "conversation": h["handle"], "block": h["destination"], "target": h.get("target"), "thread_id": h["ref"],
                         "status": h["status"], "title": h["title"] or h["meta"].get("task", "")[:80]} for h in open_]
         return out
+
+    def inbox_reader(self, p: "Principal", handle: dict[str, Any] | None) -> tuple[str | None, str]:
+        if handle and p.is_unrestricted_owner and not self.core.inbox.participant(handle, p.source):
+            return None, f"owner-read:{p.source}"
+        return p.source, p.source
 
     async def verb(self, ctx: Context, verb: str, ref: str, **kw: Any) -> Any:
         return await self.run(self.core.verb(self.who(ctx), verb, ref, **kw))
@@ -124,17 +268,29 @@ class Kit:
     # The generic tools ---------------------------------------------------------------------
 
     def register_generic(self, mcp: MCPServer) -> None:
+        @mcp.tool(title="Owner sign-in link", description="Mint a one-time web sign-in link that expires in five minutes. Show it directly to the owner and never paste it anywhere else.", annotations=WRITE)
+        async def login_link(ctx: Context) -> dict[str, Any]:
+            from ...sessions import LINK_TTL
+
+            p = self.who(ctx)
+            if not (base := self.core.cfg.public_url):
+                raise ToolError("Set SWB_PUBLIC_URL to enable owner sign-in links.")
+            token = self.core.auth.sessions.mint_link(p.client_id, p.source)
+            self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
+                                   action="login_link_minted", outcome="ok")
+            return {"url": f"{base}/login#t={token}", "expires_in": LINK_TTL}
+
         core = self.core
         kit = self
 
         @mcp.tool(
             title="Send work or a message",
-            description=("Hand work to someone or leave a message; cheap, so send freely. Every agent (claude, claude-code, chatgpt, gemini, "
-                         "capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own "
-                         "schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the "
-                         "conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or "
-                         "<block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply. "
-                         "Use forward to hand off a conversation you received and route the final answer back to its sender."),
+            description=("Send work or leave a message in an agent's mailbox. Leave to empty to use a route, or choose a slug or address from targets. "
+                         "Use captain when exactly one Captain exists. For other cases, use its alias or full address. "
+                         "For agent:owner, SwB tries the most recent agent with owner-trusted activity in the last 30 minutes, "
+                         "then the project's main agent, then the global owner route. Give the goal, context, repos and completion criteria. "
+                         "Use wait with the returned conversation to read the reply. Use forward to hand off a conversation "
+                         "and route the final answer to its sender."),
             annotations=SEND,
         )
         async def send(
@@ -153,7 +309,8 @@ class Kit:
             if in_reply_to is not None:
                 raise ToolError("use reply to answer a conversation")
             p = kit.who(ctx)
-            mailbox = bool(to) and (to.strip().lower().startswith("agent:") or to.strip().lower() in core.known_agents())
+            target = (to or "").strip().lower()
+            mailbox = target.startswith("agent:") or target == "owner" or target in core.known_agents()
             if project or not mailbox:
                 kit.scoped(p, project)
             return await kit.send(p, wait_s=wait_s, task=task, to=to, project=project, title=title, repos=repos,
@@ -162,7 +319,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="Listen conversations only: DM the owner instead of posting in the Slack thread")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="Route a message through the owner message rules. Use it with a forwarded Slack message or a triage conversation with notify_owner enabled.")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -171,13 +328,52 @@ class Kit:
             annotations=READ,
         )
         async def wait(ctx: Context, conversation: str | None = None, timeout_s: Annotated[float | None, Field(ge=0)] = None, project: ProjectArg = None,
-                       block: str | None = None) -> dict[str, Any]:
-            return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block)
+                       block: str | None = None,
+                       owner_facing: Annotated[bool, Field(description="Set true while you are speaking with the owner.")] = False) -> dict[str, Any]:
+            return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
-        @mcp.tool(title="Your inbox", description="Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
-        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
-                        project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
-            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
+        @mcp.tool(title="Your inbox", description="Read SwB messages, Watch digests and open conversations for your agent. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
+        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=50)] = 50,
+                        project: ProjectArg = None, block: str | None = None,
+                        peek: Annotated[bool, Field(description="true reads without moving your position")] = False) -> dict[str, Any]:
+            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block, peek=peek)
+
+        @mcp.tool(title="Mark inbox items read", description="Move your inbox position to cursor after you handle the items that inbox returned with peek set to true. Items up to cursor count as read.", annotations=WRITE_IDEMPOTENT)
+        async def inbox_ack(ctx: Context, cursor: Annotated[int, Field(ge=1, description="The highest item cursor you handled")]) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"cursor": core.inbox.ack(p.source, cursor)}
+
+        @mcp.tool(title="Set up the Muse hook", description="Make a private wake link for your SwB mailbox and return a Muse hook script and hook settings that use it. The script checks the link on each hook poll and wakes a worker when messages wait. Each call replaces your previous link.", annotations=WRITE)
+        async def muse_hook_setup(ctx: Context, poll_interval_secs: Annotated[int, Field(ge=5, le=30, description="Seconds between hook polls")] = 5) -> dict[str, Any]:
+            p = kit.who(ctx)
+            try:
+                out = core.hook_wake.setup(p.source, by=f"{p.kind}:{p.source}", poll_interval_secs=poll_interval_secs)
+            except ValueError as e:
+                raise ToolError(str(e)) from e
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_setup", outcome="ok",
+                              target=p.source)
+            return out
+
+        @mcp.tool(title="Test the Muse hook", description="Leave a test message in your own SwB mailbox. The Muse hook wakes a worker for it at its next poll.", annotations=WRITE)
+        async def muse_hook_test(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not core.hook_wake.status(p.source)["configured"]:
+                raise ToolError("Call muse_hook_setup first.")
+            out = await kit.run(core.agent_send(p, to=p.source, title="Muse hook test", allow_self=True,
+                                                text="SwB hook test. Tell the owner in chat that the Muse hook works. Then call inbox_ack."))
+            return {"sent": True, "conversation": out["conversation"]}
+
+        @mcp.tool(title="Muse hook status", description="Show whether your Muse hook link exists, when the hook last checked it, and your unread count.", annotations=READ)
+        async def muse_hook_status(ctx: Context) -> dict[str, Any]:
+            return core.hook_wake.status(kit.who(ctx).source)
+
+        @mcp.tool(title="Revoke the Muse hook link", description="Stop your Muse hook link. The hook turns itself off after its next checks. Call muse_hook_setup to make a new link.", annotations=DELETE)
+        async def muse_hook_revoke(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            revoked = core.hook_wake.revoke(p.source)
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_revoke",
+                              outcome="ok" if revoked else "refused", target=p.source)
+            return {"revoked": revoked}
 
         @mcp.tool(title="Conversation status", description="Status of a conversation (handle or the block's id): working, waiting, idle or failed, whether it needs the owner, its PRs and latest messages, as the block that owns it reports them.", annotations=READ_REMOTE)
         async def status(ctx: Context, conversation: Conversation, messages: Annotated[int, Field(ge=1, le=20)] = 5, include_tools: bool = False) -> dict[str, Any]:
@@ -187,59 +383,103 @@ class Kit:
         async def result(ctx: Context, conversation: Conversation, tail: Annotated[int, Field(ge=0, le=30)] = 0) -> dict[str, Any]:
             return await kit.verb(ctx, "result", conversation, tail=tail)
 
-        @mcp.tool(title="Stop following a conversation", description="Stop reporting on a conversation (its handle). The work on the other side keeps running; use reply to stop it.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Stop following a conversation", description="Stop following a conversation you sent. The work on the other side continues.", annotations=WRITE_IDEMPOTENT)
         async def cancel(ctx: Context, conversation: Conversation) -> dict[str, Any]:
             return await kit.verb(ctx, "cancel", conversation)
 
-        @mcp.tool(title="List targets", description="Everything send can reach: each block's targets (Captains, channels, ...), an agent:<name> mailbox per agent, and project routes, with address, slugs, level and persona. A slug clash goes to the higher priority. block, kind and query narrow it; refresh re-reads the blocks now.", annotations=READ_REMOTE)
+        @mcp.tool(title="List targets", description="List addresses and names for block targets, agent mailboxes and project routes. The reserved name captain works only when SwB finds exactly one Captain. Otherwise, use a named alias or the full Captain address. A clash between other names goes to the higher priority. Filter with block, kind or query. Set refresh to read the blocks again.", annotations=READ_REMOTE)
         async def targets(ctx: Context, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> dict[str, Any]:
-            kit.who(ctx)
-            got = await core.targets(block=block, kind=kind, query=query, refresh=refresh)
+            p = kit.who(ctx)
+            got = await core.targets(block=block, kind=kind, query=query, refresh=refresh, principal=p)
             return {"targets": got, "errors": dict(core.target_errors), "usage": "send(task, to=<slug or address>); without to, your route decides."}
 
         @mcp.tool(title="Connect a new agent", description="Mint a one-time pairing code (10 minutes) for an agent you are setting up, such as claude-code, codex or a laptop script. The client redeems it at POST /connect for its own bearer key; the owner can revoke it from the root page or connect_revoke. Only an unrestricted caller may mint codes.", annotations=WRITE)
         async def connect_code(ctx: Context, agent: Annotated[str, Field(description="Agent name it signs in as, lowercase-dashed, e.g. codex")], project: ProjectArg = None,
                                client: Annotated[str | None, Field(description="What it is, e.g. codex-cli on the laptop")] = None) -> dict[str, Any]:
-            p = kit.owner(ctx, "mint pairing codes")
+            p = kit.who(ctx)
             out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
-                    "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
+                    "curl": (f"curl -s -A '{USER_AGENT}' -X POST {base}/connect -H 'content-type: application/json'"
+                             f" -d '{{\"code\": \"{out['code']}\"}}'")}
 
-        @mcp.tool(title="Who can reach what", description="Every resource's visibility: private (only the owner and his own agents) or shared (anyone in that workspace, or a narrowed list). Resources are target:<slug>, channel:<workspace>/<id or #name>, memory:<scope>, route:<id> and tool:<name>; defaults are per kind.", annotations=READ)
-        async def visibility_list(ctx: Context) -> dict[str, Any]:
-            kit.owner(ctx, "read visibility")
-            slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
-            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
+        @mcp.tool(title="Pair a companion", description="Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.", annotations=WRITE)
+        async def companion_code(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not (url := core.cfg.issuer):
+                raise ToolError("Set a public SwB address first.")
+            return core.companions.mint(url, origin=p.origin, source=p.source, client=p.client_id)
 
-        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:teamcaptain, channel:acme/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
-        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:acme']")]) -> dict[str, Any]:
+        @mcp.tool(title="List companions", description="List paired devices, their connection status, and their available actions.", annotations=READ)
+        async def companion_list() -> Annotated[CallToolResult, dict[str, Any]]:
+            rows = []
+            remaining = DEVICE_OUTPUT_LIMIT - len('{"companions":[],"trust":"external"}')
+            for row in core.companions.list(details=True):
+                framed = frame_companion(row, details=True, limit=remaining - bool(rows))
+                remaining -= len(to_json(framed)) + bool(rows)
+                rows.append(framed)
+            return device_output({"companions": rows, "trust": "external"})
+
+        @mcp.tool(title="Run a companion action", description="Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.", annotations=SEND)
+        async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
+                                   timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> Annotated[CallToolResult, dict[str, Any]]:
+            result = await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
+            file_data = None
+            if (capability, action) == ("drop", "get"):
+                if set(result) != {"name", "content_b64"} or not valid_name(result["name"]):
+                    raise ToolError("Invalid Drop file result.")
+                file_data = result["content_b64"]
+                try:
+                    decode_file_content(file_data)
+                except CapabilityError as e:
+                    raise ToolError(str(e)) from e
+                result = {"name": result["name"]}
+            framed = frame_device(result, f"{capability}.{action}", sender=companion,
+                                  exact=DEVICE_ACTION_IDS.get((capability, action)))
+            return device_output({"trust": "external", "from": f"companion {companion} {capability}.{action}",
+                                  "result": framed}, file_data)
+
+        @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
+        async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"ok": core.companions.revoke(companion, origin="owner", source=p.source, client=p.client_id)}
+
+        @mcp.tool(title="Who can reach what", description="List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.", annotations=READ)
+        async def visibility_list() -> dict[str, Any]:
+            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()},
+                    "resources": core.visibility.rows(await core.visibility_resources())}
+
+        @mcp.tool(title="Make a resource private or shared", description="Owner only. Use a resource from visibility_list such as target:beta or channel:github/acme/app. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
+        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list of verified sender IDs or workspace labels, such as ['github:1234']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 
-            p = kit.owner(ctx, "change visibility")
+            p = kit.who(ctx)
             try:
-                rule = core.visibility.set(resource, visibility, f"{p.kind}:{p.source}", core.clock())
+                resource, rule = await core.set_visibility(resource, visibility, f"{p.kind}:{p.source}")
             except VisibilityError as e:
                 raise ToolError(str(e)) from e
             core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="visibility_set", outcome="ok",
                               target=resource, detail=str(rule))
-            return {"resource": resource.lower(), "visibility": rule}
+            return {"resource": resource, "visibility": rule}
 
         @mcp.tool(title="Connected agents", description="Agents connected with a pairing code: their key ids, project, client, when they last called, and who minted the code. Keys themselves are never shown again.", annotations=READ)
-        async def connect_list(ctx: Context, include_revoked: bool = False) -> dict[str, Any]:
-            kit.owner(ctx, "list connected agents")
-            return {"keys": core.connections.list(include_revoked)}
+        async def connect_list(include_revoked: bool = False) -> dict[str, Any]:
+            return {"keys": [{**row, **{field: iso(row[field]) for field in ("created_at", "last_used_at", "revoked_at")}}
+                             for row in core.connections.list(include_revoked)]}
 
         @mcp.tool(title="Revoke a connected agent", description="Revoke one connected key (key_id) or every key of an agent. The agent's next call is refused; its memory and conversations stay. Audited.", annotations=DELETE)
         async def connect_revoke(ctx: Context, key_id: str | None = None, agent: str | None = None) -> dict[str, Any]:
             from ...connect import ConnectError
 
-            p = kit.owner(ctx, "revoke connected agents")
+            p = kit.who(ctx)
             try:
                 n = core.connections.revoke(key_id=key_id, agent=agent)
             except ConnectError as e:
                 raise ToolError(str(e)) from e
-            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_revoke", outcome="ok", target=key_id or agent)
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_revoke",
+                              outcome="refused" if n is None else "ok", target=None if n is None else key_id or agent)
+            if n is None:
+                raise ToolError("Unknown key ID. Check connect_list.")
             return {"revoked": n}
 
         if not self.aliases:
@@ -251,10 +491,13 @@ class Kit:
             annotations=SEND,
         )
         async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
-                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None) -> dict[str, Any]:
+                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None,
+                             conversation: str | None = None) -> dict[str, Any]:
             if in_reply_to is not None or forward is not None:
                 raise ToolError("use reply to answer a conversation or send to forward one")
             p = kit.alias(ctx, "agent_send")
+            if conversation is not None:
+                return await kit.run(core.notify_mode_owner(p, conversation, text, to=to))
             if project:
                 kit.need(p, kit.pscope(project))
             if p.targets is not None:

@@ -1,0 +1,99 @@
+---
+title: Companion
+description: Verbinden Sie ein Gerät, damit Ihre Agenten seine lokalen Funktionen nutzen können.
+---
+
+Ein **Companion** ist ein Gerät, das sich mit Ihrem SwB-Server verbindet. Agenten können danach Funktionen auf diesem Gerät nutzen.
+
+## Einrichtungsprompt kopieren
+
+<SetupPrompt name="companion" lang="de" />
+
+## Gerät koppeln
+
+Bitten Sie einen Agenten, der als Inhaber angemeldet ist, `companion_code` aufzurufen. Bitten Sie den Agenten, den Code in einer Datei mit den Berechtigungen `0600` zu speichern. Mit diesen Berechtigungen hat nur der Eigentümer der Datei Zugriff.
+
+Um einen Code in der Konsole zu erhalten, [melden Sie sich mit einem Passkey an](/de/docs/owner-login#passkey). Öffnen Sie **Settings**. Wählen Sie unter **Connections** die Option **Pair a device** aus. Wenn Sie Cloudflare Access verwenden, nutzen Sie das Tool `companion_code`.
+
+Führen Sie diesen Befehl auf dem Gerät aus. Ersetzen Sie die Beispieladresse durch Ihre HTTPS-Adresse von SwB. Für SwB auf diesem Gerät verwenden Sie `http://127.0.0.1:8870`.
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+Geben Sie den Kopplungscode an der verdeckten Eingabeaufforderung ein. Der Code gilt einmalig und läuft nach 10 Minuten ab. Das Audit-Protokoll vermerkt, wer ihn erstellt hat.
+
+Das Gerät speichert seinen eigenen Schlüssel in einer privaten Datei.
+
+## Funktionen wählen
+
+Fügen Sie für jede Funktion, die Sie aktivieren möchten, eine Option `--cap` hinzu.
+
+| Option | Funktion |
+| --- | --- |
+| `--cap notify` | Zeigt Desktop-Benachrichtigungen auf dem Gerät |
+| `--cap drop` | Teilt Dateien bis 10 MiB pro Datei über den Ordner `~/SwB Drop` |
+| `--cap mcp --mcp NAME=COMMAND` | Gibt Ihren Agenten Zugriff auf die Tools eines MCP-Servers auf dem Gerät |
+| `--cap herdr` | [Herdr](/de/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex-App-Server](/de/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode-Server](/de/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/de/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [Status-Hooks](/de/docs/blocks/local-sessions#status-hooks) |
+
+Unter Linux nutzen Benachrichtigungen `notify-send`. Unter Debian und Ubuntu installieren Sie es mit dem Paket `libnotify-bin`.
+
+Fügen Sie für jeden MCP-Server eine Option `--mcp` hinzu. Für ein Programm verwenden Sie `--mcp 'NAME=COMMAND'`. Ersetzen Sie `NAME` durch einen Namen für Ihren Server. Ersetzen Sie `COMMAND` durch den Startbefehl des Programms. Für einen HTTP-Server auf dem Gerät verwenden Sie seine lokale Adresse, zum Beispiel `--mcp notes=http://127.0.0.1:8000/mcp`.
+
+Ihre Agenten sehen mit `companion_list` jedes gekoppelte Gerät und seine Aktionen. Mit `companion_invoke` führen sie eine Aktion aus.
+
+Textergebnisse eines Companions sind auf 1 MiB begrenzt. Lesen Sie die Dateidaten von Drop aus `structuredContent.result.content_b64`.
+
+## Lokale Sitzungen
+
+Eine **lokale Sitzung** ist die offene Unterhaltung eines Coding-Agenten auf dem Gerät. SwB zeigt ihren Status zusammen mit ihrer Adresse `local:session:<companion>:<harness>:<session>` an.
+
+Verwenden Sie den Link für Ihren Coding-Agenten in der Funktionstabelle. Richten Sie den Agenten vor der Kopplung ein. Lassen Sie den Companion nach der Kopplung laufen. Bitten Sie einen Agenten, der als Inhaber angemeldet ist, `targets(block="local")` aufzurufen. Prüfen Sie, ob Ihre Sitzungsadresse erscheint.
+
+SwB versucht, jede Nachricht an die offene Sitzung zuzustellen. Die Nachricht landet im Postfach des Agenten, wenn der Absender dieses Postfach nutzen darf. Die Antwort kommt in derselben Unterhaltung zurück.
+
+Verwenden Sie die Sitzungsadresse aus `targets`. Suchen Sie die Ressource für diese Adresse in `visibility_list`. Geben Sie die Ressource mit `visibility_set` frei.
+
+Befehle und unterstützte Agenten beschreibt [Lokale Sitzungen](/de/docs/blocks/local-sessions).
+
+## In Betrieb halten
+
+Die Kopplung startet den Companion. Mit `swb companion run` starten Sie ihn erneut. Mit `swb companion status` sehen Sie die lokale Geräte-ID und die Funktionen.
+
+Wenn Sie das Gerät mit `uvx` gekoppelt haben, ersetzen Sie `swb` durch `uvx swb-one`. Im Vordergrund läuft der Companion direkt in Python.
+
+Das Gerät baut jede Verbindung zu SwB selbst auf.
+
+## Im Hintergrund ausführen
+
+Ein Hintergrunddienst startet den Companion automatisch. Installieren Sie SwB mit `uv tool install swb-one`.
+
+Fügen Sie für eine neue Kopplung `--no-run` zu Ihren Kopplungsoptionen hinzu. Führen Sie `swb companion connect` mit diesen Optionen aus. Der Befehl endet nach der Kopplung. Beenden Sie einen laufenden Companion im Terminal, bevor Sie den Dienst installieren. Verwenden Sie für die Dienstbefehle das installierte `swb`.
+
+```sh
+swb companion service install
+```
+
+Unter Linux führt `systemd --user` den Dienst mit Ihrem Konto aus. Mit `loginctl enable-linger "$USER"` startet der Dienst beim Hochfahren und läuft nach der Abmeldung weiter.
+
+Installieren Sie den Dienst unter macOS in Ihrer Desktop-Sitzung. Die SwB-Veröffentlichung installiert und prüft die signierte App **SwB Companion** automatisch in `~/Applications`. `launchd` startet den Dienst über die App.
+
+Unter Windows startet die Aufgabenplanung den Dienst bei der Anmeldung.
+
+Legen Sie im Dienstmanager die Variablen fest, die Ihre lokalen Tools benötigen.
+
+Starten Sie den Dienst mit `swb companion service start`. Prüfen Sie seinen Status mit `swb companion service status`. Lesen Sie seine Protokolle mit `swb companion service logs`.
+
+Prüfen Sie mit `swb companion status` den Betriebsstatus, die Verbindung und die SwB-Adresse.
+
+Stoppen Sie den Dienst sofort mit `swb companion service stop`. Entfernen Sie den automatischen Start mit `swb companion service uninstall`. Der Geräteschlüssel bleibt erhalten.
+
+## Trennen
+
+Führen Sie `swb companion disconnect` auf dem Gerät aus, um seinen Schlüssel zu entfernen. Um den Schlüssel in der Konsole zu widerrufen, öffnen Sie **Connections** unter **Settings**. Wählen Sie für das Gerät **Disconnect** aus.
+
+Ein laufender Companion entfernt seinen lokalen Schlüssel, sobald er den Widerruf erkennt. Wenn noch ein Schlüssel auf dem Gerät liegt, führen Sie `swb companion disconnect` aus, bevor Sie es erneut koppeln.

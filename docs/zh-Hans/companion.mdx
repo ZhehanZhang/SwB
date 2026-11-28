@@ -1,0 +1,99 @@
+---
+title: Companion
+description: 连接一台设备，让智能体使用它的本地功能。
+---
+
+**Companion** 是运行在你自己设备上的 SwB 程序，它会连接到你的 SwB 服务器。连接后，智能体就能使用这台设备上的功能。
+
+## 复制设置提示词
+
+<SetupPrompt name="companion" lang="zh-Hans" />
+
+## 配对设备
+
+让一个以所有者身份登录的智能体调用 `companion_code`，并让它把配对码保存到权限为 `0600` 的文件中。在这种权限下，只有文件的属主可以访问它。
+
+要在控制台中获取配对码，先[用通行密钥登录](/zh-Hans/docs/owner-login#通行密钥)，然后打开 **Settings**，在 **Connections** 中选择 **Pair a device**。如果使用 Cloudflare Access，改用 `companion_code` 工具。
+
+在设备上运行下面的命令，把示例地址换成你的 SwB HTTPS 地址。如果 SwB 就运行在这台设备上，可以使用 `http://127.0.0.1:8870`。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+出现提示后输入配对码，输入的内容会隐藏。配对码只能使用一次，10 分钟后过期。审计日志会记录是谁生成了它。
+
+设备把自己的密钥保存在一个私有文件中。
+
+## 选择功能
+
+每启用一项功能，就添加一个 `--cap` 选项。
+
+| 选项 | 功能 |
+| --- | --- |
+| `--cap notify` | 在设备上显示桌面通知 |
+| `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件最大 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 让你的智能体使用设备上某个 MCP 服务器提供的工具 |
+| `--cap herdr` | [Herdr](/zh-Hans/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex 应用服务器](/zh-Hans/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode 服务器](/zh-Hans/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/zh-Hans/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [状态钩子](/zh-Hans/docs/blocks/local-sessions#状态钩子) |
+
+在 Linux 上，通知功能使用 `notify-send`。在 Debian 和 Ubuntu 上，安装 `libnotify-bin` 软件包即可获得它。
+
+每个 MCP 服务器对应一个 `--mcp` 选项。如果服务器是一个程序，使用 `--mcp 'NAME=COMMAND'`，把 `NAME` 换成你为服务器起的名称，把 `COMMAND` 换成这个程序的启动命令。如果是设备上的 HTTP 服务器，使用它的本地地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+
+智能体用 `companion_list` 查看每台已配对的设备及其操作，用 `companion_invoke` 执行某项操作。
+
+Companion 返回的文本结果上限为 1 MiB。Drop 文件的数据从 `structuredContent.result.content_b64` 读取。
+
+## 本地会话
+
+**本地会话**是编程智能体在设备上保持打开的会话。SwB 会列出它的状态，并附上它的 `local:session:<companion>:<harness>:<session>` 地址。
+
+在功能表中打开你的编程智能体对应的链接。配对之前，先设置好这个智能体。配对之后，让 Companion 保持运行。让一个以所有者身份登录的智能体调用 `targets(block="local")`，确认结果中有你的会话地址。
+
+SwB 会尝试把每条消息送达打开的会话。发送方可以使用该智能体的邮箱时，SwB 会把消息放入这个邮箱。回复在同一个对话中返回。
+
+使用 `targets` 返回的会话地址。在 `visibility_list` 中找到这个地址对应的资源，再用 `visibility_set` 共享这个资源。
+
+命令和支持的智能体见[本地会话](/zh-Hans/docs/blocks/local-sessions)。
+
+## 保持运行
+
+配对会启动 Companion。要再次启动它，运行 `swb companion run`。运行 `swb companion status` 可以查看本地设备 ID 和功能。
+
+如果配对时用的是 `uvx`，请把命令中的 `swb` 换成 `uvx swb-one`。在前台运行时，Python 会直接启动 Companion。
+
+与 SwB 的每个连接都由设备发起。
+
+## 在后台运行
+
+安装后台服务后，Companion 可以自动启动。用 `uv tool install swb-one` 安装 SwB。
+
+需要配对时，把 `--no-run` 加到配对选项中，再运行 `swb companion connect`。命令会在配对后退出。如果 Companion 正在终端中运行，先停止它，再安装服务。用已安装的 `swb` 管理服务。
+
+```sh
+swb companion service install
+```
+
+在 Linux 上，`systemd --user` 会以你的账户运行服务。运行 `loginctl enable-linger "$USER"`，让服务在开机时启动，并在退出登录后继续运行。
+
+在 macOS 上，请登录桌面后安装服务。SwB 正式版会自动将已签名的 **SwB Companion** 应用安装到 `~/Applications`，并验证应用。`launchd` 通过此应用启动服务。
+
+在 Windows 上，任务计划程序会在你登录时启动服务。
+
+请在服务管理器中设置本地工具所需的变量。
+
+用 `swb companion service start` 启动服务。用 `swb companion service status` 查看服务状态。用 `swb companion service logs` 查看日志。
+
+用 `swb companion status` 查看运行状态、连接状态和 SwB 地址。
+
+用 `swb companion service stop` 立即停止服务。用 `swb companion service uninstall` 移除自动启动设置。设备会保留密钥。
+
+## 断开连接
+
+在设备上运行 `swb companion disconnect`，移除它的密钥。要在控制台中撤销密钥，打开 **Settings** 中的 **Connections**，选择这台设备旁的 **Disconnect**。
+
+运行中的 Companion 检测到密钥已撤销后，会移除本地密钥。如果设备上仍留有密钥，先运行 `swb companion disconnect`，再重新配对。

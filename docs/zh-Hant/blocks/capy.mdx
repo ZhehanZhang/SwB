@@ -1,0 +1,57 @@
+---
+title: Capy
+description: 把工作傳送給 Capy Captain 和討論串，再把回覆帶回來。
+---
+
+## 啟用模組
+
+依照 [Capy Captain 設定](/zh-Hant/docs/setup/capy-captain)操作。SwB 用 Capy 帳號金鑰找出 Capy Captain，並追蹤它們的討論串。
+
+## 把 Capy 連接為代理
+
+在 Capy 中把 SwB 新增為自訂 MCP 伺服器，並用 OAuth 以 `capy` 的身分登入 SwB。
+
+## 傳送給 Capy Captain
+
+請任何一個代理把工作傳送給 Capy Captain。
+
+> 把這個傳給我的 Capy Captain。
+
+將 `to` 留空即可使用專案路由。只有在 SwB 恰好找到一位 Captain 時，才可使用保留名稱 `captain`。其餘情況請使用指定 Captain 的別名或完整位址，例如 `capy:captain:jam_...`。呼叫 `targets` 查詢位址。
+
+SwB 會追蹤 Capy 討論串的更新，並把更新送到傳送者的信箱。重新啟動後，SwB 會從上次儲存的位置繼續追蹤近期的工作。
+
+| 路由模式 | 傳送時的行為 |
+| - | - |
+| `captain_thread` | 傳送一則訊息給 Capy Captain |
+| `new_thread` | 開啟一個新的團隊討論串 |
+
+## MCP Tasks
+
+Capy 模組會為 MCP 2026-07-28 用戶端啟用 [MCP Tasks](/zh-Hant/docs/how-it-works#對話)。用戶端用 `server/discover` 找到這項功能，並在每次 `send` 給 Capy 時自行選用。其他情況都使用一般對話。
+
+## 傳送用的金鑰
+
+Capy 會顯示傳送用的金鑰屬於哪個帳號。SwB 先嘗試代理的金鑰，再嘗試服務金鑰。在 `personal` 模式下，Capy 帳號金鑰是最後的選擇。以擁有者身分登入後，可在 `/healthz` 查看每個代理的首選金鑰和金鑰檢查結果。
+
+## 專案自動連結
+
+代理建立 SwB 專案時，Capy 模組會尋找相符的 Capy 專案。存放庫相符優先於名稱相符。只找到一個相符專案時，SwB 會連結這兩個專案。如果連結的專案正好只有一個使用中的 Capy Captain，SwB 的自動路由會使用這個 Captain。
+
+## 設定
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.capy` | 傳送工作給 Capy 和追蹤討論串的設定 |
+| `blocks.capy.use` | 模組類型，填入 `capy` |
+| `blocks.capy.enabled` | 設為 `false` 可略過這個模組 |
+| `blocks.capy.api_base` | Capy API 的基底網址。預設為 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | `service` 使用代理金鑰和服務金鑰。`personal` 另外允許把 Capy 帳號金鑰當作最後的選擇 |
+| `blocks.capy.send_key_env` | 存放服務傳送金鑰的變數名稱 |
+| `blocks.capy.default_route` | 一次性設定初始的全域 Capy 路由。填入 Capy 目標，例如 `captain:<id>` |
+| `blocks.capy.captain_delivery` | Capy Captain 或討論串忙碌時，Capy 傳遞訊息的方式。可用的值為 `queue`、`steer` 和 `interrupt`。預設為 `queue` |
+| `blocks.capy.daily_cap` | Capy 委派的每日上限。設為 `null` 可取消上限 |
+| `blocks.capy.duplicate_window_s` | 傳送者、目標、標題和任務都相同時，重複使用同一個對話識別碼的秒數。預設為 `600` |
+| `blocks.capy.max_file_bytes` | 每次傳送的附件總大小上限，單位為位元組。預設為 `10485760` |
+| `blocks.capy.handle_ttl_days` | 啟動時恢復討論串追蹤的天數上限，同時決定 MCP 任務的存留時間。預設為 `7` |
+| `blocks.capy.avatars` | 允許 SwB 擷取 Capy Captain 的頭像。設為 `false` 時改用名稱首字母 |

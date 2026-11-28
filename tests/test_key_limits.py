@@ -1,15 +1,18 @@
 """auth.key_tools and auth.key_targets: a key held to some tools and some send targets, enforced in the server."""
 
-from conftest import SECOND_KEY, STATIC_KEY, arpc, base_config, call, error_text, payload, rpc, infra
+import json
+
+from conftest import SECOND_KEY, STATIC_KEY, arpc, base_config, call, error_text, payload, rpc, beacon
+from switchboard.refusals import SCOPE_REQUIRED, TARGET_REQUIRED
 
 
 def limited(make):
     cfg = base_config()
     cfg["auth"]["key_tools"] = {"second": ["send"]}
     cfg["auth"]["key_targets"] = {"second": ["agent:claude"]}
-    cfg["auth"]["key_scopes"] = {"second": ["project:infra"]}
+    cfg["auth"]["key_scopes"] = {"second": ["project:beacon"]}
     core, c = make(config=cfg)
-    infra(core)
+    beacon(core)
     core.projects.create(slug="other", name="Other")
     return core, c
 
@@ -23,14 +26,14 @@ def test_tools_list_shows_only_the_allowed_tools(make):
 
 def test_a_disallowed_tool_is_refused(make):
     _, c = limited(make)
-    for tool, args in (("memory_search", {"query": "x", "project": "infra"}), ("inbox", {}), ("switchboard_status", {}),
+    for tool, args in (("memory_search", {"query": "x", "project": "beacon"}), ("inbox", {}), ("switchboard_status", {}),
                        ("reply", {"conversation": "h_x", "text": "hi"}), ("slack_post", {"workspace": "a", "channel": "#x", "text": "hi"})):
         assert "may call only send" in error_text(call(c, SECOND_KEY, tool, args)), tool
 
 
 def test_the_allowed_target_is_accepted(make):
     core, c = limited(make)
-    out = payload(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "status went red", "project": "infra"}))
+    out = payload(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "status went red", "project": "beacon"}))
     assert out["delivered"] and out["to"] == "agent:claude"
     assert "status went red" in str(core.inbox.read(owner="claude")["items"][-1])
 
@@ -38,14 +41,18 @@ def test_the_allowed_target_is_accepted(make):
 def test_a_disallowed_target_is_refused(make):
     _, c = limited(make)
     for to in ("agent:capy", "capy", "claude-code", None):
-        args = {"task": "x", "project": "infra", **({"to": to} if to else {})}
+        args = {"task": "x", "project": "beacon", **({"to": to} if to else {})}
         assert "second key" in error_text(call(c, SECOND_KEY, "send", args)), to
 
 
 def test_a_disallowed_project_or_a_forward_is_refused(make):
-    _, c = limited(make)
-    assert "limited to project:infra" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "x", "project": "other"}))
-    assert "can't forward" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "x", "project": "infra", "forward": "h_x"}))
+    core, c = limited(make)
+    task = "fixture-private-task-body"
+    assert "limited to project:beacon" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": task, "project": "other"}))
+    assert "can't forward" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": task, "project": "beacon", "forward": "h_x"}))
+    rows = core.audit.recent(action="tool_refused")
+    assert [(row["target"], row["detail"]) for row in rows] == [("send", TARGET_REQUIRED), ("send", SCOPE_REQUIRED)]
+    assert task[:12] not in json.dumps(rows) and SECOND_KEY[:10] not in json.dumps(rows)
 
 
 def test_a_limited_key_cannot_read_an_inbox_over_http(make):
@@ -75,10 +82,10 @@ def test_auth_maps_match_a_key_name_spelt_with_underscores(make):
     cfg = load_config(None, env={"SWITCHBOARD_KEY_STATUS_MONITOR": "k" * 32})
     assert cfg.static_keys[0].name == "status-monitor"
     cfg = base_config()
-    cfg["auth"]["key_scopes"] = {"SECOND": ["project:infra"]}
+    cfg["auth"]["key_scopes"] = {"SECOND": ["project:beacon"]}
     cfg["auth"]["key_tools"] = {"sec_ond": ["send"]}
     core, _ = make(config=cfg)
-    assert core.cfg.key_scopes == {"second": ("project:infra",)} and core.cfg.key_tools == {"sec-ond": ("send",)}
+    assert core.cfg.key_scopes == {"second": ("project:beacon",)} and core.cfg.key_tools == {"sec-ond": ("send",)}
 
 
 def test_the_legacy_agent_send_alias_is_held_to_the_targets(make):

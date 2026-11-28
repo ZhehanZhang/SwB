@@ -1,0 +1,71 @@
+---
+title: Discord
+description: 用机器人把 Discord 服务器连接到 SwB。
+---
+
+SwB 以机器人身份登录 Discord，并通过 Discord Gateway 接收新消息。Gateway 是 SwB 向 Discord 发起的一条连接。
+
+## 开始之前
+
+使用在目标服务器上拥有 **Manage Server** 权限的 Discord 账号。以所有者身份登录 SwB。
+
+## 复制设置提示词
+
+<SetupPrompt name="discord" lang="zh-Hans" />
+
+把提示词粘贴到你的 SwB 所有者客户端中。
+
+## 设置 Discord 机器人
+
+### 创建应用
+
+打开 [https://discord.com/developers/applications](https://discord.com/developers/applications)。点击 **New Application**。
+### 命名应用
+
+输入名称，点击 **Create**。
+### 重置 Bot 令牌
+
+点击 **Bot** → **Reset Token**，确认重置。
+
+### 复制 Bot 令牌
+
+趁 Discord 还显示着令牌，点击 **Copy**。Discord 只显示一次。
+### 开启 Message Content Intent
+
+在 **Bot** 页面的 **Privileged Gateway Intents** 下开启 **Message Content Intent**，点击 **Save Changes**。
+
+### 保存令牌
+
+打开智能体给出的 SwB 认领链接，把令牌粘贴到字段中。
+### 邀请机器人
+
+打开智能体给出的邀请链接。如果 Discord 询问，选择你的服务器。点击 **Authorize**。
+
+## 智能体会做什么
+
+智能体调用 `connect(what="discord")`，必要时启用 `discord` 模块。模块启用后，`connect` 或 `discord_provision` 返回用来保存 Bot 令牌的认领链接。
+
+你保存令牌后，智能体调用 `discord_status`，检查机器人、Gateway 连接和服务器，并把 `setup.invite_url` 中的邀请链接交给你。
+
+智能体在 `config/switchboard.yaml` 的 `blocks.discord.spaces` 下配置服务器。空间把一个服务器指向一个 SwB 项目。智能体设置 `guild_id` 和 `owner_ids`。要让某个智能体调用 `discord_post`，在 `blocks.discord.agents` 下向它授予访问权限。编辑文件后重启 SwB。
+
+## 凭据
+
+| 令牌 | Discord 中的显示位置 | 格式 | 去向 |
+| --- | --- | --- | --- |
+| Bot 令牌 | **Bot** → **Reset Token**，只显示一次 | 三段文本，以点号分隔 | SwB 认领链接 |
+| 应用 ID | **General Information** → **Application ID** | 一串数字 | `blocks.discord.application_id`，也可由 SwB 自动查找 |
+
+## 检查连接
+
+让智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`discord_status` 会显示 Gateway 已就绪，机器人已在你的服务器中。
+
+使用 `owner_ids` 中列出的 Discord 账号。在频道中提及机器人，并加上 `targets` 中的一个目标名称和一条测试消息。在同一个频道中查看回复。
+
+## 排查问题
+
+如果出现 Gateway 代码 `4014`，启用 **Message Content Intent**。要用提及作为触发方式，设置 `message_content: false`，并在每条消息中提及机器人。
+
+如果出现 Gateway 代码 `4004`，重置 Discord Bot 令牌。如果令牌来自服务器环境，在那里替换它并重启 SwB。否则，使用新的认领链接。
+
+如果机器人已在服务器中，却在某个频道里始终沉默，检查这个频道的权限。

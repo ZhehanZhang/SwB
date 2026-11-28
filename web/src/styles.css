@@ -1,0 +1,360 @@
+@import "tailwindcss";
+@import "../../src/switchboard/static/console-tokens.css";
+
+@theme inline {
+  --font-sans: var(--swb-font-sans);
+  --font-display: "Inter Tight Variable", var(--swb-font-sans);
+  --font-mono: var(--swb-font-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-muted: var(--surface-sunken);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--border-strong);
+  --color-lamp-on: var(--lamp-on);
+  --color-lamp-off: var(--lamp-off);
+  --color-cord-intake: var(--cord-intake);
+  --color-cord-route: var(--cord-route);
+  --color-cord-sink: var(--cord-sink);
+  --color-socket: var(--socket);
+  --color-socket-inner: var(--socket-inner);
+  --color-overlay: var(--overlay);
+  --color-logo-capy: var(--logo-capy);
+  --color-logo-capy-foreground: var(--logo-capy-foreground);
+  --spacing-control: 2.25rem;
+  --spacing-control-sm: 1.75rem;
+  --spacing-row: 2.75rem;
+  --container-inbox-table: 38rem;
+  --container-inbox-split: 64rem;
+  --radius-sm: 4px;
+  --radius-md: var(--swb-radius-md);
+  --radius-lg: 8px;
+  --shadow-xs: var(--surface-shadow);
+  --text-display-xl: 2rem;
+  --text-display-xl--line-height: 2.25rem;
+  --text-display-xl--font-weight: 800;
+  --text-display-xl--letter-spacing: -.025em;
+  --text-display-lg: 1.375rem;
+  --text-display-lg--line-height: 1.75rem;
+  --text-display-lg--font-weight: 800;
+  --text-display-lg--letter-spacing: -.02em;
+  --text-page-title: var(--swb-page-title);
+  --text-page-title--line-height: var(--swb-page-title-height);
+  --text-page-title--font-weight: var(--swb-page-title-weight);
+  --text-page-title--letter-spacing: var(--swb-page-title-spacing);
+  --text-heading-md: 1rem;
+  --text-heading-md--line-height: 1.5rem;
+  --text-heading-md--font-weight: 600;
+  --text-heading-md--letter-spacing: -.01em;
+  --text-label-sm: var(--swb-label-sm);
+  --text-label-sm--line-height: var(--swb-label-sm-height);
+  --text-label-sm--font-weight: var(--swb-label-sm-weight);
+  --text-body-md: var(--swb-body-md);
+  --text-body-md--line-height: var(--swb-body-md-height);
+  --text-nav-label: .75rem;
+  --text-nav-label--line-height: 1rem;
+  --text-body-sm: .8125rem;
+  --text-body-sm--line-height: 1.125rem;
+  --text-caption: .6875rem;
+  --text-caption--line-height: .875rem;
+  --text-caption--font-weight: 500;
+  --text-caption--letter-spacing: .02em;
+  --text-mono-sm: .75rem;
+  --text-mono-sm--line-height: 1rem;
+  --text-mono-md: .8125rem;
+  --text-mono-md--line-height: 1.125rem;
+  --text-mono-md--font-weight: 500;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-body-md text-foreground antialiased;
+  }
+
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+.console-pressable {
+  -webkit-tap-highlight-color: transparent;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition: background-color 170ms ease-out;
+
+    &.console-press-scale {
+      transition-property: background-color, opacity, transform;
+    }
+  }
+}
+
+@media (hover: hover) {
+  .console-pressable:hover:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+    background-color: var(--console-pressable-bg, var(--surface-sunken));
+  }
+}
+
+.console-pressable:active:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+  background-color: var(--console-pressable-bg, var(--surface-sunken));
+
+  &.console-press-scale {
+    opacity: .92;
+
+    @media (prefers-reduced-motion: no-preference) {
+      transform: scale(.97);
+      transition-duration: 0s;
+    }
+  }
+}
+
+.console-mobile-nav {
+  background: var(--background);
+}
+
+.console-mobile-nav::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100%;
+  height: 60px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--background) 3%, transparent),
+    color-mix(in srgb, var(--background) 10%, transparent),
+    color-mix(in srgb, var(--background) 22%, transparent),
+    color-mix(in srgb, var(--background) 38%, transparent),
+    color-mix(in srgb, var(--background) 56%, transparent),
+    color-mix(in srgb, var(--background) 74%, transparent),
+    color-mix(in srgb, var(--background) 88%, transparent),
+    color-mix(in srgb, var(--background) 96%, transparent),
+    var(--background)
+  );
+}
+
+.console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
+  background-color: var(--surface-sunken);
+}
+
+[data-sonner-toaster] [data-sonner-toast] {
+  --normal-bg: var(--surface);
+  --normal-border: var(--border);
+  --normal-text: var(--foreground);
+  box-shadow: var(--toast-shadow);
+}
+
+@utility grid-cols-memory {
+  grid-template-columns: 11rem minmax(0,1fr);
+}
+
+@utility grid-cols-memory-wide {
+  grid-template-columns: 13rem minmax(0,1fr);
+}
+
+@utility grid-cols-about-wide {
+  grid-template-columns: 33% minmax(0,1fr) auto;
+}
+
+@utility grid-cols-about {
+  grid-template-columns: 35% minmax(0,1fr) auto;
+}
+
+@utility grid-cols-conversation-skeleton {
+  grid-template-columns: 10% 16% 16% minmax(0,1fr) 11% 9.25% 1rem;
+}
+
+@utility grid-cols-auto-main {
+  grid-template-columns: auto 1fr;
+}
+
+@utility grid-cols-auto-auto-main {
+  grid-template-columns: auto auto minmax(0,1fr);
+}
+
+@utility grid-cols-auto-fill {
+  grid-template-columns: auto minmax(0,1fr);
+}
+
+@utility grid-cols-auto-fill-auto {
+  grid-template-columns: auto minmax(0,1fr) auto;
+}
+
+@utility grid-cols-overview {
+  grid-template-columns: minmax(0,19%) minmax(2.25rem,7.25%) minmax(10.8125rem,13.75rem) minmax(2.25rem,7.25%) minmax(0,1fr);
+}
+
+@utility grid-cols-fill-auto {
+  grid-template-columns: minmax(0,1fr) auto;
+}
+
+@utility grid-cols-fill-auto-auto {
+  grid-template-columns: minmax(0,1fr) auto auto;
+}
+
+@utility grid-cols-overview-compact {
+  grid-template-columns: minmax(0,1fr) repeat(2, clamp(1.5rem,10.5vw,2.625rem)) minmax(0,1fr);
+}
+
+@utility grid-cols-fill-fill-auto {
+  grid-template-columns: repeat(2, minmax(0,1fr)) auto;
+}
+
+@utility grid-cols-overview-split {
+  grid-template-columns: minmax(0,2.44fr) minmax(0,1fr);
+}
+
+@utility grid-cols-two-one {
+  grid-template-columns: minmax(0,2fr) minmax(0,1fr);
+}
+
+@utility grid-cols-connection {
+  grid-template-columns: minmax(4.625rem,25%) minmax(0,1fr);
+}
+
+@utility grid-cols-settings-detail {
+  grid-template-columns: minmax(5.5rem,24%) 1fr;
+}
+
+@utility grid-cols-settings {
+  grid-template-columns: minmax(5.5rem,24%) 1fr auto;
+}
+
+@utility grid-cols-backup-status {
+  grid-template-columns: minmax(6rem,32%) 1fr;
+}
+
+@utility grid-rows-conversation-skeleton {
+  grid-template-rows: 1.125rem 1.25rem 1rem;
+}
+
+@utility h-mobile-tabbar {
+  height: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom));
+}
+
+@utility h-topbar {
+  height: var(--topbar-height);
+}
+
+@utility max-h-mobile-more {
+  max-height: 75dvh;
+}
+
+@utility max-h-sheet {
+  max-height: 90dvh;
+}
+
+@utility max-h-inset-dialog {
+  max-height: calc(100dvh - 2rem);
+}
+
+@utility max-h-command-list {
+  max-height: min(24rem,55dvh);
+}
+
+@utility max-h-dropdown {
+  max-height: var(--radix-dropdown-menu-content-available-height);
+}
+
+@utility min-h-memory {
+  min-height: calc(100dvh - var(--topbar-height) - 3rem);
+}
+
+@utility ml-rail {
+  margin-left: var(--rail-width);
+}
+
+@utility pb-mobile-tabbar {
+  padding-bottom: calc(var(--mobile-tabbar-clearance) + env(safe-area-inset-bottom));
+}
+
+@utility pb-sheet-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@utility pt-console-safe {
+  padding-top: max(1.75rem, env(safe-area-inset-top));
+}
+
+@utility pt-login-safe {
+  padding-top: max(3.375rem, env(safe-area-inset-top));
+}
+
+@utility stroke-logo {
+  stroke-width: 2.5;
+}
+
+@utility top-command-menu {
+  top: min(16dvh,8rem);
+}
+
+@utility w-inset-dialog {
+  width: calc(100% - 2rem);
+}
+
+@utility w-rail {
+  width: var(--rail-width);
+}
+
+@utility press-primary {
+  --console-pressable-bg: color-mix(in srgb, var(--primary) 85%, transparent);
+}
+
+@utility press-destructive {
+  --console-pressable-bg: color-mix(in srgb, var(--destructive) 85%, transparent);
+}
+
+@utility press-secondary {
+  --console-pressable-bg: var(--border);
+}
+
+@utility max-w-channel-menu {
+  max-width: min(18rem, calc(100vw - 2rem));
+}
+
+@utility grid-cols-inbox-split {
+  grid-template-columns: minmax(0,3fr) minmax(0,2fr);
+}
+
+@utility max-h-inbox-pane {
+  max-height: calc(100dvh - var(--topbar-height) - 3rem);
+}
+
+@utility max-h-inbox-filters {
+  max-height: 65dvh;
+}
+
+@utility w-inbox-filters {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+@utility content-unassigned {
+  content: "—";
+}

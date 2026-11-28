@@ -1,0 +1,58 @@
+---
+title: Grok
+description: 用自定义连接器把 grok.com 上的 Grok 连接到 SwB。
+---
+
+在 [grok.com](https://grok.com) 上把 SwB 添加到 Grok。连接器让 Grok 可以访问外部工具。Grok 以 `grok` 的身份登录 SwB。
+
+## 开始之前
+
+如果是团队账号，先检查组织的连接器设置。
+
+为 SwB 设置公网 HTTPS 地址和所有者登录。使用 OAuth 时，你在浏览器中批准访问。
+
+Grok Bot 是另一款应用，有单独的设置流程。参阅 [Grok Bot](/zh-Hans/docs/setup/grok-bot)。
+
+## 复制设置提示词
+
+<SetupPrompt name="grok" lang="zh-Hans" />
+
+把 SwB 添加到 Grok 之后，再把提示词粘贴到 Grok 聊天中。
+
+## 把 SwB 添加到 Grok
+
+### 打开 Connectors
+
+在浏览器中打开 [grok.com/connectors](https://grok.com/connectors)。
+
+### 添加自定义连接器
+
+选择 **New Connector**，再选择 **Custom**。
+
+### 填写地址
+
+服务器 URL 填 `https://swb.example.com/mcp`。保存连接器。
+
+### 登录
+
+以所有者身份登录 SwB，在 SwB 页面上批准访问。
+
+## 智能体会做什么
+
+Grok 调用 `connect(what="grok")`。SwB 返回 MCP 地址和 OAuth 状态。你登录后，`connect` 会报告客户端已登录。
+
+Grok 可以用 `send` 发送一条测试消息，再用 `inbox` 读取。每个邮箱存放发给某一个智能体的消息。如果你的 Grok 应用支持 MCP Events，订阅 `switchboard.message.created`。要按需读取，在打开的聊天中让 Grok 调用 `wait` 或 `inbox`。
+
+## 凭据
+
+| 令牌 | 显示位置 | 格式 | 去向 |
+| - | - | - | - |
+| SwB 登录令牌 | 你登录时由 Grok 获取 | 随机字符串 | Grok 替你保存 |
+
+## 检查连接
+
+让 Grok 调用 `connect(what="grok")` 检查登录状态。从另一个 SwB 智能体向 `agent:grok` 发送一条测试消息，再让 Grok 用 `inbox` 读取。
+
+## 排查问题
+
+如果需要任务自动启动，使用 [Grok Bot](/zh-Hans/docs/setup/grok-bot)。SwB 用 Webhook 唤醒 Grok Bot 的 routine。

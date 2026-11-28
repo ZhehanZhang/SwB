@@ -22,12 +22,14 @@ def connect(client, agent=None, token=STATIC_KEY):
 
 def entry(agent, snippet):
     if agent == "codex":
-        return tomllib.loads(snippet)["mcp_servers"]["switchboard"]
+        return tomllib.loads(snippet)["mcp_servers"]["swb"]
     if agent == "goose":
-        return yaml.safe_load(snippet)["extensions"]["switchboard"]
+        config = yaml.safe_load(snippet)["extensions"]["swb"]
+        assert config["name"] == "swb"
+        return config
     if agent == "opencode":
-        return json.loads(snippet)["mcp"]["servers"]["switchboard"]
-    return json.loads(snippet)["mcpServers"]["switchboard"]
+        return json.loads(snippet)["mcp"]["servers"]["swb"]
+    return json.loads(snippet)["mcpServers"]["swb"]
 
 
 def test_discovery_lists_every_agent(make):
@@ -45,7 +47,7 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
     [setup] = [step for step in out["next"] if "snippet" in step]
     snippet = setup["snippet"]
     assert f"{PUBLIC}/mcp" in snippet and setup["by"] in {"you", "person"}
-    assert "wait or inbox" in out["next"][-1]["do"]
+    assert "SwB wait or inbox" in out["next"][-1]["do"]
     assert all(key not in json.dumps(out) for key in (CAPY_KEY, STATIC_KEY))
     if agent == "other":
         assert "unverified" in setup["do"]
@@ -54,19 +56,23 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
     else:
         assert "Bearer" not in snippet and not core.store.q("SELECT 1 FROM connect_codes")
         if agent == "claude-code":
-            assert snippet == f"claude mcp add --transport http --scope user switchboard {PUBLIC}/mcp"
+            assert setup["do"] == "Add SwB with this command."
+            assert out["next"][-2]["do"] == "Sign in to SwB from /mcp in Claude Code."
+            assert snippet == f"claude mcp add --transport http --scope user swb {PUBLIC}/mcp"
             assert "Claude Code channel" in out["next"][-1]["do"]
         else:
             config = entry(agent, snippet)
             assert (config.get("httpUrl") or config.get("url") or config["uri"]) == f"{PUBLIC}/mcp"
+            if agent in {"codex", "gemini-cli", "opencode", "cline"}:
+                assert " swb" in out["next"][-2]["do"]
 
 
 @pytest.mark.parametrize("agent", AGENTS)
 def test_coding_agent_bearer_configuration_without_oauth(make, agent):
-    _, client = make(base_config(auth={}))
+    _, client = make(base_config(auth={}, public_url=None))
     out = connect(client, agent)
     [snippet] = [s["snippet"] for s in out["next"] if "snippet" in s]
-    assert f"{PUBLIC}/mcp" in snippet and "Bearer <key>" in snippet
+    assert "http://localhost:8000/mcp" in snippet and "Bearer <key>" in snippet
     if agent != "other":
         headers = entry(agent, snippet)
         assert (headers.get("http_headers") or headers["headers"]) == {"Authorization": "Bearer <key>"}

@@ -19,29 +19,47 @@ class Guide(NamedTuple):
 
 
 JSON_BEARER = ', "headers": {"Authorization": "Bearer <key>"}'
-MCP_JSON = '{"mcpServers": {"switchboard": {%s@auth}}}'
+MCP_JSON = '{"mcpServers": {"swb": {%s@auth}}}'
 GUIDES = {
     "claude-code": Guide("~/.claude.json", MCP_JSON % '"type": "http", "url": @url',
-                         "Sign in to switchboard from /mcp in Claude Code.", JSON_BEARER,
-                         "claude mcp add --transport http --scope user switchboard @url"),
-    "codex": Guide("~/.codex/config.toml", "[mcp_servers.switchboard]\nurl = @url@auth",
-                   "Run codex mcp login switchboard to sign in.", '\nhttp_headers = { Authorization = "Bearer <key>" }'),
+                         "Sign in to SwB from /mcp in Claude Code.", JSON_BEARER,
+                         "claude mcp add --transport http --scope user swb @url"),
+    "codex": Guide("~/.codex/config.toml", "[mcp_servers.swb]\nurl = @url@auth",
+                   "Run codex mcp login swb to sign in.", '\nhttp_headers = { Authorization = "Bearer <key>" }'),
     "gemini-cli": Guide("~/.gemini/settings.json", MCP_JSON % '"httpUrl": @url',
-                        "Sign in when Gemini CLI prompts, or run /mcp auth switchboard.", JSON_BEARER),
-    "goose": Guide("~/.config/goose/config.yaml", 'extensions:\n  switchboard:\n    type: streamable_http\n'
-                   '    name: switchboard\n    enabled: true\n    uri: @url\n    headers: {@auth}\n'
+                        "Sign in when Gemini CLI prompts, or run /mcp auth swb.", JSON_BEARER),
+    "goose": Guide("~/.config/goose/config.yaml", 'extensions:\n  swb:\n    type: streamable_http\n'
+                   '    name: swb\n    enabled: true\n    uri: @url\n    headers: {@auth}\n'
                    '    env_keys: []\n    envs: {}\n    timeout: 300',
                    "Sign in when Goose opens the browser on first connect.", '"Authorization": "Bearer <key>"'),
-    "opencode": Guide("opencode.json (OpenCode V2)", '{"mcp": {"servers": {"switchboard": {"type": "remote", "url": @url, "enabled": true@auth}}}}',
-                      "Run opencode mcp auth switchboard to sign in.", ', "oauth": false' + JSON_BEARER),
+    "opencode": Guide("opencode.json (OpenCode V2)", '{"mcp": {"servers": {"swb": {"type": "remote", "url": @url, "enabled": true@auth}}}}',
+                      "Run opencode mcp auth swb to sign in.", ', "oauth": false' + JSON_BEARER),
     "cline": Guide("~/.cline/data/settings/cline_mcp_settings.json", MCP_JSON % '"type": "streamableHttp", "url": @url',
-                   "Open cline mcp and select Authorize OAuth for switchboard.", JSON_BEARER),
+                   "Open cline mcp and select Authorize OAuth for the swb entry.", JSON_BEARER),
     "kiro": Guide("~/.kiro/settings/mcp.json", MCP_JSON % '"url": @url',
                   "Sign in when Kiro opens the browser on first connect.", JSON_BEARER),
     "qwen-code": Guide("~/.qwen/settings.json", MCP_JSON % '"httpUrl": @url',
                        "Sign in when Qwen Code prompts, or use /mcp to authenticate.", JSON_BEARER),
     "other": Guide("", "Transport: Streamable HTTP\nURL: @url@auth", None, "\nAuthorization: Bearer <key>"),
 }
+
+
+def coding_snippet(agent: str, url: str, oauth: bool) -> dict[str, str]:
+    guide = GUIDES[agent]
+    use_oauth = oauth and guide.oauth is not None
+    if use_oauth and guide.command:
+        instruction = "Add SwB with this command."
+        snippet = guide.command.replace("@url", shlex.quote(url))
+    else:
+        instruction = f"Merge this entry into {guide.where}." if guide.where else "Enter these settings in your remote MCP client (client-specific syntax unverified)."
+        if not use_oauth:
+            instruction = instruction.rstrip(".") + ", replacing <key> locally with the pairing key and keeping it out of shared files."
+        auth = "" if use_oauth else guide.bearer
+        snippet_url = json.dumps(url) if guide.where else url
+        snippet = guide.snippet.replace("@auth", auth).replace("@url", snippet_url)
+        if snippet.startswith("{"):
+            snippet = json.dumps(json.loads(snippet), indent=2)
+    return {"id": agent, "where": guide.where, "snippet": snippet, "instruction": instruction, "auth": "oauth" if use_oauth else "bearer"}
 
 
 def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
@@ -63,7 +81,8 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
     if agent not in GUIDES:
         raise ToolError(f"Choose one of these coding agents: {names}.")
     guide = GUIDES[agent]
-    use_oauth = oauth and guide.oauth is not None
+    config = coding_snippet(agent, url, oauth)
+    use_oauth = config["auth"] == "oauth"
     steps: list[dict[str, str]] = []
     if not use_oauth:
         if not principal.is_unrestricted_owner:
@@ -76,23 +95,11 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
                         "do": f'To set up another machine or replace it, revoke it with connect_revoke(key_id="{key["id"]}"), then call connect again.'}]}
             code = kit.mint_pairing(principal, agent, project, None)["code"]
             steps.append({"by": "person", "do": f'POST {core.base_url}/connect with {{"code":"{code}"}} from the client to obtain its bearer key.'})
-    if use_oauth and guide.command:
-        do = "Run this command to add Switchboard."
-        snippet = guide.command.replace("@url", shlex.quote(url))
-    else:
-        do = f"Merge this entry into {guide.where}." if guide.where else "Enter these settings in your remote MCP client (client-specific syntax unverified)."
-        if not use_oauth:
-            do = do.rstrip(".") + ", replacing <key> locally with the pairing key and keeping it out of shared files."
-        auth = "" if use_oauth else guide.bearer
-        snippet_url = json.dumps(url) if guide.where else url
-        snippet = guide.snippet.replace("@auth", auth).replace("@url", snippet_url)
-        if snippet.startswith("{"):
-            snippet = json.dumps(json.loads(snippet), indent=2)
-    steps.append({"by": "person", "do": do, "snippet": snippet})
+    steps.append({"by": "person", "do": config["instruction"], "snippet": config["snippet"]})
     if use_oauth:
         steps.append({"by": "person", "do": guide.oauth})
-    wake = "Use the Switchboard wait or inbox tool to pick up messages"
+    wake = "Use the SwB wait or inbox tool to pick up messages."
     if agent == "claude-code":
-        wake += "; the Claude Code channel described in the README can also push messages to an open session"
-    steps.append({"by": "person", "do": wake + "."})
+        wake += " The Claude Code channel can also deliver messages to an open session."
+    steps.append({"by": "person", "do": wake})
     return {"done": done, "next": steps}

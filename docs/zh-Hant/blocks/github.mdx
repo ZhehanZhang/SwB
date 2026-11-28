@@ -1,0 +1,102 @@
+---
+title: GitHub App
+description: 把 GitHub 事件傳送給你的代理和服務。
+---
+
+## 建立應用程式
+
+在你的帳號下建立一個 GitHub App。把 Webhook 網址設為你的公開 SwB 網址加上 `/github/webhook`，例如 `https://swb.example.com/github/webhook`。在私有檔案中產生一組 Webhook 密鑰。SwB 接受長度至少 16 個字元的密鑰。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
+```
+
+把密鑰輸入到 **Webhook secret**。請代理連接 GitHub，再用認領連結儲存同一組密鑰。刪除私有檔案，並重新啟動 SwB 來載入密鑰。請代理再次呼叫 `connect`，取得其餘的 App ID 或私密金鑰連結。在私密金鑰欄位中貼上 `.pem` 檔案的完整內容。
+
+## 權限
+
+在 **Repository permissions** 下，依照表格設定存取等級。
+
+| 存放庫資源 | 存取等級 | 事件 |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動設為 **Read-only** | |
+
+把應用程式安裝到需要的存放庫上。
+
+## 路由事件
+
+```yaml
+blocks:
+  github:
+    use: github
+    sinks:
+      team: {url_env: SWB_EXAMPLE_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+在伺服器環境中，把 `SWB_EXAMPLE_GITHUB_SINK_URL` 設為接收端的網址。
+
+**接收端**（sink）是用來接收事件副本的 URL。在 `watch` 模式下，SwB 會向每個相符的接收端傳送一個精簡的 JSON 事件。設有接收端路由的存放庫預設使用 `watch`。頻道模式和空間模式優先。SwB 會把其他詳細資料引述在 `metadata` 中。每個請求都以事件的傳遞 ID 作為 `Idempotency-Key`。遇到連線失敗、逾時和 HTTP 5xx 回應時，SwB 會重試。
+
+如果 Cloudflare Access 保護你的主機，放行 `/github/webhook`。這個路徑由 GitHub 簽章保護。
+
+## 擁有者帳號
+
+在 `off` 模式下，SwB 會捨棄這個空間的所有 GitHub 事件，包括來自擁有者帳號的事件。
+
+如果只想接受來自已設定擁有者帳號的事件，使用 `work` 模式。把 `https://api.github.com/users/USERNAME` 中的 `USERNAME` 換成你的 GitHub 使用者名稱，開啟這個 URL，再把數字 `id` 複製到空間的 `owner_ids` 清單中。重新啟動 SwB 來套用設定。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        owner_ids: [4242]
+        mode:
+          mode: work
+          target: agent:beta
+```
+
+用 `blocks.github.owner_ids` 設定預設的擁有者 ID。空間的 `owner_ids` 清單會取代這項預設值，清單留空則會清除預設值。
+
+SwB 會檢查每個標題、內文或留言的作者。只有當文字的作者本人列在 `owner_ids` 中，而且是真人時，這段文字才算 `owner`。SwB 把分支名稱、ref、工作流程標題和檢查名稱引述為 `external`。
+
+帶有檢查名稱的 `check_run`，信任等級為 `external`，即使由擁有者觸發也一樣。來自 fork 的 Pull Request 可以設定檢查名稱。在存取規則中使用 `github:4242` 這類 ID。這些規則授予的存取權與信任等級各自獨立。
+
+如果要執行 GitHub 對話動作，在 `conversation` 或 `handle` 中傳入 SwB 對話識別碼。
+
+## 設定
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.github` | GitHub 事件和動作的設定 |
+| `blocks.github.use` | 模組類型，填入 `github` |
+| `blocks.github.enabled` | 設為 `false` 可略過這個模組 |
+| `blocks.github.app_id_env` | 存放 App ID 的變數名稱 |
+| `blocks.github.private_key_env` | 存放 App 私密金鑰的變數名稱 |
+| `blocks.github.token_env` | 存放細粒度權杖的變數名稱，可用來替代 App 憑證 |
+| `blocks.github.secret_env` | 存放 Webhook 密鑰的變數名稱 |
+| `blocks.github.sinks` | 依事件接收端名稱區分的設定 |
+| `blocks.github.sinks.*.url_env` | 存放接收端網址的變數名稱 |
+| `blocks.github.routes` | 存放庫名稱或 `owner/*` 與事件接收端清單的對應表 |
+| `blocks.github.owner_ids` | 預設清單，列出視為擁有者而受信任的 GitHub 使用者數字 ID |
+| `blocks.github.spaces` | 共用設定的具名存放庫集合。`acme/app` 這類名稱會選取對應的存放庫 |
+| `blocks.github.spaces.*.repo` | 存放庫名稱，格式為 `owner/repo` |
+| `blocks.github.spaces.*.owner_ids` | GitHub 使用者數字 ID 清單，在這個空間中取代預設值 |
+| `blocks.github.spaces.*.mode` | 這個空間中存放庫的預設[頻道模式](/zh-Hant/docs/channel-modes) |
+| `blocks.github.spaces.*.mode.target` | 模式設定中的目標。選擇 `agent:beta` 這類位址 |
+| `blocks.github.spaces.*.project` | 這個空間的事件使用的預設 SwB 專案 |
+
+用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` 把代理綁定到存放庫。如果使用 assist 模式，改用 `mode="assist"`。從 `targets` 中選擇目標。已連結的專案路由是備用選項。
+
+如果要開放給外部傳送者，同時授予 `channel:github/acme/app` 和 `target:beta` 的存取權。存取規則見[頻道可見性](/zh-Hant/docs/channel-modes#允許外部的-github-傳送者)。
+
+在 `watch` 模式下，SwB 會在經過 `modes.digest_minutes` 後，或為這個信箱和空間收集到 50 個事件時，把摘要傳送到目標信箱。參閱 [Watch 摘要](/zh-Hant/docs/channel-modes#讀取-watch-摘要)。

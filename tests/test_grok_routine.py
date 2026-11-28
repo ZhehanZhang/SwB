@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import aiohttp
 import pytest
 
-from conftest import STATIC_KEY, Clock, base_config, call, default_env, payload, principal, sign_in
+from conftest import CAPTAIN, STATIC_KEY, Clock, base_config, call, default_env, error_text, payload, principal, sign_in
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
 from switchboard.core import CoreError
@@ -60,7 +60,7 @@ def test_grok_send_wakes_after_mailbox_delivery_and_oauth_reply_correlates(make)
     assert headers == {"Content-Type": "application/json", "Authorization": f"Bearer {KEY}"}
     body = json.loads(raw)
     assert body == {
-        "text": ('Summarize the release.\n\n(switchboard: this is an owner request; answer with '
+        "text": ('capy asks: Summarize the release.\n\nSummarize the release.\n\n(switchboard: this is an owner request; answer with '
                  f'reply(conversation="{handle}", text=…, final=true) through the switchboard connector)'),
         "conversation": handle, "from": core.agents.label("capy"), "trust": "owner",
     }
@@ -77,6 +77,20 @@ def test_grok_send_wakes_after_mailbox_delivery_and_oauth_reply_correlates(make)
     assert answer["text"] == "Looks good." and answer["from"]["agent"] == "grok"
     passive = payload(call(client, STATIC_KEY, "send", {"to": "agent:grok", "task": "No wake."}))
     assert passive["mailbox"] and len(block.http.requests) == 1
+
+
+def test_grok_trigger_uses_the_mailbox_subject_before_the_reply_hint(make):
+    core, client = make(config(incoming=ROUTINE), {**default_env(), **CREDENTIALS})
+    block = core.blocks["grok-routine"]
+    block.http = Webhook(202)
+    task_at_limit = "Check status. " + "x" * (20_000 - len("Check status. "))
+    out = payload(call(client, STATIC_KEY, "send", {"to": "grok", "title": "Canary review", "task": task_at_limit}))
+    (_, raw, _, _), = block.http.requests
+    body = json.loads(raw)
+    title, task, tail = body["text"].split("\n\n")
+    assert title == core.inbox.handle(out["handle"])["title"] == "Canary review"
+    assert task == task_at_limit
+    assert f'reply(conversation="{out["handle"]}"' in tail and tail.endswith("through the switchboard connector)")
 
 
 async def test_project_primary_named_and_configured_routes(amake):
@@ -104,6 +118,22 @@ async def test_project_primary_named_and_configured_routes(amake):
         await core.send(Principal("capy", "test:capy", "key", scopes=("project:other",)),
                         to="lint", task="Out of scope.")
     assert len(block.http.requests) == 5
+
+
+def test_unqualified_route_tools_find_grok_past_capy(make):
+    cfg = config(lint=ROUTINE)
+    cfg["blocks"]["capy"] = {"default_route": {"captain": CAPTAIN}}
+    core, client = make(cfg)
+    core.projects.create(slug="demo", name="Demo")
+    args = {"project": "demo"}
+    route = payload(call(client, STATIC_KEY, "routes_set", {**args, "target": "grok-routine:routine:lint"}))
+    assert route in payload(call(client, STATIC_KEY, "routes_list"))["routes"]
+    assert "no such route" in error_text(call(client, STATIC_KEY, "routes_remove", {**args, "block": "capy"}))
+    result = payload(call(client, STATIC_KEY, "routes_resolve", args))
+    assert result["to"] == "grok-routine:routine:lint" and result["route"] == route and result["checked"] == ["agent+project", "project"]
+    assert payload(call(client, STATIC_KEY, "send", {**args, "task": "Check the build"}))["routine"] == "lint"
+    assert payload(call(client, STATIC_KEY, "routes_remove", args))["removed"] == route
+    assert payload(call(client, STATIC_KEY, "routes_resolve", args))["to"] == f"capy:captain:{CAPTAIN}"
 
 
 @pytest.mark.parametrize("auth,custom_header", [("key", "X-Routine-Key"), ("key", "authorization"),

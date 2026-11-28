@@ -1,0 +1,84 @@
+---
+title: Discord
+description: 把 Discord 訊息路由給代理，並在討論串中回覆。
+---
+
+## 建立機器人
+
+依照 [Discord 設定](/zh-Hant/docs/setup/discord)建立機器人。啟用 Message Content Intent，才能讀取文字和後續訊息。
+
+請代理連接 Discord。代理會呼叫 `discord_provision`，並給你一個認領連結。開啟連結，貼上 Bot 權杖。
+
+## 把機器人加入伺服器
+
+機器人連線後，呼叫 `discord_status`，開啟 `setup.invite_url` 中的連結，把機器人加入你的伺服器。這個連結會要求已啟用功能所需的權限。
+
+在 `discord_status` 的 `discovered.guilds` 中找出伺服器 ID，加入設定檔中的一個空間。一個空間（space）存放一個 Discord 伺服器的設定。
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: claude
+    agents: {claude: [home]}
+```
+
+如果要設定擁有者，傳送一則私訊給機器人，在 `discord_status` 的 `discovered.dm_users` 中找出你的使用者 ID，再把這個 ID 填入 `owner_ids`。
+
+## 從 Discord 傳送
+
+提及機器人，並加上目標的簡稱，例如 `@swb claude check the build`。啟用討論串後，SwB 可以從你的訊息開啟一個討論串，把你加進去，並在其中張貼回覆。後續訊息可以沿用討論串的目標。啟用形象（persona）後，符合條件的回覆會使用代理的名稱和頭像。
+
+## 分享給其他人
+
+頻道和目標預設為私有。如果要讓其他人存取，頻道和目標都要分享。使用 `channel:<space>/<channel id>` 和 `target:<slug>`。如果要讓特定使用者存取，把 `discord:<user id>` 加入存取清單。
+
+## 模組設定
+
+在設定中開啟 Discord，即可修改機器人的名稱與頭像。各伺服器可使用自己的名稱與頭像。授予機器人更改暱稱的權限，即可設定伺服器暱稱。
+
+開啟 **Post every agent as this bot** 後，伺服器中的代理回覆會顯示該空間的機器人名稱與頭像。稽核記錄會保留回覆的代理。
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.discord` | Discord 機器人及其空間的設定 |
+| `blocks.discord.use` | 載入 `discord` 模組 |
+| `blocks.discord.enabled` | 設為 `true` 載入模組，設為 `false` 則關閉 |
+| `blocks.discord.token_env` | 存放 Bot 權杖的環境變數名稱 |
+| `blocks.discord.application_id` | 邀請連結使用的 Discord 應用程式 ID。SwB 也可以從 Discord 讀取這個 ID |
+| `blocks.discord.connect` | 設為 `true` 接收 Discord 的即時事件。設為 `false` 可單獨測試 API 呼叫 |
+| `blocks.discord.message_content` | 設為 `true` 讀取訊息內容，包括討論串中的後續訊息。要在 Developer Portal 中啟用 Message Content Intent |
+| `blocks.discord.threads` | 設為 `true` 時，在伺服器文字頻道中為回覆開啟公開討論串 |
+| `blocks.discord.personas` | 設為 `true` 時，用 Webhook 傳送的伺服器貼文會使用代理的名稱和頭像。要授予機器人 Manage Webhooks 權限 |
+| `blocks.discord.avatar` | 機器人個人檔案的頭像檔名 |
+| `blocks.discord.ack_reaction` | 表情符號，用來標示已收到寫給機器人的訊息。設為 `null` 可關閉這個回應 |
+| `blocks.discord.dm_space` | 私訊套用這個空間的路由和擁有者設定。預設為第一個已設定的空間 |
+| `blocks.discord.dm_mode` | 其他人私訊的模式。`watch` 收集成摘要，`off` 略過私訊 |
+| `blocks.discord.daily_cap` | 用工具發文或回覆時，每種動作的每日上限。設為 `null` 可取消上限 |
+| `blocks.discord.refresh_minutes` | 更新目標清單的間隔，單位為分鐘。預設為 `30` |
+| `blocks.discord.target_aliases` | 把額外的目標名稱對應到現有目標 |
+| `blocks.discord.agents` | 每個代理可以發文並接收事件的空間。`*` 代表所有空間 |
+
+用[頻道模式](/zh-Hant/docs/channel-modes)經由專案路由喚醒代理。
+
+## 空間與頻道
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.discord.spaces` | 把 SwB 中使用的名稱對應到 Discord 伺服器的設定 |
+| `blocks.discord.spaces.*.guild_id` | Discord 伺服器 ID。在其中一個空間省略它，就會自動比對。這時空間擁有者名下要正好有一個可用的伺服器 |
+| `blocks.discord.spaces.*.owner_ids` | 視為擁有者的 Discord 使用者 ID。預設為 Discord 應用程式的擁有者 |
+| `blocks.discord.spaces.*.known` | 把已知的 Discord 使用者 ID 對應到顯示名稱 |
+| `blocks.discord.spaces.*.default_target` | 新訊息寫給 SwB 且省略目標名稱時使用的目標 |
+| `blocks.discord.spaces.*.project` | 這個空間的預設 SwB 專案 |
+| `blocks.discord.spaces.*.channel_projects` | 依頻道 ID 或以 `#` 開頭的名稱設定 SwB 專案 |
+| `blocks.discord.spaces.*.mode` | 空間的模式。頻道或討論串的模式可以覆寫它 |
+| `blocks.discord.spaces.*.channels` | 依頻道或討論串 ID 設定模式或更詳細的設定 |
+| `blocks.discord.spaces.*.channels.*.mode` | 單一頻道或討論串的模式 |
+| `blocks.discord.spaces.*.channels.*.actions` | `triage` 模式允許的動作，例如 `reply` 和 `notify_owner` |
+| `blocks.discord.spaces.*.listen` | 舊版設定，列出使用 `assist` 模式的頻道或討論串 ID |
+| `blocks.discord.spaces.*.bot_posts_per_hour` | 每個討論串 1 小時內的機器人貼文數上限。預設為 `20` |

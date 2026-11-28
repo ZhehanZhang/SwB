@@ -1,0 +1,110 @@
+---
+title: Inhaber-Anmeldung
+description: Melden Sie sich mit einem Passkey, einem Einmal-Link, einem Einrichtungscode oder Ihrem Identitätsanbieter an.
+---
+
+Der Inhaber meldet sich an, um SwB zu verwalten. Mit diesem Zugriff gibt der Inhaber Anmeldungen von Agenten frei und speichert Tokens.
+
+| Seite | Zweck |
+| - | - |
+| `/login` | Als Inhaber anmelden. |
+| `/authorize` | Die Verbindungsanfrage eines Agenten prüfen. |
+
+## Einmal-Link
+
+```bash
+swb login-link
+```
+
+Der Befehl gibt einen Link wie `https://swb.example.com/login#t=...` aus. Öffnen Sie ihn innerhalb von fünf Minuten in Ihrem Browser. Der Link gilt einmalig. Ein Agent, der als Inhaber angemeldet ist, kann mit dem Tool `login_link` ebenfalls einen Link erstellen. Das Token steht im Teil des Links nach `#`.
+
+Beim ersten lokalen Start gibt `swb up` einen Einmal-Link aus. Die lokale Adresse ist standardmäßig `http://localhost:8870`. Wenn Sie `SWB_PORT` setzen, verwendet SwB diesen Port in der Adresse. Für `swb login-link` wählen Sie mit `--url` einen anderen Server. Mit `--dir` lesen Sie den Inhaberschlüssel aus einem anderen Instanzordner.
+
+Wenn die Anmeldung mit dem Link fehlschlägt, führen Sie `swb login-link` erneut aus. Öffnen Sie den neuen Link in Ihrem Browser.
+
+## Einrichtungscode
+
+Ein Einrichtungscode gilt einmalig für die erste Anmeldung des Inhabers. Verwenden Sie ihn, wenn SwB die Anmeldung selbst verwaltet. Die [Bereitstellungsanleitung](/de/docs/deploy) zeigt, wo Sie den Code für einen gehosteten Server finden.
+
+Für einen eigenen Code erzeugen Sie 32 zufällige Bytes. Kodieren Sie diese als 64 hexadezimale Zeichen in Kleinschreibung oder als Standard-Base64. Dieser Befehl fügt einen hexadezimalen Code zur privaten Datei `.env` hinzu. Führen Sie ihn nach `swb init` im Instanzordner aus.
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+Starten Sie SwB mit gesetztem `SWB_SETUP_CODE`. Öffnen Sie `/login` in Ihrem Browser. Fügen Sie den Code in **Setup code** ein. Wählen Sie **Sign in** aus.
+
+## Passkey
+
+Ein **Passkey** bestätigt Ihre Anmeldung mit Ihrem Gerät. Geben Sie nach der ersten Anmeldung den Namen Ihres Geräts in **Passkey name** ein. Wählen Sie **Add a passkey** aus.
+
+Für ein weiteres Gerät öffnen Sie **Settings**. Wählen Sie unter **Sign-in** die Option **Add a passkey** aus. Geben Sie einen Namen ein. Wählen Sie **Add passkey** aus, um ihn zu speichern. Verwenden Sie Ihren Passkey für spätere Anmeldungen.
+
+## OIDC
+
+Mit OpenID Connect (OIDC) bestätigt ein Anmeldedienst wie Google Ihre Identität. Tragen Sie Ihren Dienst in die Konfigurationsdatei ein. Setzen Sie `SWB_OIDC_CLIENT_SECRET` auf das Secret aus diesem Dienst.
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+Setzen Sie bei Ihrem Anbieter die Weiterleitungsadresse auf `https://swb.example.com/auth/oidc/callback`. Die Anmeldeseite zeigt eine Schaltfläche für Ihren Dienst. SwB akzeptiert eine verifizierte E-Mail-Adresse aus `auth.owner_emails`. Sie können auch Konto-IDs aus Ihrem Dienst in `auth.oidc.owner_subjects` eintragen.
+
+## Cloudflare Access
+
+Folgen Sie der [Cloudflare-Einrichtung](/de/docs/cloudflare#cloudflare-access), um die Konsole mit Cloudflare Access zu schützen. SwB prüft das Access-Token und gleicht die E-Mail-Adresse mit `auth.owner_emails` oder `SWB_OWNER_EMAILS` ab.
+
+## Agent-Anmeldung
+
+Mit OAuth kann sich eine App nach Ihrer Freigabe mit SwB verbinden. Geben Sie die Verbindung auf `/authorize` frei. Die App erhält den OAuth-Scope `switchboard`, den Namen des angefragten Zugriffs. Die App holt oder erneuert ihre Tokens über `/token`.
+
+Wenn die App einen OAuth-Fehler erhält, finden Sie Details in `error_description`.
+
+| Fehler | Bedeutung |
+| - | - |
+| `access_denied` | Der Inhaber hat die Verbindung abgelehnt. |
+| `invalid_client` | SwB hat die Identität oder die Zugangsdaten der App abgelehnt. |
+| `invalid_client_metadata` | SwB hat die Registrierungseinstellungen der App abgelehnt. |
+| `invalid_redirect_uri` | SwB verlangt bei der Registrierung eine erlaubte Rückrufadresse. |
+| `invalid_request` | Das Anfrageformat oder ein Pflichtwert ist ungültig. |
+| `invalid_grant` | SwB hat den Autorisierungscode oder das Refresh-Token abgelehnt. |
+| `invalid_target` | Die Anfrage nennt eine falsche MCP-Adresse. |
+| `unsupported_response_type` | Verwenden Sie `response_type=code`. |
+| `unsupported_grant_type` | Verwenden Sie `grant_type=authorization_code` oder `grant_type=refresh_token`. |
+| `temporarily_unavailable` | Setzen Sie `public_url` oder prüfen Sie das Limit für Client-Registrierungen. |
+
+`/connect` gibt ebenfalls `invalid_grant` zurück, wenn SwB einen [Kopplungscode](/de/docs/connect#mit-einem-kopplungscode-verbinden) ablehnt.
+
+## Sitzungen
+
+Ein **Cookie** ist ein Wert, den Ihr Browser speichert, damit Sie angemeldet bleiben. SwB setzt für dieses Cookie das Flag `Secure`. Verwenden Sie HTTPS für eine öffentliche Adresse.
+
+Wenn Sie eine Einstellung ändern, sendet der Browser ein Token, mit dem SwB die Anfrage prüft. Melden Sie sich unter **Settings** ab.
+
+Der Browser liest Ihren aktuellen Anmeldestatus unter `/auth/session`.
+
+## Anmeldefehler
+
+SwB vermerkt fehlgeschlagene Browser-Anmeldungen unter **Audit**. Jede Zeile nennt den Grund und verbirgt Codes und Tokens. Für einige Fehler begrenzt SwB wiederholte Zeilen.
+
+| Fehler | Bedeutung |
+| - | - |
+| `link_used` | Jemand hat sich mit dem Link angemeldet, bevor er abgelaufen ist. |
+| `link_expired` | Der Link ist abgelaufen. |
+| `link_invalid` | SwB hat den Link abgelehnt. |
+| `setup_failed` | Der Einrichtungscode hat ein falsches Format oder weicht von `SWB_SETUP_CODE` ab. |
+| `setup_closed` | Die Anmeldung per Einrichtungscode ist deaktiviert. Verwenden Sie eine andere Anmeldemethode. |
+| `passkey_failed` | Die Einrichtung oder Prüfung des Passkeys ist fehlgeschlagen. |
+| `last_method` | SwB behält den letzten Passkey, wenn OIDC und Cloudflare Access beide inaktiv sind. |
+| `not_found` | Die Passkey-ID ist falsch oder der Passkey wurde entfernt. |
+| `oidc_failed` | Die Anmeldung über den Identitätsanbieter ist fehlgeschlagen. |
+| `signed_out` | Die Anfrage erfordert eine Inhabersitzung. |
+| `csrf` | SwB hat die Seitenadresse oder das Sicherheitstoken abgelehnt. |
+| `slow_down` | Die Anmeldeversuche haben ein Limit erreicht. Warten Sie die Zeit aus `Retry-After` ab. |

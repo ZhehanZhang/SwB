@@ -1,0 +1,32 @@
+{
+  "title": "文档",
+  "pages": [
+    "get-started",
+    "---运行 SwB---",
+    "install",
+    "deploy",
+    "cloudflare",
+    "first-run",
+    "owner-login",
+    "operate",
+    "---连接智能体---",
+    "connect",
+    "setup",
+    "companion",
+    "---模块---",
+    "...blocks",
+    "---基本概念---",
+    "index",
+    "how-it-works",
+    "memory",
+    "channel-modes",
+    "---参考---",
+    "tools",
+    "config",
+    "credentials",
+    "security",
+    "---",
+    "faq",
+    "about"
+  ]
+}

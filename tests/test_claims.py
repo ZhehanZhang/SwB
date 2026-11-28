@@ -1,13 +1,15 @@
 import hashlib
+import html
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlsplit
 
 import pytest
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, base_config, default_env, sign_in
+from conftest import CAPTAIN, CAPY_KEY, OWNER, PUBLIC, STATIC_KEY, Clock, base_config, call, default_env, payload, sign_in
 from switchboard.__main__ import _NoQuery
-from switchboard.claims import CLAIM_TTL_S, ClaimError, ClaimUnavailable, Claims
+from switchboard.claims import CLAIM_TTL_S, ClaimError, ClaimUnavailable, Claims, Field
 from switchboard.store import Store
 
 NAME = "EXAMPLE_TOKEN"
@@ -22,8 +24,153 @@ def form_csrf(page):
 
 def private_page(page):
     assert page.headers["cache-control"] == "no-store"
-    assert page.headers["referrer-policy"] == "no-referrer"
-    assert '<meta name="referrer" content="no-referrer">' in page.text
+    assert page.headers["referrer-policy"] == "same-origin"
+    assert '<meta name="referrer" content="same-origin">' in page.text
+
+
+def assert_claim_error_title(response, title, status=400):
+    assert response.status_code == status
+    rendered = html.unescape(re.search(r"<h1\b[^>]*>([^<]+)</h1>", response.text)[1])
+    assert not re.search(r"[:;—]|\b(?:no|not|never|without)\b|n['’]t", rendered, re.I)
+    assert rendered == title
+
+
+def test_github_webhook_secret_claim_rejects_whitespace_and_short_values(make):
+    name = "EXAMPLE_GITHUB_WEBHOOK_SECRET"
+    config = base_config(version=2, blocks={"mcp": {}, "github": {"secret_env": name}})
+    core, client = make(config, {"SWITCHBOARD_KEY_OWNER": STATIC_KEY})
+    out = payload(call(client, STATIC_KEY, "connect", {"what": "github"}))
+    path = urlsplit(out["next"][0]["link"]).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    secret = "A1b2C3d4E5f6G7h8"
+    invalid = [(secret[:-1], "Use a webhook secret with at least 16 characters")]
+    invalid.extend((value, "Enter a continuous webhook secret") for value in (
+        " " + secret, secret + " ", *(secret[:8] + c + secret[8:] for c in " \t\n\u00a0"),
+    ))
+    for value, title in invalid:
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, title)
+        assert core.secret(name) is None
+    assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": secret}).status_code == 200
+    assert core.secret(name) == secret
+
+
+@pytest.mark.parametrize("name", ["CAPY_API_KEY", "EXAMPLE_CAPY_SEND_KEY"])
+def test_capy_key_claim_checks_format(make, capy, name):
+    env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
+    if name != "CAPY_API_KEY":
+        env["CAPY_API_KEY"] = CAPY_KEY
+    config = base_config(version=2, blocks={"mcp": {}, "capy": {"send_key_env": "EXAMPLE_CAPY_SEND_KEY"}})
+    core, client = make(config, env)
+    out = payload(call(client, STATIC_KEY, "connect", {"what": "capy-captain", "choose": {"captain": CAPTAIN}}))
+    path = urlsplit(out["next"][0]["link"]).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    suffix = "aA0-_" + "x" * 38
+    invalid = ("x", "other_" + suffix, "capy_" + suffix[:-1], "capy_" + suffix + "x",
+               *("capy_" + suffix[:10] + c + suffix[11:] for c in "+/=é "))
+    provider_calls = len(capy.requests)
+    for value in invalid:
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, "Enter capy_ followed by 43 characters")
+        if len(value) > 1:
+            assert value not in response.text
+        assert core.secret(name) is None
+    key = "capy_" + suffix
+    response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": key})
+    assert response.status_code == 200 and key not in response.text
+    assert core.secret(name) == key and len(capy.requests) == provider_calls
+
+
+def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
+    core, client = make(base_config(version=2, blocks={
+        "github": {}, "slack": {"engine": False},
+        "discord": {"connect": False, "token_env": "COPY_DISCORD_TOKEN"},
+    }))
+    pem = "-----BEGIN PRIVATE KEY-----" + "YWJj" + "-----END PRIVATE KEY-----"
+    cases = [
+        ("COPY_TOKEN", "token", "", "Enter a single-line value up to 8 KiB"),
+        ("COPY_URL", "url", "http://example.test", "Enter a public HTTPS webhook URL"),
+        ("COPY_ID", "id", "abc", "Enter a numeric ID"),
+        ("GITHUB_APP_ID", "id", "0", "Enter a numeric App ID"),
+        ("GITHUB_WEBHOOK_SECRET", "webhook_secret", "short", "Use a webhook secret with at least 16 characters"),
+        ("COPY_PEM", "pem", "x" * (64 * 1024 + 1), "Use a text file up to 64 KiB"),
+        ("COPY_PEM", "pem", "bad key", "Paste the full private key or upload the .pem file"),
+        ("COPY_PEM", "pem", pem, "Use a valid .pem file"),
+        ("GITHUB_APP_PRIVATE_KEY", "pem", pem, "Use the .pem file that GitHub downloads."),
+        ("COPY_JSON", "json", "[]", "Use a JSON object"),
+        ("COPY_SLACK_BOT", "slack_bot", "abc", "Use a Slack token that starts with xoxb-"),
+        ("COPY_SLACK_USER", "slack_user", "abc", "Use a Slack token that starts with xoxp-"),
+        ("COPY_SLACK_APP", "slack_app", "abc", "Use a Slack token that starts with xapp-"),
+        ("COPY_SLACK_BOT", "slack_bot", "xoxb-example", "Use a token accepted by Slack"),
+        ("COPY_DISCORD_TOKEN", "token", "wrong", "Use a bot token"),
+        ("COPY_INTERNAL_ERROR", "token", "test", "Check the value"),
+    ]
+
+    async def reject_slack(kind, token):
+        return False
+
+    def internal_error(value):
+        raise ClaimError("Internal error: use another link")
+
+    monkeypatch.setattr(core.blocks["slack"], "claim_auth_check", reject_slack)
+    core.claims.register_name("COPY_INTERNAL_ERROR", internal_error)
+    for name, kind, value, title in cases:
+        path = urlsplit(core.claims.mint(name, PUBLIC, kind=kind)).path
+        csrf = form_csrf(client.get(path, headers=OWNER))
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, title)
+        assert '<form method="post" autocomplete="off">' in response.text and form_csrf(response) == csrf
+
+    assert_claim_error_title(client.post(path, headers={"Authorization": "Bearer example"}), "Use the SwB owner key", 403)
+    assert_claim_error_title(client.get("/claim/unknown", headers=OWNER), "Request a new link", 410)
+    for label in ("App ID", "Webhook secret", "Private key", "Bot token", "User token", "App-level token"):
+        path = urlsplit(core.claims.mint_group("Example group", [Field("COPY_FIELD", label)], PUBLIC)).path
+        csrf = form_csrf(client.get(path, headers=OWNER))
+        assert_claim_error_title(client.post(path, headers=OWNER, data={"csrf": csrf}), f"Check {label}")
+
+
+def test_generic_claim_gets_connector_avatar_and_default_title(make):
+    core, client = make()
+    name = "GEMINI_EXAMPLE_TOKEN"
+    with pytest.raises(ClaimError, match="Choose a credential kind"):
+        core.claims.mint(name, PUBLIC, kind="gemini")
+    path = urlsplit(core.claims.mint(name, PUBLIC)).path
+    page = client.get(path, headers=OWNER)
+    assert_claim_error_title(page, "Save a token", 200)
+    assert 'data-connector="gemini"' in page.text and 'src="/avatars/gemini.png"' in page.text
+    [claim] = client.get("/api/tokens", headers=OWNER).json()["waiting"]
+    assert (claim["label"], claim["kind"]) == (name, "generic")
+    assert_claim_error_title(client.get("/routines/claim/unknown", headers=OWNER), "Claude routine setup required")
+
+
+def test_routine_and_chat_claim_error_titles_use_positive_copy(make):
+    clock = Clock()
+    core, client = make(base_config(version=2, blocks={"claude-routine": {}, "discord": {"connect": False}}), clock=clock)
+    core.projects.create(slug="sample", name="Sample")
+    routine = core.blocks["claude-routine"]
+
+    def routine_path():
+        registration = routine.register(fire="trig_01EXAMPLE", claude_project="Sample", project="sample", project_name=None,
+                                        description=None, create_new=False, name=None, primary=None, actor="test")
+        return urlsplit(registration["link"]).path
+
+    first, current = routine_path(), routine_path()
+    assert_claim_error_title(client.get(first, headers=OWNER), "Use the latest link", 410)
+    csrf = form_csrf(client.get(current, headers=OWNER))
+    rejected = client.post(current, headers=OWNER, data={"csrf": csrf, "token": "bad"})
+    assert_claim_error_title(rejected, "Use a Claude routine token")
+    assert form_csrf(rejected) == csrf and 'name="token"' in rejected.text
+    assert client.post(current, headers=OWNER, data={"csrf": csrf, "token": ROUTINE_TOKEN}).status_code == 200
+    assert_claim_error_title(client.get(current, headers=OWNER), "Link already used", 410)
+    expired_routine = routine_path()
+    discord = core.blocks["discord"]
+    expired_bot = urlsplit(discord.claims.open("bot_token", "test")["link"]).path
+    csrf = form_csrf(client.get(expired_bot, headers=OWNER))
+    assert_claim_error_title(client.post(expired_bot, headers=OWNER, data={"csrf": csrf, "token": "bad"}), "Use a bot token")
+    clock.t += CLAIM_TTL_S
+    for path in (expired_routine, expired_bot):
+        assert_claim_error_title(client.get(path, headers=OWNER), "Link expired", 410)
+    assert_claim_error_title(client.get("/claims/discord/unknown", headers=OWNER), "Request a new link", 410)
 
 
 def test_webhook_url_claim_rejects_invalid_urls_without_spending_link(make):
@@ -44,6 +191,15 @@ def test_webhook_url_claim_rejects_invalid_urls_without_spending_link(make):
     assert core.secret("EXAMPLE_WEBHOOK_URL") == valid
 
 
+def test_grok_url_claim_names_the_saved_field(make):
+    core, client = make()
+    path = urlsplit(core.claims.mint("GROK_ROUTINE_URL", PUBLIC, url=True)).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    response = client.post(path, data={"token": "https://webhook.example.test/grok", "csrf": csrf}, headers=OWNER)
+    assert response.status_code == 200
+    assert "<h1>Webhook URL saved</h1>" in response.text
+
+
 def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     core, client = make()
     link = core.claims.mint(NAME, PUBLIC)
@@ -53,11 +209,16 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     assert core.secret(NAME) is None
 
     for headers in ({}, {"authorization": f"Bearer {STATIC_KEY}"}, {"cf-access-jwt-assertion": "other"}):
-        assert client.get("/", headers=headers).status_code == 403
+        root = client.get("/", headers=headers)
+        assert root.status_code == 303 and root.headers["location"] == "/login?next=%2F"
         refused = client.get(path, headers=headers)
-        assert refused.status_code == 403
-        private_page(refused)
-        assert client.post(path, data={"token": VALUE}, headers=headers).status_code == 403
+        assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
+        assert refused.headers["cache-control"] == "no-store" and refused.headers["referrer-policy"] == "no-referrer"
+        posted = client.post(path, data={"token": VALUE}, headers=headers)
+        if "authorization" in headers:
+            assert posted.status_code == 403
+        else:
+            assert posted.status_code == 401 and posted.json() == {"error": "signed_out"}
 
     page = client.get(path, headers=OWNER)
     assert page.status_code == 200 and NAME in page.text and 'type="password"' in page.text
@@ -69,34 +230,39 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     invalid = client.post(path, data={"csrf": csrf, "token": VALUE + "\nsecond line"}, headers=OWNER)
     assert invalid.status_code == 400 and VALUE not in invalid.text
     private_page(invalid)
-    row = core.store.one("SELECT code_hash, sealed FROM secrets WHERE name = ?", (NAME,))
-    assert row["code_hash"] == hashlib.sha256(code.encode()).hexdigest() and row["sealed"] is None
+    row = core.store.one("SELECT code_hash FROM claim_links WHERE name = ?", (NAME,))
+    assert row["code_hash"] == hashlib.sha256(code.encode()).hexdigest() and core.claims.secret(NAME) is None
 
     with caplog.at_level(logging.INFO, logger="switchboard.audit"):
         saved = client.post(path, data={"csrf": csrf, "token": VALUE}, headers=OWNER)
-    assert saved.status_code == 200 and "Run connect again" in saved.text
+    assert saved.status_code == 200 and "<h1>Token saved</h1>" in saved.text
     private_page(saved)
     assert VALUE not in saved.text and VALUE not in caplog.text
     assert code not in saved.text and code not in caplog.text
-    row = core.store.one("SELECT code_hash, sealed FROM secrets WHERE name = ?", (NAME,))
-    assert row["code_hash"] is None and VALUE.encode() not in row["sealed"]
+    row = core.store.one("SELECT sealed FROM secrets WHERE name = ?", (NAME,))
+    assert not core.claims.pending(NAME) and VALUE.encode() not in row["sealed"]
     assert core.secret(NAME) == VALUE
     spent = client.get(path, headers=OWNER)
     assert spent.status_code == 410
     private_page(spent)
-    assert client.post(path, data={"csrf": csrf, "token": "replacement"}, headers=OWNER).status_code == 410
+    for data in ({"csrf": csrf}, {}, {"csrf": "stale"}):
+        reused = client.post(path, data={**data, "token": "replacement"}, headers=OWNER)
+        assert_claim_error_title(reused, "Request a new link", 410)
+    assert client.post(path, data={"token": VALUE}).status_code == 401
+    assert client.post(path, headers={**OWNER, "Origin": "https://elsewhere.example.test"}, data={"csrf": csrf}).status_code == 403
     assert core.secret(NAME) == VALUE
     [audit] = core.audit.recent(action="token_claim")
     assert audit["target"] == NAME and audit["source"] == "admin:owner@example.test" and audit["outcome"] == "ok"
     assert VALUE not in str(audit) and code not in str(audit)
 
 
-def test_claims_require_access_configuration(make):
+def test_claim_does_not_accept_access_assertions_without_access_configured(make):
     core, client = make(config=base_config(auth={"owner_emails": ["owner@example.test"]}))
     path = urlsplit(core.claims.mint(NAME, PUBLIC)).path
-    assert client.get("/", headers=OWNER).status_code == 403
-    assert client.get(path, headers=OWNER).status_code == 403
-    assert client.post(path, data={"token": VALUE}, headers=OWNER).status_code == 403
+    assert client.get("/", headers=OWNER).headers["location"] == "/login?next=%2F"
+    assert client.get(path, headers=OWNER).headers["location"].startswith("/login?next=%2Fclaim%2F")
+    posted = client.post(path, data={"token": VALUE}, headers=OWNER)
+    assert posted.status_code == 401 and posted.json() == {"error": "signed_out"}
     assert core.secret(NAME) is None
 
 
@@ -133,12 +299,14 @@ def test_owner_key_redeems_cli_claim_without_csrf(make, routine, access):
     [audit] = core.audit.recent(action=action)
     assert audit["source"] == "key:owner"
     spent = client.post(path, headers=headers, data={"token": value})
-    assert spent.status_code == (400 if routine else 410)
+    assert spent.status_code == 410
     private_page(spent)
 
 
-def test_no_access_form_keeps_claim_details_hidden_until_owner_auth(make):
-    core, client = make(config=base_config(auth={}), env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+def test_no_owner_sign_in_form_keeps_claim_details_hidden_until_owner_auth(make):
+    config = base_config(auth={})
+    config.pop("public_url")
+    core, client = make(config=config, env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
     path = urlsplit(core.claims.mint(NAME, PUBLIC)).path
     unknown_path = "/claim/" + "f" * 43
     page = client.get(path)
@@ -148,7 +316,7 @@ def test_no_access_form_keeps_claim_details_hidden_until_owner_auth(make):
     assert page.text.replace(form_csrf(page), "") == unknown.text.replace(form_csrf(unknown), "")
     assert NAME not in page.text and OWNER_KEY not in page.text
     assert page.text.count('type="password"') == 2
-    assert client.get("/").status_code == 403
+    assert client.get("/").headers["location"] == "/login?next=%2F"
     for endpoint, response in ((path, page), (unknown_path, unknown)):
         assert client.post(endpoint, data={"token": VALUE, "owner_key": STATIC_KEY, "csrf": form_csrf(response)}).status_code == 403
         assert client.post(endpoint, data={"token": VALUE, "owner_key": OWNER_KEY}).status_code == 403
@@ -163,12 +331,28 @@ def test_no_access_form_keeps_claim_details_hidden_until_owner_auth(make):
 def test_designated_key_must_be_unrestricted_for_claim(make, restriction):
     core, client = make(config=base_config(auth=restriction), env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
     path = urlsplit(core.claims.mint(NAME, PUBLIC)).path
-    assert client.get(path).status_code == 403
+    page = client.get(path)
+    assert page.status_code == 303 and page.headers["location"].startswith("/login?next=%2Fclaim%2F")
     assert client.post(path, headers={"Authorization": f"Bearer {OWNER_KEY}"}, data={"token": VALUE}).status_code == 403
     assert core.secret(NAME) is None
 
 
-def test_claim_expiry_and_newest_link_wins_per_name(make):
+def test_cli_claim_errors_return_only_safe_corrections(make):
+    core, client = make(env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    path = urlsplit(core.claims.mint("COPY_ID", PUBLIC, kind="id")).path
+    headers = {"Authorization": f"Bearer {OWNER_KEY}", "Accept": "application/json"}
+    invalid = client.post(path, headers=headers, data={"token": VALUE})
+    assert invalid.status_code == 400
+    assert invalid.json() == {"error": "claim_input", "message": "Enter a numeric ID"}
+    assert invalid.headers["cache-control"] == "no-store"
+    assert all(value not in invalid.text for value in (VALUE, OWNER_KEY))
+    assert client.post(path, headers=headers, data={"token": "42"}).status_code == 200
+    spent = client.post(path, headers=headers, data={"token": VALUE})
+    assert spent.status_code == 410
+    assert spent.json() == {"error": "claim_unavailable", "message": "Request a new link"}
+
+
+def test_each_claim_link_has_its_own_expiry(make):
     clock = Clock()
     core, client = make(clock=clock)
     first = urlsplit(core.claims.mint(NAME, PUBLIC)).path
@@ -177,9 +361,10 @@ def test_claim_expiry_and_newest_link_wins_per_name(make):
     clock.t += CLAIM_TTL_S - 1
     newest = urlsplit(core.claims.mint(NAME, PUBLIC)).path
     assert newest != first
-    assert client.get(first, headers=OWNER).status_code == 410
+    assert client.get(first, headers=OWNER).status_code == 200
     assert client.get(other, headers=OWNER).status_code == 200
     clock.t += 1
+    assert client.get(first, headers=OWNER).status_code == 410
     assert client.get(other, headers=OWNER).status_code == 410
     page = client.get(newest, headers=OWNER)
     assert page.status_code == 200
@@ -221,7 +406,27 @@ def test_invalid_claim_requests_fail_without_registering_a_secret(make):
         core.claims.mint("not-a-name", PUBLIC)
     with pytest.raises(ClaimError, match="public_url"):
         core.claims.mint(NAME, None)
+    with pytest.raises(ClaimError, match="credential kind"):
+        core.claims.mint(NAME, PUBLIC, kind="unknown")
     assert core.store.q("SELECT name FROM secrets") == []
+
+
+def test_existing_claim_tables_gain_kind_and_label_without_losing_links(tmp_path):
+    store = Store(tmp_path / "legacy.db", clock=Clock())
+    try:
+        store.x("CREATE TABLE secrets (name TEXT PRIMARY KEY, code_hash TEXT UNIQUE, expires_at REAL, sealed BLOB, require_https INTEGER)")
+        code = "f" * 43
+        store.x("INSERT INTO secrets VALUES (?, ?, ?, NULL, 1)", (NAME, hashlib.sha256(code.encode()).hexdigest(), store.clock() + 100))
+        claims = Claims(store)
+        assert claims.inspect_details(code) == {
+            "name": NAME, "kind": "token", "label": "", "expires_at": store.clock() + 100, "require_https": 1,
+        }
+        with pytest.raises(ClaimError):
+            claims.consume(code, VALUE)
+        assert claims.consume(code, "https://hook.example.test") == NAME
+        assert claims.secret(NAME) == "https://hook.example.test"
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize("prefix", ["/claim/", "/routines/claim/"])

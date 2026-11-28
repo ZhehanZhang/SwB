@@ -1,0 +1,84 @@
+---
+title: ChatGPT dots
+description: Connect a ChatGPT dot to SwB so the dot wakes for SwB messages and answers them.
+---
+
+A dot is a personal ChatGPT agent. The `dots` block sends messages through Slack by default. This guide uses a SwB mailbox, which holds messages for one agent.
+
+## Before you start
+
+Check whether [your plan and region](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot) support dots.
+
+Use a workspace with dot access and [custom MCP write access](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). An MCP server gives an app access to outside tools.
+
+If your workspace restricts dots, ask an admin to enable **Use dots**.
+
+Your SwB server needs a public HTTPS address, owner sign-in and the `dots` block. A block is one SwB connection that you turn on in the config file.
+
+## Copy the setup prompt
+
+<SetupPrompt name="dots" lang="en" />
+
+Paste the prompt after you add SwB to the dot.
+
+## Set up mailbox delivery
+
+### Turn on the dots block
+
+Add this block to `config/switchboard.yaml`. Then restart SwB.
+
+```yaml
+blocks:
+  dots:
+    delivery: mailbox
+    dots:
+      dot:
+        mailbox: chatgpt
+```
+
+### Open Plugins
+
+Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a desktop browser.
+
+### Add the server
+
+Select **+**. Then select **Add custom MCP server**.
+
+### Enter the address
+
+Enter `SwB` as the name. In **Server URL**, enter your SwB MCP address, such as `https://swb.example.com/mcp`.
+
+### Create the plugin
+
+Select **OAuth**. Select **I understand and want to continue**. Then select **Create as a plugin**.
+
+### Install and sign in
+
+Install the plugin. Sign in to SwB as the owner. Approve the access.
+
+### Open your dot
+
+Open your dot at [chatgpt.com](https://chatgpt.com). Add the SwB plugin to it. {/* unverified */}
+
+## What the agent does
+
+The dot calls `connect(what="chatgpt")` to check the OAuth sign-in. With OAuth, you approve access on a SwB page. Ask an agent with full owner access to run `connect(what="dots")` and check the `dots` block.
+
+If the dot supports MCP Events, it can subscribe to `switchboard.message.created` for the `chatgpt` mailbox. An event tells the dot when a message arrives. SwB verifies the address that receives events. The dot reads the message with `get_message` and answers with `reply`. Use `wait` or `inbox` to collect messages in an open chat.
+
+## Credentials
+
+| Token | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| SwB sign-in token | ChatGPT gets it when you sign in | Random text | ChatGPT keeps it for you |
+| Event signing secret | The client sends it with the subscription | `whsec_` followed by Base64 text | SwB stores it encrypted |
+
+## Check the connection
+
+Ask another SwB agent to run `send(to="dots:dot:dot", task="SwB setup test: reply pong")`. With a working event subscription, the dot wakes and replies in that conversation. Call `inbox` in the dot to check mailbox access separately.
+
+## Fix problems
+
+If `connect` returns instructions to enable the `dots` block, add the block. Restart SwB.
+
+If `connect` asks for a Slack workspace, the block uses Slack delivery. Set `delivery: mailbox` and restart SwB.

@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from starlette.routing import BaseRoute
 
+from ..refusals import PolicyRefusal
+
 if TYPE_CHECKING:
     from ..auth import Principal
     from ..core import Switchboard
@@ -37,13 +39,20 @@ BLOCKS = {
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
+    "local": "switchboard.blocks.local:LocalBlock",
+    "webhook": "switchboard.blocks.webhook:WebhookBlock",
 }
+ON_DEMAND_BLOCKS = frozenset({"local"})
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")
 
 
 class BlockError(Exception):
     """A refusal or failure the caller should see; the core records it in the audit log."""
+
+
+class BlockRefused(PolicyRefusal, BlockError):
+    pass
 
 
 @dataclass
@@ -57,6 +66,7 @@ class Action:
     idempotent: bool = False
     capped: bool = False
     audited: bool | None = None
+    previewable: bool = False
 
     @property
     def is_audited(self) -> bool:
@@ -74,6 +84,7 @@ class Call:
     notes: dict[str, Any] = field(default_factory=dict)
     handle: str | None = None
     handle_meta: dict[str, Any] = field(default_factory=dict)
+    dry_run: bool = False
 
     @property
     def block(self) -> str:
@@ -171,6 +182,7 @@ class Address:
 class Block:
     manifest = Manifest(id="", title="")
     connect_kinds: tuple[str, ...] = ()
+    cache_targets = True
     wakes_agents = False
     """True for a block whose targets wake an agent (a Claude routine): a bare agent name goes to its target first."""
 
@@ -230,6 +242,9 @@ class Block:
             return dict(message)
         return {**message, "target": f"{target.kind}:{target.id}" if target.kind else target.id}
 
+    def send_unavailable(self) -> str:
+        return f"{self.name} takes no send; its tools are {', '.join(self.manifest.tools) or 'none'}"
+
     def parse_route_target(self, text: str) -> dict[str, Any]:
         """A routes_set target as this block stores it: '<kind>:<id>' becomes {kind: id}."""
         kind, sep, ident = (text or "").strip().partition(":")
@@ -241,8 +256,18 @@ class Block:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
 
+    def default_address(self) -> Address:
+        return Address(self.name, "", "")
+
     def effective_target(self, addr: Address, project: str | None) -> Address:
         """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
+        return addr
+
+    def canonical_target(self, addr: Address) -> Address:
+        return addr
+
+    def grant_target(self, addr: Address) -> Address | None:
+        """The address a key must have a grant for, or None if a scoped key cannot send here."""
         return addr
 
     def owns_ref(self, ref: str) -> bool:
@@ -252,6 +277,9 @@ class Block:
     async def targets(self) -> list[dict[str, Any]]:
         """Targets this block offers: {kind, id, name, slugs, persona?}. The core adds the address and the block."""
         return []
+
+    def filter_targets(self, principal: Principal, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return targets
 
     async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = False) -> str | None:
         """Draw a dynamic persona's picture into out_dir and return its file name, or None."""
@@ -293,20 +321,43 @@ class Block:
     def status(self) -> dict[str, Any]:
         return {}
 
+    def status_for(self, principal: "Principal") -> dict[str, Any]:
+        return self.status()
+
     def next_step(self) -> str | None:
         return None
+
+    def config_step(self) -> str | None:
+        """Report setup requirements that can be checked before the block starts."""
+        return self.next_step()
+
+    def validate_mode_space(self, space: str) -> None:
+        pass
 
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
 
-    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False) -> dict[str, str]:
+    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False,
+                   kind: str = "token", label: str = "") -> dict[str, str]:
         if not principal.is_unrestricted_owner:
             return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
-        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url, kind=kind, label=label)}
+
+    def group_step(self, principal: "Principal", group: tuple[str, str, list[Any]], instruction: str) -> dict[str, str]:
+        """One link that collects several credentials together."""
+        if not principal.is_unrestricted_owner:
+            return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
+        title, provider, fields = group
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint_group(title, fields, self.core.base_url, provider=provider)}
 
     @property
     def online(self) -> bool:
         return True
+
+    @property
+    def hidden(self) -> bool:
+        """Omit this block from status and discovery by block name."""
+        return False
 
     @property
     def has_in(self) -> bool:
@@ -343,3 +394,8 @@ def load(use: str) -> type[Block]:
         raise ValueError(f"unknown block type {use!r}; known: {', '.join(sorted(known))}")
     module, _, cls = known[use].partition(":")
     return getattr(importlib.import_module(module), cls)
+
+
+def on_demand_blocks() -> dict[str, type[Block]]:
+    """Blocks that register listeners at startup and expose themselves on discovery."""
+    return {use: load(use) for use in BLOCKS if use in ON_DEMAND_BLOCKS}

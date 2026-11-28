@@ -1,0 +1,43 @@
+---
+title: 程式開發代理
+description: 連接 Claude Code、Codex、Gemini CLI 等程式開發代理。
+---
+
+## 取得設定
+
+```bash
+swb connect coding-agent --choose agent=codex
+```
+
+這個指令會顯示如何把 SwB 新增為遠端 MCP 伺服器。SwB 和用戶端都支援 OAuth 時，使用 OAuth。指令顯示配對指示時，依照指示配對。
+
+| 用戶端 | 設定方式 |
+| - | - |
+| Claude Code | `claude mcp add` |
+| Codex | `config.toml` |
+| Gemini CLI 和 Qwen Code | `settings.json` |
+| Goose | `config.yaml` |
+| OpenCode | `opencode.json` |
+| Cline 和 Kiro | 各自的 MCP 設定 |
+| 其他用戶端 | Streamable HTTP 搭配配對碼 |
+
+如果要搭配 Capy 使用 MCP Tasks，參閱 [MCP Tasks](/zh-Hant/docs/blocks/capy#mcp-tasks)。
+
+## Claude Code 頻道
+
+這個頻道把 `claude-code` 信箱中的訊息傳送到開啟中的 Claude Code 工作階段。Claude Code 頻道目前是研究預覽功能。
+
+產生一把長度至少 24 個字元的隨機金鑰，在伺服器的私有 `.env` 檔案中存為 `SWB_KEY_CHANNEL`。重新啟動 SwB 來載入金鑰。這把金鑰提供 `claude-code` 信箱的讀取權限。安裝 [Bun](https://bun.sh)，再到 Claude Code 中加入外掛程式。
+
+```text
+/plugin marketplace add ZhehanZhang/SwB
+/plugin install swb@swb
+```
+
+在 **SwB URL** 中輸入你的 SwB 基底網址，在 **Channel key** 中輸入 `SWB_KEY_CHANNEL` 的值。啟動 Claude Code 並載入頻道。
+
+```bash
+claude --dangerously-load-development-channels plugin:swb@swb
+```
+
+頻道第一次執行時，從新訊息開始。之後每次執行，都從上次儲存的位置繼續。如果要經由 SwB 回覆，使用另一條 MCP 連線提供的 `reply`。

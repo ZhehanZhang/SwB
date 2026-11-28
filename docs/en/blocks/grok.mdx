@@ -1,0 +1,50 @@
+---
+title: Grok
+description: Connect Grok in the browser or wake Grok Bot with a routine.
+---
+
+## Add the connector
+
+Follow [Grok setup](/docs/setup/grok) to connect Grok in the browser. Use [Grok Bot setup](/docs/setup/grok-bot) for the separate desktop app.
+
+## Wake Grok Bot with a routine
+
+Ask an agent to connect Grok Bot. From a terminal, run `swb connect grok-bot`. Follow its setup instructions to get the routine prompt.
+
+Use the prompt to create a Grok Bot routine with a webhook trigger. A webhook starts the routine when SwB sends a request to its URL. Replace `example` with the short name of an active SwB project. Run the command to register the routine.
+
+```bash
+swb connect grok-bot --choose name=project-triage project=example auth=key
+```
+
+SwB gives you separate claim links for the webhook address and key. Use each link to save its value. Run the same command again for the test call. Ask your agent to run the call and check for a `pong` reply.
+
+## How a wake works
+
+With `auth=key`, SwB sends the key in the `Authorization` header by default. With `auth=signature`, SwB signs the request. The request contains the text, conversation ID, sender and trust level. It also includes the project when available. The routine calls `reply` for requests with `owner` trust.
+
+For manual setup, set the variables named in `url_env` and `secret_env` in your server environment.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
+```
+
+Send to a routine by its name, or to `grok:<slug>` for the main routine of a project.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.grok-routine` | Settings for waking Grok Bot routines |
+| `blocks.grok-routine.use` | Block type. Use `grok-routine` |
+| `blocks.grok-routine.enabled` | Set `false` to skip this block |
+| `blocks.grok-routine.routines` | Map from routine names to settings |
+| `blocks.grok-routine.routines.*.project` | SwB project short name. Use `null` for a general routine |
+| `blocks.grok-routine.routines.*.primary` | Set `true` to choose this routine first for its project |
+| `blocks.grok-routine.routines.*.auth` | Use `key` to send a key or `signature` to sign the request. Default `key` |
+| `blocks.grok-routine.routines.*.header` | HTTP header for the key or signature. Defaults are `Authorization` for `key` and `Webhook-Signature` for `signature` |
+| `blocks.grok-routine.routines.*.url_env` | Name of the variable that holds the public HTTPS webhook address |
+| `blocks.grok-routine.routines.*.secret_env` | Name of the variable that holds the key or signing secret |

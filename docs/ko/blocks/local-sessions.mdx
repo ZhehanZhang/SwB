@@ -1,0 +1,120 @@
+---
+title: 로컬 세션
+description: 페어링된 기기에서 실행되는 코딩 에이전트에 메시지를 보냅니다.
+---
+
+로컬 세션은 페어링된 기기에서 열려 있는 코딩 에이전트의 작업 공간입니다. SwB은 로컬 세션을 대상으로 나열합니다. 대상은 메시지를 받을 수 있는 주소입니다.
+
+## 기기 페어링
+
+[기기 페어링](/ko/docs/companion#기기-페어링)을 따르세요. 아래에서 내 에이전트에 맞는 명령을 사용하세요. `https://swb.example.com`을 내 SwB 주소로 바꾸세요. 기능마다 `--cap` 옵션을 하나씩 사용하세요. 페어링된 기기의 기능을 바꾸려면 먼저 [연결을 해제](/ko/docs/companion#연결-해제)하세요.
+
+설정을 하나씩 확인하려면 소유자 에이전트에서 `targets(block="local")`를 호출하세요. 내 세션의 주소를 복사하세요. 형식은 `local:session:<companion>:<harness>:<session>`입니다. 하네스는 에이전트를 실행하는 프로그램입니다.
+
+## 메시지 보내기
+
+`send`의 `to`에 세션 주소를 넘기세요. SwB은 열린 세션에 메시지를 전달하려고 시도합니다. 일치하는 에이전트가 있는 세션이면 우편함 전달에 그 에이전트의 우편함 접근 권한이 필요합니다. 그 밖의 세션에서는 소유자가 보낸 메시지가 소유자의 우편함으로 갑니다. 답장을 읽으려면 돌려받은 대화 ID로 `result`를 호출하세요.
+
+| 상태 | 의미 |
+| --- | --- |
+| `working` | 에이전트가 작업 중입니다 |
+| `blocked` | 에이전트가 승인이나 입력을 기다리고 있습니다 |
+| `idle` | 에이전트가 작업을 받을 준비가 되었습니다 |
+| `done` | 에이전트가 작업을 마쳤습니다 |
+| `unknown` | 상태를 아직 확인하는 중입니다 |
+
+`blocked` 세션은 세션 안에서 요청에 응답하세요. 발신자가 그 우편함을 쓸 수 있으면 SwB은 메시지를 우편함에 보관합니다.
+
+컴패니언은 세션 상태를 SwB 서버에 보고합니다. 세션 이름과 폴더 이름도 보고할 수 있습니다. 컴패니언은 직접 전달한 메시지마다 답을 하나씩 돌려보낼 수 있습니다. 세션의 나머지 내용은 기기에 그대로 남습니다.
+
+## 상태 훅
+
+훅은 에이전트가 변경을 알릴 때 명령을 실행합니다. 상태 훅은 macOS와 Linux에서 작동합니다.
+
+```sh
+swb companion connect https://swb.example.com --cap hooks
+```
+
+[pipx](/ko/docs/install)로 `swb` 명령을 설치하세요. 에이전트의 명령 검색 경로에서 `swb`를 찾을 수 있게 하세요. `SWB_COMPANION_HOME`을 설정했다면 에이전트와 컴패니언에 같은 폴더를 사용하세요.
+
+| 에이전트 | 이벤트 명령 | 설정 |
+| --- | --- | --- |
+| Claude Code | `swb hook claude-code` | `channel/hooks/hooks.json`의 `hooks`를 `~/.claude/settings.json`에 병합합니다 |
+| Gemini CLI | `swb hook gemini` | 아래처럼 체크아웃에서 SwB 확장을 설치합니다 |
+| Codex | `swb hook codex` | `integrations/codex/hooks.json`의 `hooks`를 `~/.codex/hooks.json`에 병합합니다 |
+
+[SwB 릴리스 체크아웃](/ko/docs/deploy#docker-compose)의 파일을 사용하세요. SwB Claude Code 플러그인에도 이 훅이 들어 있습니다. Codex 설정 폴더를 따로 지정했다면 그 폴더의 `hooks.json`을 사용하세요.
+
+```sh
+gemini extensions install /path/to/SwB/integrations/gemini
+```
+
+훅을 설정한 뒤 새 세션을 여세요. `targets(block="local")`에서 그 세션의 주소를 확인하세요. hooks 기능만 켜면 세션은 우편함으로 메시지를 받습니다.
+
+## Herdr
+
+Herdr 창에서 코딩 에이전트를 여세요. 창은 터미널 안의 한 영역입니다. 컴패니언은 Herdr의 소켓으로 세션 이벤트를 받습니다. 소켓은 같은 기기의 프로그램끼리 쓰는 연결입니다.
+
+세션에 이름을 붙이거나 소켓 경로를 따로 지정하려면 [Herdr 컴패니언 설정](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48)을 참고하세요.
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+창에서 답장을 받으려면 해당 [상태 훅](#상태-훅)을 설정하세요. `local:session:<companion>:herdr:<session>` 대상이 있는지 확인하세요. 그 대상에 짧은 테스트 메시지를 보내세요. 메시지가 창에 나타나는지 확인하세요. 상태 훅을 설정했다면 `result`로 답장을 확인하세요.
+
+## Codex
+
+Codex 앱 서버는 열린 Codex 세션에 다른 프로그램이 접근하게 해 주는 프로세스입니다. 터미널 하나에서 앱 서버를 시작하세요.
+
+```sh
+codex app-server --listen unix://
+```
+
+두 번째 터미널에서 세션을 여세요.
+
+```sh
+codex --remote unix://
+```
+
+컴패니언에는 별도의 터미널을 사용하세요. 모든 터미널에서 같은 Codex 설정 폴더를 사용하세요. 소켓을 따로 지정하려면 위의 두 명령에 `unix://<path>`를 사용하세요. 컴패니언 터미널에서 `SWB_CODEX_SOCKET`을 그 경로로 설정하세요.
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+컴패니언은 앱 서버에서 세션 이벤트를 읽습니다. `local:session:<companion>:codex:<session>` 대상이 있는지 확인하세요. 그 대상에 짧은 테스트 메시지를 보내세요. `result`로 답장을 확인하세요.
+
+## OpenCode
+
+기기에서 OpenCode 서버를 시작하세요.
+
+```sh
+opencode serve --hostname 127.0.0.1 --port 4096
+```
+
+그 서버에서 세션을 여세요. `SWB_OPENCODE_URL`을 서버의 로컬 주소로 설정하세요. 비밀번호로 보호된 서버는 [OpenCode 컴패니언 설정](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228)을 참고하세요.
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+컴패니언은 OpenCode 서버에서 세션 이벤트를 읽습니다. `local:session:<companion>:opencode:<session>` 대상이 있는지 확인하세요. 그 대상에 짧은 테스트 메시지를 보내세요. `result`로 답장을 확인하세요.
+
+## DeepSeek Harness
+
+DeepSeek Harness `0.2.2-rc.5`를 사용하세요. 프로필은 앱 설정의 묶음입니다. `web` 프로필에 SwB 브리지를 설치하세요. 브리지는 세션 이벤트를 컴패니언으로 보냅니다.
+
+`release/1.0` 브랜치의 로컬 사본을 사용하세요. `/path/to/SwB`을 그 사본의 전체 경로로 바꾸세요.
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+`web` 프로필로 DeepSeek Harness를 다시 시작하세요. 세션을 여세요. `SWB_COMPANION_HOME`을 설정했다면 DeepSeek Harness와 컴패니언에 같은 절대 경로를 사용하세요.
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+`local:session:<companion>:dsh:<session>` 대상이 있는지 확인하세요. 그 대상에 짧은 테스트 메시지를 보내세요. `result`로 답장을 확인하세요.

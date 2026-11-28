@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: Let SwB start a Claude Code routine that works inside your Claude Project.
+---
+
+A routine is a saved Claude Code task that runs on its own. SwB starts the routine in your Claude Project when another agent sends it work. The routine replies in the same SwB conversation.
+
+## Before you start
+
+You need Claude Pro, Max or Ultra with access to Claude Code Projects. Open [Claude Code](https://claude.ai/code) and select **Projects**. [Join the waitlist](https://claude.com/form/projects) for access.
+
+Add SwB to the same Claude account. See [Claude](/docs/setup/claude). Enable the `claude-routine` block in `config/switchboard.yaml`.
+
+## Copy the setup prompt
+
+<SetupPrompt name="claude-project" lang="en" />
+
+Open your project in [Claude Code](https://claude.ai/code). Paste the prompt into the coordinator chat on the left. The coordinator creates a routine named `swb <project>` in your project.
+
+## Open the routine
+
+Open the routine link from the coordinator or use one of these paths.
+
+### From the Routines page
+
+Open the [Routines page](https://claude.ai/code/routines). Click the banner at the top to show hidden project routines. Open `swb <project>`.
+
+### From the project
+
+Click **+** in the top tab row of the right panel. Select **Routines**. Open `swb <project>`. Click **View full page**.
+
+## Open the API trigger
+
+Open the menu next to the routine name. Select **Edit**. In the edit form, select **Trigger**, then **+**, then **API**.
+
+Copy the **Fire URL**. Give this URL to the coordinator.
+
+## Generate and save the token
+
+The owner generates the token in Claude. Select **Generate token**. Copy the token while the **Token generated** dialog is open.
+
+Open the claim link from the coordinator. Check the project and routine ID on the **Claude routine token** page. Paste the token into **Token**. Select **Save token**.
+
+SwB shows **Routine saved** or **Routine and project saved**. Tell the coordinator when the token is saved.
+
+## What the agent does
+
+The coordinator calls `connect(what="claude-project")` from a SwB client with unrestricted owner access. SwB checks the `claude-routine` block and lists its routines. The coordinator can call `project_list` to find your SwB project.
+
+The coordinator adds an API trigger. It includes this instruction in the routine prompt with the exact Claude Project name.
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+The coordinator calls `connect` again with `fire_url`, `claude_project` and `project` in `choose`. SwB returns a claim link. A claim link is a private SwB page for a credential. This link works once and expires after 30 minutes.
+
+If SwB finds similar projects, the agent asks you to pick one. For a new project, it calls `connect` with a new slug and `create_new` set to `true`.
+
+## Credentials
+
+| Item | Where Claude shows it | Format | Where it goes |
+| - | - | - | - |
+| Routine token | **Token generated** in the API panel, one time | Starts with `sk-ant-oat01-` | The **Token** field on the SwB claim link |
+| Fire URL | **Fire URL** in the API panel | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | The agent in the coordinator chat. The URL only names the routine. |
+
+## Check the connection
+
+The coordinator calls `routine_list` to check the project and the `untested` status. It sends a test message with `send`. A successful start returns `fired: true` and changes the status to `tested`. Open the session link if Claude returns one. Check that the session runs in your project.
+
+## Fix problems
+
+If the claim link expired, ask the agent to call `connect` again for a new link. If you click **Regenerate** in the API panel, the old token stops at once. Ask the agent to register the routine again and save the new token on the new claim link.
+
+If Claude returns **this project is paused** for a request with text, SwB retries with an empty request. The routine then collects the message with `routine_pickup`. If your project is paused, resume it in Claude.

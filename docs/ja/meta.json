@@ -1,0 +1,32 @@
+{
+  "title": "ドキュメント",
+  "pages": [
+    "get-started",
+    "---SwB を実行する---",
+    "install",
+    "deploy",
+    "cloudflare",
+    "first-run",
+    "owner-login",
+    "operate",
+    "---エージェントを接続する---",
+    "connect",
+    "setup",
+    "companion",
+    "---ブロック---",
+    "...blocks",
+    "---基本概念---",
+    "index",
+    "how-it-works",
+    "memory",
+    "channel-modes",
+    "---リファレンス---",
+    "tools",
+    "config",
+    "credentials",
+    "security",
+    "---",
+    "faq",
+    "about"
+  ]
+}

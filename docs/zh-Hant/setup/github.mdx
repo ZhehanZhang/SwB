@@ -1,0 +1,133 @@
+---
+title: GitHub
+description: 把 GitHub 事件傳送到 SwB，讓代理處理議題和 Pull Request。
+---
+
+SwB 透過 GitHub App 接收存放庫事件。事件是 GitHub 上某個動作的通知。有了應用程式的私密金鑰，代理還能替議題加上標籤、在議題中留言，以及建立議題。
+
+## 開始之前
+
+準備一個 GitHub 帳號，它要能在你想連接的存放庫上建立並安裝應用程式。以擁有者身分登入 SwB。
+
+GitHub 需要能連到你伺服器上的 `https://swb.example.com/github/webhook`。
+
+## 複製設定提示詞
+
+<SetupPrompt name="github" lang="zh-Hant" />
+
+把提示詞貼到你的 SwB 擁有者用戶端。
+
+## 設定 GitHub App
+
+### 開啟 GitHub App 設定
+
+按一下個人頭像 → **Settings** → **Developer settings** → **GitHub Apps**，再按一下 **New GitHub App**。
+### 為應用程式命名
+
+輸入 **GitHub App name** 和 **Homepage URL**。首頁可以填你的存放庫網址。
+### 設定 Webhook
+
+讓 **Webhook** 下的 **Active** 保持勾選。Webhook 是 GitHub 傳送事件的目的網址。在 **Webhook URL** 中輸入你的 SwB 網址，後面加上 `/github/webhook`。
+### 設定 Webhook 密鑰
+
+在私有檔案中產生一組密鑰。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+把密鑰存進密碼管理工具，再輸入到 **Webhook secret**。SwB 接受長度至少 16 個字元的密鑰。
+### 設定權限
+
+在 **Repository permissions** 下，依照表格設定存取等級。
+### 訂閱事件
+
+在 **Subscribe to events** 下，選取下方表格中的事件。
+
+### 建立應用程式
+
+在 **Where can this GitHub App be installed?** 下選取 **Only on this account**，再按一下 **Create GitHub App**。
+### 產生私密金鑰
+
+在 **Private keys** 下選取 **Generate a private key**。下載的 `.pem` 檔案要保密。
+
+### 儲存憑證
+
+用對應的 SwB 認領連結儲存 Webhook 密鑰，儲存後刪除暫存的密鑰檔案。SwB 提出要求時，再用各自的認領連結儲存 **App ID** 和 `.pem` 檔案。
+### 安裝應用程式
+
+按一下 **Install App**，再按一下你帳號旁的 **Install**。選取 **Only select repositories**。
+### 選取存放庫
+
+選取你的存放庫，再按一下 **Install**。
+
+| 存放庫資源 | 存取等級 | 事件 |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動設為 **Read-only** | |
+
+在組織中，GitHub 可能顯示 **Request** 來取代 **Install**。這時由組織擁有者核准請求。
+
+## 代理會做什麼
+
+代理呼叫 `connect(what="github")`。SwB 會顯示 Webhook 網址、密鑰狀態和存放庫路由的數量。一條路由會把事件傳送到一個目標。
+
+代理在 `config/switchboard.yaml` 的 `blocks.github.spaces` 下加入每個存放庫。空間（space）為存放庫設定模式、專案和目標。下面的範例把 `acme/app` 的 Watch 摘要傳送到專案 `demo` 中的 `agent:beta`。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode:
+          mode: watch
+          target: agent:beta
+        project: demo
+```
+
+如果使用 Work 模式，代理會把 `mode.mode` 設為 `work`，並把你的 GitHub 使用者數字 ID 加入空間的 `owner_ids`。ID 的查詢方式和範例見[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+
+SwB 會檢查事件文字的作者。出自 `owner_ids` 中某個人的文字，信任等級可以為 `owner`。SwB 把分支名稱、ref、工作流程標題和檢查名稱視為 `external`。
+
+即使檢查由擁有者啟動，檢查名稱仍是 `external`。來自 fork 的 Pull Request 可以變更這個名稱。
+
+儲存 Webhook 密鑰並更新路由後，重新啟動 SwB。
+
+代理再次呼叫 `connect(what="github")`，取得其餘的 App ID 或私密金鑰連結。如果要從現有的個人存取權杖改用 App，代理會選擇 `choose={"credential":"app"}`。
+
+重新啟動後，代理呼叫 `github_status`，檢查應用程式的安裝狀態和權限。
+
+如果使用分流模式，呼叫 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，並從 `targets` 中選擇位址。如果使用 assist 模式，改用 `mode="assist"`。在分流模式下，`github_reply` 是預設的 GitHub 寫入動作。
+
+如果要開放給外部傳送者，同時授予 `channel:github/acme/app` 和 `target:beta` 的存取權。存取規則見[頻道可見性](/zh-Hant/docs/channel-modes#允許外部的-github-傳送者)。
+
+經過 `modes.digest_minutes` 分鐘或累積 50 個事件後，Watch 模式會傳送摘要。請接收摘要的代理查看收件匣。
+
+## 憑證
+
+| 權杖 | GitHub 顯示的位置 | 格式 | 去處 |
+| --- | --- | --- | --- |
+| Webhook 密鑰 | 由你用 `openssl rand -hex 32` 產生 | 至少 16 個字元 | SwB 認領連結 |
+| App ID | 應用程式設定中的 **App ID** | 一串數字 | SwB 認領連結 |
+| 私密金鑰 | 按下 **Generate a private key** 後下載，只此一次 | `.pem` 檔案 | SwB 認領連結 |
+
+SwB 用私密金鑰向 GitHub 取得安裝權杖。每個安裝權杖的有效時間為 1 小時。
+
+如果要更換 Webhook 密鑰，請代理呼叫 `connect(what="github", choose={"replace":"secret"})`。使用 `webhook_secret` 也有相同效果。使用 `all` 可以一併更換 App 憑證或個人存取權杖。依照回傳的指示處理每個值。參閱[憑證](/zh-Hant/docs/credentials#更換憑證)。
+
+## 檢查連線
+
+請代理再次呼叫 `connect`。設定完成時，它會回報 `connected`。`github_status` 會顯示 `secret_present`，以及應用程式安裝後取得的權限。
+
+在 GitHub 上開啟應用程式設定 → **Advanced** → **Recent deliveries**。開啟最新的一筆傳遞記錄，確認 SwB 回應了成功代碼。
+
+## 疑難排解
+
+如果出現簽章錯誤，依照[設定 Webhook 密鑰](#設定-webhook-密鑰)產生新密鑰，並輸入到 GitHub App 設定中。請代理呼叫 `connect(what="github", choose={"replace":"secret"})`，再用認領連結儲存同一組密鑰。重新啟動 SwB，然後從 **Recent deliveries** 重新傳送事件。
+
+如果 `connect` 要求 **Issues** 的寫入權限，開啟應用程式設定 → **Permissions & events**，把 **Issues** 設為 **Read & write**，並在已安裝的應用程式上接受這項變更。

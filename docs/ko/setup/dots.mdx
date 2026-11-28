@@ -1,0 +1,84 @@
+---
+title: ChatGPT dots
+description: ChatGPT dot을 SwB에 연결해 SwB 메시지가 오면 dot이 깨어나 답하게 합니다.
+---
+
+dot은 개인용 ChatGPT 에이전트입니다. `dots` 블록은 기본적으로 Slack으로 메시지를 보냅니다. 이 가이드에서는 SwB 우편함을 사용합니다. 우편함은 에이전트 하나의 메시지를 보관합니다.
+
+## 시작하기 전에
+
+[내 플랜과 지역](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot)에서 dot을 지원하는지 확인하세요.
+
+dot 접근 권한과 [사용자 지정 MCP 쓰기 권한](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)이 있는 워크스페이스를 사용하세요. MCP 서버는 앱이 외부 도구를 쓰게 해 줍니다.
+
+워크스페이스에서 dot 사용이 제한되어 있다면 관리자에게 **Use dots**를 켜 달라고 요청하세요.
+
+SwB 서버에는 공개 HTTPS 주소, 소유자 로그인, `dots` 블록이 필요합니다. 블록은 설정 파일에서 켜는 SwB 연결 하나입니다.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="dots" lang="ko" />
+
+dot에 SwB을 추가한 뒤 이 프롬프트를 붙여 넣으세요.
+
+## 우편함 전달 설정
+
+### dots 블록 켜기
+
+`config/switchboard.yaml`에 이 블록을 추가하세요. 그다음 SwB을 다시 시작하세요.
+
+```yaml
+blocks:
+  dots:
+    delivery: mailbox
+    dots:
+      dot:
+        mailbox: chatgpt
+```
+
+### Plugins 열기
+
+데스크톱 브라우저에서 [chatgpt.com/plugins](https://chatgpt.com/plugins)를 여세요.
+
+### 서버 추가
+
+**+**를 선택하세요. 그다음 **Add custom MCP server**를 선택하세요.
+
+### 주소 입력
+
+이름에 `SwB`을 입력하세요. **Server URL**에 `https://swb.example.com/mcp` 같은 SwB MCP 주소를 입력하세요.
+
+### 플러그인 만들기
+
+**OAuth**를 선택하세요. **I understand and want to continue**를 선택하세요. 그다음 **Create as a plugin**을 선택하세요.
+
+### 설치와 로그인
+
+플러그인을 설치하세요. 소유자로 SwB에 로그인하세요. 접근을 승인하세요.
+
+### dot 열기
+
+[chatgpt.com](https://chatgpt.com)에서 내 dot을 여세요. dot에 SwB 플러그인을 추가하세요. {/* unverified */}
+
+## 에이전트가 하는 일
+
+dot이 `connect(what="chatgpt")`를 호출해 OAuth 로그인을 확인합니다. OAuth를 쓰면 SwB 페이지에서 접근을 승인합니다. 소유자 권한을 모두 가진 에이전트에게 `connect(what="dots")`를 실행해 `dots` 블록을 확인해 달라고 요청하세요.
+
+dot이 MCP Events를 지원하면 `chatgpt` 우편함의 `switchboard.message.created`를 구독할 수 있습니다. 이벤트는 메시지가 도착했을 때 dot에 알려 줍니다. SwB은 이벤트를 받는 주소를 검증합니다. dot은 `get_message`로 메시지를 읽고 `reply`로 답합니다. 열린 채팅에서 메시지를 받으려면 `wait`나 `inbox`를 사용하세요.
+
+## 자격 증명
+
+| 토큰 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| SwB 로그인 토큰 | 로그인할 때 ChatGPT가 받습니다 | 임의 텍스트 | ChatGPT가 대신 보관합니다 |
+| 이벤트 서명 시크릿 | 클라이언트가 구독과 함께 보냅니다 | `whsec_` 뒤에 Base64 텍스트 | SwB이 암호화해 저장합니다 |
+
+## 연결 확인
+
+다른 SwB 에이전트에게 `send(to="dots:dot:dot", task="SwB setup test: reply pong")` 실행을 요청하세요. 이벤트 구독이 작동하면 dot이 깨어나 그 대화에 답장합니다. 우편함 접근은 dot에서 `inbox`를 호출해 따로 확인하세요.
+
+## 문제 해결
+
+`connect`가 `dots` 블록을 켜라고 안내하면 블록을 추가하세요. SwB을 다시 시작하세요.
+
+`connect`가 Slack 워크스페이스를 요청하면 블록이 Slack 전달을 쓰고 있는 것입니다. `delivery: mailbox`를 설정하고 SwB을 다시 시작하세요.

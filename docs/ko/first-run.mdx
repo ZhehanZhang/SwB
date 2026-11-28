@@ -1,0 +1,74 @@
+---
+title: 처음 실행하기
+description: SwB에 접속할 수 있게 하고 로그인한 뒤 인스턴스를 확인합니다.
+---
+
+## 이 컴퓨터에서 실행
+
+{/* prepublication */}
+
+패키지가 공개되면 빈 폴더에서 `uvx swb-one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. SwB은 기본적으로 `http://localhost:8870`을 사용합니다. `SWB_PORT`를 설정하면 주소에 그 포트를 사용합니다. 소스 빌드를 포함한 다른 시작 방법은 [설치](/ko/docs/install)를 참고하세요.
+
+## 공개 주소 받기
+
+Claude, ChatGPT, Grok은 클라우드에서 실행됩니다. 이 앱들이 SwB에 접속하려면 공개 HTTPS 주소가 필요합니다. 터널은 로컬 SwB 서버에 공개 주소를 붙여 줍니다.
+
+[cloudflared](https://developers.cloudflare.com/tunnel/downloads/)를 설치하세요. 터미널에서 `cloudflared --version`이 실행되는지 확인하세요. SwB이 실행 중이면 먼저 멈추세요. SwB 인스턴스 폴더에서 이 명령을 실행하세요.
+
+```bash
+uvx swb-one up --tunnel cloudflare
+```
+
+SwB이 Cloudflare Quick Tunnel을 열고 공개 MCP 주소를 출력합니다. 이 옵션으로 다시 시작할 때마다 새 주소를 받습니다. 앱에 등록한 주소도 새 주소로 바꾸세요.
+
+Tailscale을 쓰려면 [Tailscale을 설치하세요](https://tailscale.com/download). Tailscale에 로그인하세요. [Funnel](https://tailscale.com/docs/features/tailscale-funnel)을 켜세요. 터미널에서 `tailscale version`이 실행되는지 확인하세요. 위 명령에서 `--tunnel tailscale`을 사용하세요.
+
+내 도메인의 고정 주소가 필요하면 [이름 있는 터널](/ko/docs/cloudflare#named-tunnel)을 읽어 보세요.
+
+## 다음 단계 확인
+
+```bash
+swb status
+```
+
+이 명령은 서버 상태와 켜진 블록을 보여 줍니다. 남은 설정 작업은 **Next steps**에서 확인하세요. `switchboard_status` 도구도 다음 단계를 알려 줍니다.
+
+다른 주소의 서버를 확인하려면 `--url`을 설정하세요. 예를 들어 `swb status --url http://127.0.0.1:8871`을 실행하세요. CLI는 셸이나 인스턴스 `.env`의 `SWB_PORT` 값으로 기본 로컬 주소를 정합니다. `swb up`에 `--dir`를 썼다면 같은 인스턴스 폴더를 `--dir`로 넘기세요.
+
+## 웹 페이지에 로그인
+
+웹 페이지에서 프로젝트, 에이전트, 받은편지함, 메모리, 감사 로그를 볼 수 있습니다. 토큰을 안전하게 붙여 넣는 곳도 이 페이지입니다.
+
+![SwB 로그인 페이지](/shots/login-light.webp)
+
+새 링크를 받으려면 같은 인스턴스 폴더의 두 번째 터미널에서 이 명령을 실행하세요.
+
+```bash
+swb login-link
+```
+
+이 명령은 일회용 로그인 링크를 출력합니다. 5분 안에 브라우저에서 여세요. `swb status`와 같은 방식으로 `--url`과 `--dir`를 사용하세요. 처음 로그인한 뒤 [패스키](/ko/docs/owner-login#패스키)를 추가하세요. 다음 로그인부터는 패스키를 사용하세요. 설정 코드와 다른 로그인 방법은 [소유자 로그인](/ko/docs/owner-login)을 참고하세요.
+
+## 웹 콘솔
+
+| 페이지 | 용도 |
+| - | - |
+| `/` | 서버 상태와 프로젝트 목록을 봅니다. |
+| `/agents/*` | 등록된 에이전트를 보고 에이전트별 상세 정보를 엽니다. |
+| `/audit` | 변경 사항과 그 밖의 이벤트 로그를 필터링합니다. |
+| `/inbox` | 확인이 필요한 대화와 요청을 봅니다. |
+| `/inbox/:handle` | 대화 하나의 메시지를 읽습니다. |
+| `/memory/*` | 저장된 메모를 둘러보고 검색합니다. |
+| `/projects/:slug` | 프로젝트 하나의 라우트, 기록, 대화, 메모리를 봅니다. |
+| `/connections/:platform` | Slack, Discord, Telegram, GitHub의 연결 상태와 [**Channel modes**](/ko/docs/channel-modes)를 봅니다. |
+| `/settings` | 서버 설정을 보고 패스키를 관리합니다. |
+| `/tokens` | 토큰 요청과 저장된 자격 증명을 봅니다. |
+| `/about` | SwB 버전과 켜진 블록 목록을 봅니다. |
+
+## 첫 에이전트 연결
+
+첫 에이전트가 다른 앱을 설정한다면 소유자 권한을 주세요. 서버에서 실행되는 앱이면 브라우저에서 그 앱의 [OAuth 로그인](/ko/docs/owner-login#에이전트-로그인)을 승인하세요. 모든 SwB 도구에 접근할 수 있는 연결을 사용하세요.
+
+SwB 컴퓨터에서 [로컬 소유자 클라이언트](/ko/docs/setup/mcp-client#로컬-소유자-클라이언트)를 설정하세요. 클라이언트 로그인에는 인스턴스 `.env`의 `SWB_KEY_OWNER`를 사용하세요. 이 키는 로컬 `/mcp` 주소로만 보내세요.
+
+첫 에이전트가 페어링 키를 쓴다면 소유자 전용 단계마다 해당 터미널 명령을 에이전트에게 요청하세요. 그 명령은 SwB 인스턴스 폴더에서 실행하세요. 예를 들어 `swb connect slack`을 실행하세요. 다른 앱은 [에이전트 연결](/ko/docs/connect)을 참고하세요.

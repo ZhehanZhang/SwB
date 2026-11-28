@@ -1,0 +1,55 @@
+---
+title: Claude
+description: Claude と Claude Projects を接続し、ルーティンで起こします。
+---
+
+## コネクターを追加する
+
+[Claude のセットアップ](/ja/docs/setup/claude)に従って、SwB の MCP アドレスをカスタムコネクターとして追加してください。Project かチャットでコネクターを有効にしてください。Claude は OAuth を使い、`claude` としてサインインします。
+
+## Claude Project を接続する
+
+[Claude Project のセットアップ用プロンプト](/ja/docs/setup/claude-project)を、その Project のチャットに貼り付けてください。
+
+エージェントは SwB のプロジェクトを見つけ、API トリガー付きのルーティンを設定します。次に `connect` を呼び出し、1 回限りの受け取りリンクを取得します。このリンクは 30 分で期限が切れます。リンクを開いてください。フォームにルーティンのトークンを貼り付けてください。トークンを保存してください。エージェントがテストメッセージを送り、返信を確認します。
+
+## ルーティン
+
+**ルーティン**とは、SwB が開始できる Claude Code のタスクです。SwB は、Claude のメールボックスにもメッセージを残します。ルーティンは `reply` を使って送信者に回答します。
+
+| 送り先 | 配信先 |
+| - | - |
+| `project=<slug>` を付けた `claude` | プロジェクトのメインのルーティン |
+| `claude:<slug>` | プロジェクトのメインのルーティン |
+| `<routine name>` | そのルーティン |
+| `agent:claude` | メールボックスだけ |
+
+1 つのプロジェクトに複数のルーティンを置けます。既定では、SwB はそのエージェントとプロジェクトの最初のルーティンを選びます。あるルーティンを優先して選ばせるときは、登録時に `primary=true` を設定してください。
+
+Claude がプロジェクトの一時停止を報告した場合、SwB は空のリクエストでもう一度試します。ルーティンは `routine_pickup` でメッセージを読みます。
+
+## 設定
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+手動でセットアップするときは、`token_env` に、ルーティンのトークンを入れた変数の名前を設定してください。この例では `SWB_EXAMPLE_CLAUDE_TOKEN` を使います。
+
+| キー | 用途 |
+| - | - |
+| `blocks.claude-routine` | Claude Code のルーティンを起こすための設定 |
+| `blocks.claude-routine.use` | ブロックの種類。`claude-routine` を使います |
+| `blocks.claude-routine.enabled` | このブロックを無効にするときは `false` を設定します |
+| `blocks.claude-routine.routines` | ルーティン名と設定の対応表 |
+| `blocks.claude-routine.routines.*.agent` | メッセージを受け取るエージェント。既定値は `claude` |
+| `blocks.claude-routine.routines.*.kind` | プロジェクトのルーティンには `project` を使います。汎用のルーティンには `general` を使います |
+| `blocks.claude-routine.routines.*.project` | プロジェクトのルーティンが属する SwB のプロジェクト名 |
+| `blocks.claude-routine.routines.*.name` | ルーティンの表示名 |
+| `blocks.claude-routine.routines.*.primary` | `true` にすると、そのエージェントとプロジェクトでこのルーティンを最初に選びます |
+| `blocks.claude-routine.routines.*.routine_id` | `trig_...` のような Claude API のトリガー ID |
+| `blocks.claude-routine.routines.*.slugs` | 送り先に使える追加の短い名前 |
+| `blocks.claude-routine.routines.*.token_env` | ルーティンのトークンを入れた変数の名前 |

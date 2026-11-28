@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: 把 SwB 的工作路由給 Capy Captain，再把回覆帶回來。
+---
+
+Capy Captain 是負責指揮一組討論串的 Capy 代理。SwB 把任務傳送給 Captain，再把每則回覆送回傳送者。
+
+## 開始之前
+
+需要同一個組織中的 Capy 帳號、專案和 Captain。服務使用者是供軟體使用的 Capy 帳號。
+
+啟用 `capy` 模組。在 Capy 的 **Settings** → **MCP & plugins** 中加入 SwB。使用具備完整擁有者存取權的 SwB 用戶端。
+
+## 複製設定提示詞
+
+<SetupPrompt name="capy-captain" lang="zh-Hant" />
+
+把提示詞貼到你的 SwB 擁有者用戶端。
+
+## 設定 Captain 路由
+
+### 開啟 API 設定
+
+在 Capy 中開啟 **Settings** → **API**，確認開啟的是正確的組織。
+
+### 建立讀取金鑰
+
+建立一把能存取你的 Captain 的個人 API 金鑰，趁 Capy 還顯示金鑰時複製下來。
+
+### 儲存讀取金鑰
+
+開啟代理提供的認領連結，把金鑰貼到 **Token**，再選取 **Save token**。
+
+### 重新啟動 SwB
+
+代理要求時，重新啟動 SwB，SwB 隨後會載入金鑰。
+
+### 建立 Capy Captain
+
+如有需要，建立一個 Capy Captain。選擇專案，以及要執行 Captain 的機器。
+
+### 選擇 Capy Captain
+
+告訴代理由哪個 Capy Captain 接收工作。
+
+### 建立傳送金鑰
+
+在 **Settings** → **API** 中建立一個角色為 `read_write` 的服務使用者，授予它專案的存取權，再為這個服務使用者建立一把金鑰。
+
+### 分享 Capy Captain
+
+開啟 Capy Captain 的選單，選取 **Share**，把存取權授予服務使用者。如果 Captain 在已配對裝置上執行，也把該裝置的存取權授予服務使用者。 {/* unverified */}
+
+### 儲存傳送金鑰
+
+開啟第二個認領連結，把金鑰貼到 **Token**，再選取 **Save token**。
+
+### 再次重新啟動 SwB
+
+重新啟動 SwB，然後告訴代理你已完成。
+
+## 代理會做什麼
+
+從具備完整擁有者存取權的用戶端呼叫 `connect(what="capy-captain")`。如果 SwB 需要讀取金鑰，會回傳一個認領連結。認領連結是用來輸入憑證的私有頁面。
+
+重新啟動後，`connect` 會列出可用的 Captain。確認由哪個 Captain 接收工作，再呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。如果要建立專案路由，在 `choose` 中加入 `"project":"<project>"`。路由告訴 SwB 要把工作送到哪裡。
+
+如果代理需要服務金鑰才能傳送，SwB 會要求提供。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
+
+如果你的應用程式支援 MCP Events，訂閱 `switchboard.message.created`。如果只在需要時讀取，呼叫 `wait` 或 `inbox`。
+
+## 憑證
+
+| 權杖 | 顯示位置 | 格式 | 去處 |
+| - | - | - | - |
+| 讀取金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加上 43 個隨機字元 | 對應 SwB 認領連結頁面上的 **Token** |
+| 傳送金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加上 43 個隨機字元 | 對應 SwB 認領連結頁面上的 **Token** |
+
+## 檢查連線
+
+請代理再次呼叫 `connect(what="capy-captain")`，確認結果為 `connected`。傳送一項簡短的測試任務到這條路由，確認任務出現在 Captain 討論串中，再用 `result` 或 `inbox` 讀取回覆。以擁有者身分開啟 `/healthz`，檢查已設定的傳送金鑰名稱和狀態。
+
+## 疑難排解
+
+Capy 金鑰沿用所屬帳號的權限。如果 `connect` 要求新的讀取金鑰，建立一把能存取 Captain 的金鑰。
+
+如果傳送失敗並出現存取錯誤，檢查服務使用者對專案、Captain 和已配對裝置的存取權。
+
+伺服器環境中的值優先於用認領連結儲存的值。到伺服器環境中修改，再重新啟動 SwB。
+
+如果要更換遺失的金鑰，在 **Settings** → **API** 中撤銷它，再建立新金鑰。每個認領連結只能使用一次，30 分鐘後過期。

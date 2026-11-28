@@ -1,0 +1,94 @@
+.console-more-sheet {
+  bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom));
+}
+
+.console-mobile-nav[data-more-open]::before {
+  visibility: hidden;
+}
+
+.console-mobile-hit {
+  position: relative;
+}
+
+.console-mobile-hit::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 calc(3.5rem - var(--mobile-tabbar-height));
+}
+
+.console-mobile-hit:first-child::after {
+  left: -1.25rem;
+}
+
+.console-mobile-hit:last-child::after {
+  right: -1.25rem;
+}
+
+.console-more-sheet[data-state="open"] {
+  animation: console-sheet-up 200ms ease-out;
+}
+
+.console-more-sheet[data-state="closed"] {
+  animation: console-sheet-down 160ms ease-in both;
+  pointer-events: none;
+}
+
+.console-more-scrim[data-state="open"] {
+  animation: console-scrim-in 200ms ease-out;
+}
+
+.console-more-scrim[data-state="closed"] {
+  animation: console-scrim-out 160ms ease-in both;
+  pointer-events: none;
+}
+
+@keyframes console-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes console-sheet-down {
+  to { transform: translateY(100%); }
+}
+
+@keyframes console-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes console-scrim-out {
+  to { opacity: 0; }
+}
+
+:root {
+  view-transition-name: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(console-route) {
+  animation: none;
+}
+
+::view-transition-old(console-route),
+::view-transition-new(console-route) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-out;
+}
+
+@media (width < 48rem) {
+  ::view-transition {
+    clip-path: inset(0 0 calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .console-more-sheet[data-state],
+  .console-more-scrim[data-state],
+  ::view-transition-old(console-route),
+  ::view-transition-new(console-route) {
+    animation: none;
+  }
+}

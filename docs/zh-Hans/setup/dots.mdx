@@ -1,0 +1,84 @@
+---
+title: ChatGPT dots
+description: 把 ChatGPT dot 连接到 SwB，让 dot 在收到 SwB 消息时被唤醒并回复。
+---
+
+dot 是个人专属的 ChatGPT 智能体。`dots` 模块默认通过 Slack 发送消息。本页改用 SwB 邮箱，每个邮箱存放发给某一个智能体的消息。
+
+## 开始之前
+
+确认[你的套餐和所在地区](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot)是否支持 dot。
+
+使用具备 dot 访问权限和[自定义 MCP 写入权限](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)的工作区。MCP 服务器让应用可以访问外部工具。
+
+如果工作区限制了 dot，让管理员启用 **Use dots**。
+
+SwB 服务器需要公网 HTTPS 地址、所有者登录和 `dots` 模块。模块是 SwB 的一项连接，在配置文件中启用。
+
+## 复制设置提示词
+
+<SetupPrompt name="dots" lang="zh-Hans" />
+
+把 SwB 添加到 dot 之后，再粘贴提示词。
+
+## 设置邮箱投递
+
+### 启用 dots 模块
+
+把下面的模块添加到 `config/switchboard.yaml`，然后重启 SwB。
+
+```yaml
+blocks:
+  dots:
+    delivery: mailbox
+    dots:
+      dot:
+        mailbox: chatgpt
+```
+
+### 打开 Plugins
+
+在桌面浏览器中打开 [chatgpt.com/plugins](https://chatgpt.com/plugins)。
+
+### 添加服务器
+
+选择 **+**，再选择 **Add custom MCP server**。
+
+### 填写地址
+
+名称填 `SwB`。在 **Server URL** 中填你的 SwB MCP 地址，例如 `https://swb.example.com/mcp`。
+
+### 创建插件
+
+选择 **OAuth**。选择 **I understand and want to continue**。然后选择 **Create as a plugin**。
+
+### 安装并登录
+
+安装插件。以所有者身份登录 SwB，并批准访问。
+
+### 打开你的 dot
+
+在 [chatgpt.com](https://chatgpt.com) 打开你的 dot，为它添加 SwB 插件。 {/* unverified */}
+
+## 智能体会做什么
+
+dot 调用 `connect(what="chatgpt")` 检查 OAuth 登录。使用 OAuth 时，你在 SwB 页面上批准访问。让一个以所有者身份登录、拥有完整权限的智能体运行 `connect(what="dots")`，检查 `dots` 模块。
+
+如果 dot 支持 MCP Events，它可以为 `chatgpt` 邮箱订阅 `switchboard.message.created`。事件在消息到达时通知 dot。SwB 会验证接收事件的地址。dot 用 `get_message` 读取消息，用 `reply` 回复。在打开的聊天中，用 `wait` 或 `inbox` 收取消息。
+
+## 凭据
+
+| 令牌 | 显示位置 | 格式 | 去向 |
+| - | - | - | - |
+| SwB 登录令牌 | 你登录时由 ChatGPT 获取 | 随机字符串 | ChatGPT 替你保存 |
+| 事件签名密钥 | 客户端订阅时一并发送 | `whsec_` 后接 Base64 文本 | SwB 加密保存 |
+
+## 检查连接
+
+让另一个 SwB 智能体运行 `send(to="dots:dot:dot", task="SwB setup test: reply pong")`。事件订阅正常时，dot 会被唤醒并在这个对话中回复。要单独检查邮箱访问，在 dot 中调用 `inbox`。
+
+## 排查问题
+
+如果 `connect` 返回启用 `dots` 模块的说明，添加这个模块，然后重启 SwB。
+
+如果 `connect` 要求提供 Slack 工作区，说明模块正在使用 Slack 投递。设置 `delivery: mailbox`，然后重启 SwB。

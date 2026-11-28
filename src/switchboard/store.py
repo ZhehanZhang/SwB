@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+import os
 import re
 import secrets
 import sqlite3
+import stat
 import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -34,6 +40,26 @@ CREATE TABLE IF NOT EXISTS memories (
   deleted_at REAL
 );
 CREATE INDEX IF NOT EXISTS memories_updated ON memories(updated_at);
+CREATE TABLE IF NOT EXISTS connect_codes (
+  code_hash TEXT PRIMARY KEY,
+  agent TEXT NOT NULL,
+  project TEXT,
+  client TEXT,
+  created_by TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  expires_at REAL NOT NULL,
+  used_at REAL
+);
+CREATE TABLE IF NOT EXISTS paired_memory_grants (
+  key_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  PRIMARY KEY(key_id, scope)
+);
+CREATE TABLE IF NOT EXISTS paired_memory_grants_migration (
+  version INTEGER PRIMARY KEY CHECK(version = 1),
+  keys_migrated INTEGER NOT NULL,
+  grants_migrated INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(title, body, tags, namespace, content='memories', content_rowid='rowid', tokenize='porter unicode61');
 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
   INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
@@ -41,7 +67,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
 END;
-CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE OF title, body, tags, namespace ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
   INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
 END;
@@ -54,6 +80,12 @@ CREATE TABLE IF NOT EXISTS memory_revisions (
   body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS memory_revisions_id ON memory_revisions(memory_id, at);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at REAL NOT NULL,
+  updated_by TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS oauth_clients (
   client_id TEXT PRIMARY KEY,
@@ -87,6 +119,49 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   revoked_at REAL
 );
 CREATE INDEX IF NOT EXISTS oauth_tokens_family ON oauth_tokens(family);
+
+CREATE TABLE IF NOT EXISTS owner_sessions (
+  id TEXT PRIMARY KEY,
+  via TEXT NOT NULL,
+  client_id TEXT,
+  source TEXT,
+  created_at REAL NOT NULL,
+  last_seen REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_initialized (
+  id INTEGER PRIMARY KEY CHECK (id = 1)
+);
+CREATE TABLE IF NOT EXISTS owner_login_links (
+  token_hash TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_login_links_used (
+  token_hash TEXT PRIMARY KEY,
+  expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_webauthn_challenges (
+  id TEXT PRIMARY KEY,
+  challenge BLOB NOT NULL,
+  kind TEXT NOT NULL,
+  owner_key TEXT,
+  expires_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS owner_webauthn_challenges_expiry ON owner_webauthn_challenges(expires_at);
+CREATE TABLE IF NOT EXISTS owner_webauthn_user (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  handle BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_passkeys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL,
+  created_at REAL NOT NULL,
+  last_used_at REAL,
+  rp_id TEXT
+);
 
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,6 +211,7 @@ CREATE TABLE IF NOT EXISTS handles (
   state TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS handles_open ON handles(destination, open);
+CREATE INDEX IF NOT EXISTS handles_ref ON handles(destination, ref);
 CREATE TABLE IF NOT EXISTS inbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner TEXT NOT NULL,
@@ -146,6 +222,43 @@ CREATE TABLE IF NOT EXISTS inbox (
   at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
+CREATE INDEX IF NOT EXISTS inbox_handle ON inbox(handle, id);
+CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS inbox_watch_group ON inbox(owner, json_extract(data, '$.block'),
+    json_extract(data, '$.space'), json_extract(data, '$.dm'), id) WHERE kind = 'watch_digest';
+CREATE INDEX IF NOT EXISTS inbox_watch_owner_group ON inbox(json_extract(data, '$.block'),
+    json_extract(data, '$.space'), json_extract(data, '$.dm'), id)
+    WHERE kind = 'watch_digest' AND json_extract(data, '$.for_owner') = 1;
+CREATE TABLE IF NOT EXISTS owner_delivery_pending (
+  handle TEXT PRIMARY KEY REFERENCES handles(handle),
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_activity (
+  agent TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  client TEXT NOT NULL,
+  credential TEXT NOT NULL,
+  at REAL NOT NULL,
+  PRIMARY KEY(agent, kind, client, credential)
+);
+CREATE INDEX IF NOT EXISTS owner_activity_at ON owner_activity(at);
+CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
+CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
+CREATE TABLE IF NOT EXISTS space_modes (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, mode TEXT NOT NULL, actions TEXT NOT NULL,
+  project TEXT, target TEXT, updated_at REAL NOT NULL, updated_by TEXT NOT NULL,
+  PRIMARY KEY(block, space, channel)
+);
+CREATE TABLE IF NOT EXISTS watch_events (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL,
+  author_id TEXT NOT NULL, author TEXT NOT NULL, excerpt TEXT NOT NULL, link TEXT, at REAL NOT NULL,
+  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL, parts TEXT,
+  PRIMARY KEY(block, space, channel, message)
+);
+CREATE INDEX IF NOT EXISTS watch_events_pending ON watch_events(block, space, dm, target, at) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS handles_channel_mode ON handles(owner, created_at) WHERE json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage');
 CREATE TABLE IF NOT EXISTS inbox_cursors (
   owner TEXT NOT NULL,
   handle TEXT NOT NULL,
@@ -155,21 +268,37 @@ CREATE TABLE IF NOT EXISTS inbox_cursors (
 """
 
 
-def _migrate(db: sqlite3.Connection) -> None:
+def _migrate(db: sqlite3.Connection) -> int:
     """Bring databases written by capy-bridge 0.1 up to the scoped schema."""
     if "private" not in {r[1] for r in db.execute("PRAGMA table_info(projects)")}:
         db.execute("ALTER TABLE projects ADD COLUMN private INTEGER NOT NULL DEFAULT 0")
     cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
     if "scope" not in cols:
         db.execute("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'")
+    if "writer_credential" not in cols:
+        db.execute("ALTER TABLE memories ADD COLUMN writer_credential TEXT")
     db.execute("DROP INDEX IF EXISTS memories_ns_key")
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_key ON memories(scope, namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL"
     )
     db.execute("CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope, updated_at)")
+    _migrate_memory_provenance(db)
     db.execute("DROP TABLE IF EXISTS login_failures")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(handles)")}:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
+    if "rp_id" not in {r[1] for r in db.execute("PRAGMA table_info(owner_passkeys)")}:
+        db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
+    if "target" not in {r[1] for r in db.execute("PRAGMA table_info(space_modes)")}:
+        db.execute("ALTER TABLE space_modes ADD COLUMN target TEXT")
+    if "parts" not in {r[1] for r in db.execute("PRAGMA table_info(watch_events)")}:
+        db.execute("ALTER TABLE watch_events ADD COLUMN parts TEXT")
+    db.execute("""
+        INSERT OR IGNORE INTO owner_initialized(id)
+        SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (
+            EXISTS (SELECT 1 FROM owner_sessions) OR EXISTS (SELECT 1 FROM owner_passkeys)
+            OR EXISTS (SELECT 1 FROM audit WHERE action = 'login_link_used' AND outcome = 'ok')
+        )
+    """)
     db.execute("CREATE TABLE IF NOT EXISTS alias_use (alias TEXT NOT NULL, agent TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_at REAL NOT NULL, PRIMARY KEY(alias, agent))")
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "delegations" in tables:
@@ -178,10 +307,109 @@ def _migrate(db: sqlite3.Connection) -> None:
                SELECT at, day, 'mcp', source, client, 'capy', kind, target, thread_id, title, excerpt, outcome, detail FROM delegations"""
         )
         db.execute("DROP TABLE delegations")
+    return db.execute("""UPDATE handles SET meta = json_set(meta, '$.owner_archived', json('true'))
+        WHERE owner = 'owner' AND destination = 'mailbox' AND json_extract(meta, '$.owner_archived') IS NOT 1""").rowcount
+
+
+MEMORY_COLUMNS = {
+    "created_by": "TEXT",
+    "content_by": "TEXT",
+    "content_trust": "TEXT NOT NULL DEFAULT 'agent'",
+    "content_hash": "TEXT",
+    "sync_source": "TEXT",
+    "sync_key": "TEXT",
+    "deleted_by": "TEXT",
+}
+REVISION_COLUMNS = {"rev": "INTEGER", "scope": "TEXT", "namespace": "TEXT", "key": "TEXT", "tags": "TEXT", "trust": "TEXT"}
+
+
+def memory_hash(body: str) -> str:
+    """The dedupe key of a memory body: case and whitespace do not count."""
+    return hashlib.sha256(" ".join((body or "").split()).casefold().encode("utf-8")).hexdigest()
+
+
+def _migrate_memory_provenance(db: sqlite3.Connection) -> None:
+    """Add provenance, dedupe and sync columns to memories and backfill them. Every existing row stays."""
+    trigger = db.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'memories_au'").fetchone()
+    if trigger is None or "UPDATE OF" not in trigger[0]:
+        db.execute("DROP TRIGGER IF EXISTS memories_au")
+        db.execute("""CREATE TRIGGER memories_au AFTER UPDATE OF title, body, tags, namespace ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
+  INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
+END""")
+    cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
+    for name, definition in MEMORY_COLUMNS.items():
+        if name not in cols:
+            db.execute(f"ALTER TABLE memories ADD COLUMN {name} {definition}")
+    rcols = {r[1] for r in db.execute("PRAGMA table_info(memory_revisions)")}
+    for name, definition in REVISION_COLUMNS.items():
+        if name not in rcols:
+            db.execute(f"ALTER TABLE memory_revisions ADD COLUMN {name} {definition}")
+    db.execute("UPDATE memory_revisions SET rev = rowid WHERE rev IS NULL")
+    db.execute("""CREATE TRIGGER IF NOT EXISTS memory_revisions_ai AFTER INSERT ON memory_revisions BEGIN
+  UPDATE memory_revisions SET rev = new.rowid WHERE rowid = new.rowid;
+END""")
+    db.execute("""UPDATE memories SET created_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  ORDER BY r.at, r.rowid LIMIT 1), source) WHERE created_by IS NULL""")
+    db.execute("""UPDATE memories SET content_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  AND r.action IN ('create', 'replace', 'append') ORDER BY r.at DESC, r.rowid DESC LIMIT 1), source) WHERE content_by IS NULL""")
+    db.execute("""UPDATE memories SET deleted_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  AND r.action = 'delete' ORDER BY r.at DESC, r.rowid DESC LIMIT 1), source)
+                  WHERE deleted_at IS NOT NULL AND deleted_by IS NULL""")
+    for row in db.execute("SELECT id, body FROM memories WHERE content_hash IS NULL").fetchall():
+        db.execute("UPDATE memories SET content_hash = ? WHERE id = ?", (memory_hash(row[1]), row[0]))
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS memories_sync ON memories(sync_source, sync_key) WHERE sync_key IS NOT NULL")
+    db.execute("CREATE INDEX IF NOT EXISTS memories_hash ON memories(scope, content_hash) WHERE deleted_at IS NULL")
 
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{int(time.time() * 1000):013d}{secrets.token_hex(4)}"
+
+
+def ensure_private_data_dir(path: Path) -> None:
+    if not path.is_dir():
+        try:
+            path.mkdir(mode=0o700, parents=True)
+        except FileExistsError:
+            if not path.is_dir():
+                raise
+        else:
+            _private_mode(path, 0o700, existing=False)
+            return
+    _private_mode(path, 0o700, existing=True)
+
+
+def _private_mode(path: Path, mode: int, *, existing: bool) -> None:
+    if os.name != "posix" or stat.S_IMODE(path.stat().st_mode) == mode:
+        return
+    try:
+        path.chmod(mode)
+    except OSError:
+        if not existing:
+            raise
+        log.warning("Could not set mode %04o on %s. Check its permissions.", mode, path)
+
+
+def open_database(path: str | Path) -> sqlite3.Connection:
+    if str(path) != ":memory:":
+        path = Path(path)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if os.name == "posix":
+            try:
+                path.touch(mode=0o600, exist_ok=False)
+            except FileExistsError:
+                _private_mode(path, 0o600, existing=True)
+            else:
+                _private_mode(path, 0o600, existing=False)
+            for suffix in ("-wal", "-shm", "-journal"):
+                try:
+                    _private_mode(path.with_name(path.name + suffix), 0o600, existing=True)
+                except FileNotFoundError:
+                    pass
+    db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    return db
 
 
 class Store:
@@ -189,15 +417,11 @@ class Store:
 
     def __init__(self, path: str | Path, clock: Callable[[], float] = time.time):
         self.path = str(path)
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self._lock = threading.RLock()
-        self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db = open_database(path)
         self.db.executescript(SCHEMA)
-        self.tx(_migrate)
+        self.owner_archived_count = self.tx(_migrate)
 
     def close(self) -> None:
         self.db.close()

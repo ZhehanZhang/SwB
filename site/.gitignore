@@ -1,0 +1,12 @@
+/node_modules/
+/.next/
+/.open-next/
+/.generated/
+/.source/
+/.wrangler/
+/.dev.vars*
+/.env*
+/next-env.d.ts
+/*.tsbuildinfo
+/playwright-report/
+/test-results/

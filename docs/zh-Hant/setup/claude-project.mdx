@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: 讓 SwB 啟動在 Claude Project 中工作的 Claude Code routine。
+---
+
+routine 是一項儲存起來、能自行執行的 Claude Code 任務。其他代理把工作傳送過來時，SwB 會在你的 Claude Project 中啟動這個 routine，routine 再到同一個 SwB 對話中回覆。
+
+## 開始之前
+
+需要 Claude Pro、Max 或 Ultra 方案，並具備 Claude Code Projects 的使用權限。開啟 [Claude Code](https://claude.ai/code)，選取 **Projects**。如需取得使用權限，[加入候補名單](https://claude.com/form/projects)。
+
+把 SwB 加入同一個 Claude 帳號，做法見 [Claude](/zh-Hant/docs/setup/claude)。在 `config/switchboard.yaml` 中啟用 `claude-routine` 模組。
+
+## 複製設定提示詞
+
+<SetupPrompt name="claude-project" lang="zh-Hant" />
+
+在 [Claude Code](https://claude.ai/code) 中開啟你的專案，把提示詞貼到左側的協調者聊天中。協調者會在專案中建立一個名為 `swb <project>` 的 routine。
+
+## 開啟 routine
+
+開啟協調者提供的 routine 連結，或使用下列任一路徑。
+
+### 從 Routines 頁面
+
+開啟 [Routines 頁面](https://claude.ai/code/routines)。按一下頂端的橫幅，顯示隱藏的專案 routine，再開啟 `swb <project>`。
+
+### 從專案
+
+在右側面板頂端的分頁列按一下 **+**，選取 **Routines**。開啟 `swb <project>`，再按一下 **View full page**。
+
+## 開啟 API 觸發條件
+
+開啟 routine 名稱旁的選單，選取 **Edit**。在編輯表單中依序選取 **Trigger**、**+**、**API**。
+
+複製 **Fire URL**，把這個 URL 交給協調者。
+
+## 產生並儲存權杖
+
+權杖由擁有者在 Claude 中產生。選取 **Generate token**，趁 **Token generated** 對話方塊還開著時複製權杖。
+
+開啟協調者提供的認領連結。在 **Claude routine token** 頁面核對專案和 routine ID，把權杖貼到 **Token** 欄位，再選取 **Save token**。
+
+SwB 會顯示 **Routine saved** 或 **Routine and project saved**。權杖儲存後，告知協調者。
+
+## 代理會做什麼
+
+協調者從具備完整擁有者存取權的 SwB 用戶端呼叫 `connect(what="claude-project")`。SwB 會檢查 `claude-routine` 模組，並列出其中的 routine。協調者可以呼叫 `project_list` 找出你的 SwB 專案。
+
+協調者會新增一個 API 觸發條件，並把下面這條指示寫進 routine 提示詞，其中填入 Claude Project 的確切名稱。
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+協調者再次呼叫 `connect`，並在 `choose` 中帶入 `fire_url`、`claude_project` 和 `project`。SwB 會回傳一個認領連結。認領連結是 SwB 的私有頁面，專門用來填寫憑證。這個連結只能使用一次，30 分鐘後過期。
+
+如果 SwB 找到相似的專案，代理會請你從中選一個。如果要建立新專案，代理會以新的短名稱（slug）呼叫 `connect`，並把 `create_new` 設為 `true`。
+
+## 憑證
+
+| 項目 | Claude 顯示的位置 | 格式 | 去處 |
+| - | - | - | - |
+| routine 權杖 | API 面板中的 **Token generated**，只顯示一次 | 以 `sk-ant-oat01-` 開頭 | SwB 認領連結頁面上的 **Token** 欄位 |
+| Fire URL | API 面板中的 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 交給協調者聊天中的代理。這個 URL 只用來指明是哪個 routine。 |
+
+## 檢查連線
+
+協調者呼叫 `routine_list`，確認專案和 `untested` 狀態，再用 `send` 傳送一則測試訊息。啟動成功時會回傳 `fired: true`，狀態也會變成 `tested`。如果 Claude 回傳工作階段連結，開啟連結，確認工作階段在你的專案中執行。
+
+## 疑難排解
+
+如果認領連結已過期，請代理再次呼叫 `connect` 取得新連結。如果在 API 面板按了 **Regenerate**，舊權杖會立即失效。這時請代理重新註冊 routine，再到新的認領連結頁面儲存新權杖。
+
+如果 Claude 對帶有文字的請求回傳 **this project is paused**，SwB 會改用空白請求重試，routine 再用 `routine_pickup` 取得訊息。如果專案已暫停，到 Claude 中恢復專案。

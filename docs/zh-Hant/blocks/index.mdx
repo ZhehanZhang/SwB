@@ -1,0 +1,52 @@
+---
+title: 模組
+description: 查看 SwB 提供的連線和功能。
+---
+
+模組為 SwB 增加一項連線或功能。在設定檔中設定模組。使用預設設定時，SwB 會從環境變數偵測部分模組。執行 `swb status` 可查看模組狀態和設定指引。以擁有者身分登入後，可在 `/healthz` 查看詳細資訊。
+
+| 連線 | 連接方式 | SwB 如何傳遞訊息 |
+| - | - | - |
+| [Claude](/zh-Hant/docs/blocks/claude) | 自訂連接器和 Claude routine | `wait`、`inbox` 和 routine 喚醒 |
+| [ChatGPT](/zh-Hant/docs/blocks/chatgpt) | 自訂 MCP 伺服器和 ChatGPT dots | MCP Events |
+| [Capy](/zh-Hant/docs/blocks/capy) | Capy API 金鑰 | Capy 討論串的串流 |
+| [Grok](/zh-Hant/docs/blocks/grok) | MCP 連接器和 Grok Bot routine | `wait`、`inbox` 和 routine 喚醒 |
+| [程式開發代理](/zh-Hant/docs/blocks/coding-agents) | OAuth 或配對碼 | `wait`、`inbox` 和 Claude Code 頻道 |
+| [本機工作階段](/zh-Hant/docs/blocks/local-sessions) | 已配對裝置 | 信箱，或直接傳遞到開啟中的工作階段 |
+| [Slack](/zh-Hant/docs/blocks/slack) | 使用 Socket Mode 的 Slack 應用程式 | 在討論串中回覆 |
+| [Discord](/zh-Hant/docs/blocks/discord) | Bot 權杖 | 在討論串中回覆 |
+| [Telegram](/zh-Hant/docs/blocks/telegram) | Bot 權杖 | 在主題中回覆 |
+| [GitHub](/zh-Hant/docs/blocks/github) | Webhook 密鑰 | 已簽署的 Webhook |
+| [Webhooks](/zh-Hant/docs/blocks/webhooks) | 簽署密鑰或共用密鑰 | 事件傳入，已簽署的訊息傳出 |
+| [Muse](/zh-Hant/docs/setup/muse) | 已配對的 Muse gadget 和 MCP 連接器 | 即時喚醒和信箱訊息 |
+| [其他 MCP 用戶端](/zh-Hant/docs/setup/mcp-client) | OAuth 或配對碼 | `wait` 和 `inbox` |
+
+## 信任與存取
+
+SwB 檢查平台 ID 來決定訊息的信任等級。在 Slack、Discord 和 Telegram 中，用 `known` 協助 SwB 判斷要接受誰的訊息。擁有者以外的人傳來的訊息，信任等級為 `external`。參閱[信任](/zh-Hant/docs/security#信任)。
+
+目標、頻道和記憶範圍預設為私有。分享某項資源後，其他人就能存取。
+
+## 內建頭像
+
+[Slack 形象（persona）](/zh-Hant/docs/blocks/slack#形象)可以使用內建頭像，以檔名指定。
+
+| 檔案 | 名稱 |
+| - | - |
+| `capy.png` | Capy |
+| `chatgpt.png` | ChatGPT |
+| `claude-code.png` | Claude Code |
+| `claude.png` | Claude |
+| `codex.png` | Codex |
+| `default.png` | `default` |
+| `dots.png` | ChatGPT dots |
+| `dsh.png` | DeepSeek Harness |
+| `gemini.png` | Gemini |
+| `grok-bot.png` | Grok Bot |
+| `grok.png` | Grok |
+| `muse.png` | Muse |
+| `swb.png` | SwB |
+
+## 新增自己的模組
+
+模組是一個帶有資訊清單的 Python 類別。資訊清單描述模組能做什麼、能把訊息傳送到哪裡，以及使用哪些密鑰。在 `switchboard.blocks` 進入點群組中註冊你的模組。執行 `swb blocks list` 可查看伺服器上已設定的模組。

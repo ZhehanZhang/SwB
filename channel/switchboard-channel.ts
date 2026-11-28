@@ -1,46 +1,42 @@
 #!/usr/bin/env bun
-// switchboard channel for Claude Code (research preview): pushes Capy's replies to switchboard delegations
-// into the open Claude Code session. It reads switchboard's inbox over SSE (GET /inbox/events) and turns each
+// SwB channel for Claude Code (research preview): pushes Capy's replies to SwB delegations
+// into the open Claude Code session. It reads the SwB inbox over SSE (GET /inbox/events) and turns each
 // item into a notifications/claude/channel event. Events arrive only while the session is open; items that
 // came in meanwhile are delivered on the next start, from the cursor saved in ~/.claude/channels/switchboard/.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-
-const URL_BASE = (process.env.SWITCHBOARD_URL ?? "https://swb.example.com").replace(/\/+$/, "")
-const KEY = process.env.SWITCHBOARD_KEY ?? ""
-const AGENT = process.env.SWITCHBOARD_AGENT ?? ""
-const STATE_DIR = process.env.SWITCHBOARD_CHANNEL_STATE ?? join(homedir(), ".claude", "channels", "switchboard")
-const CURSOR_FILE = join(STATE_DIR, "cursor")
+import { version } from "./package.json"
 
 const log = (msg: string) => process.stderr.write(`[switchboard-channel] ${msg}\n`)
+const userAgent = `SwB/${version} (channel)`
 
 const mcp = new Server(
-  { name: "switchboard", version: "0.2.0" },
+  { name: "swb", title: "SwB", version },
   {
     capabilities: { experimental: { "claude/channel": {} } },
     instructions:
-      "Events from the switchboard channel are Capy's reports on work delegated through switchboard (capy_delegate). " +
+      "Events from the SwB channel are Capy's reports on work delegated through SwB (capy_delegate). " +
       "kind is reply (progress or an answer), ask (Capy needs the owner), status, error, or final (the delegation finished). " +
-      "Read them and tell the owner what changed. To answer Capy, use the switchboard MCP server's capy_reply tool with the thread_id; " +
-      "this channel itself is one-way.",
+      "Read them and tell the owner what changed. To answer Capy, use the SwB MCP server's capy_reply tool with the thread_id. " +
+      "This channel delivers events to Claude Code.",
   },
 )
 
-function readCursor(): string | null {
+function readCursor(file: string): string | null {
   try {
-    const v = readFileSync(CURSOR_FILE, "utf8").trim()
+    const v = readFileSync(file, "utf8").trim()
     return /^\d+$/.test(v) ? v : null
   } catch {
     return null
   }
 }
 
-function saveCursor(v: string): void {
-  mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 })
-  writeFileSync(CURSOR_FILE, v + "\n", { mode: 0o600 })
+function saveCursor(file: string, v: string): void {
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+  writeFileSync(file, v + "\n", { mode: 0o600 })
 }
 
 type Item = { cursor: number; handle: string; owner: string; kind: string; text?: string; thread_id?: string; status?: string; pull_requests?: string[] }
@@ -85,29 +81,40 @@ export async function* sseFrames(body: ReadableStream<Uint8Array>): AsyncGenerat
   }
 }
 
-async function follow(): Promise<never> {
-  let cursor = readCursor()
+async function follow(url: string, key: string, agent: string, stateDir: string): Promise<never> {
+  const cursorFile = join(stateDir, "cursor")
+  let cursor = readCursor(cursorFile)
+  let previous = cursor === null && stateDir === process.env.CLAUDE_PLUGIN_DATA && basename(stateDir) === "swb-swb"
+    ? readCursor(join(dirname(stateDir), "switchboard-switchboard", "cursor"))
+    : null
   let delay = 1000
   for (;;) {
     try {
+      if (previous !== null) {
+        saveCursor(cursorFile, previous)
+        cursor = previous
+        previous = null
+      }
       const q = new URLSearchParams()
-      if (AGENT) q.set("agent", AGENT)
+      if (agent) q.set("agent", agent)
       if (cursor) q.set("after", cursor)
-      const res = await fetch(`${URL_BASE}/inbox/events?${q}`, { headers: { Authorization: `Bearer ${KEY}`, Accept: "text/event-stream" } })
-      if (res.status === 401) throw new Error("switchboard rejected SWITCHBOARD_KEY (401)")
-      if (!res.ok || !res.body) throw new Error(`switchboard answered ${res.status}`)
-      log(`connected to ${URL_BASE}`)
+      const res = await fetch(`${url}/inbox/events?${q}`, {
+        headers: { Authorization: `Bearer ${key}`, Accept: "text/event-stream", "User-Agent": userAgent },
+      })
+      if (res.status === 401) throw new Error("SwB rejected the channel key (401)")
+      if (!res.ok || !res.body) throw new Error(`SwB answered ${res.status}`)
+      log("Connected to SwB")
       for await (const f of sseFrames(res.body)) {
         delay = 1000
         if (f.event === "ready" && !cursor) {
           cursor = String(JSON.parse(f.data).cursor)
-          saveCursor(cursor)
+          saveCursor(cursorFile, cursor)
         }
         if (f.event !== "item") continue
         const item = JSON.parse(f.data) as Item
         await mcp.notification({ method: "notifications/claude/channel", params: toEvent(item) })
         cursor = f.id ?? String(item.cursor)
-        saveCursor(cursor)
+        saveCursor(cursorFile, cursor)
       }
       log("stream closed; reconnecting")
     } catch (e) {
@@ -119,10 +126,27 @@ async function follow(): Promise<never> {
 }
 
 if (import.meta.main) {
-  if (!KEY) {
-    log("SWITCHBOARD_KEY is not set; set it to the value of SWITCHBOARD_KEY_CHANNEL from the server's .env")
+  const readEnv = (suffix: string) => {
+    const name = `SWB_${suffix}`
+    const value = process.env[name]
+    if (value !== undefined) return value
+    const legacy = `SWITCHBOARD_${suffix}`
+    const old = process.env[legacy]
+    if (old !== undefined) log(`Use ${name} in place of ${legacy}.`)
+    return old
+  }
+  const url = (readEnv("URL") ?? "").trim().replace(/\/+$/, "")
+  const key = readEnv("KEY")
+  const agent = readEnv("AGENT") ?? ""
+  const stateDir = readEnv("CHANNEL_STATE") ?? join(homedir(), ".claude", "channels", "switchboard")
+  if (!url) {
+    log("Set SWB_URL to the base URL of your SwB server")
+    process.exit(1)
+  }
+  if (!key) {
+    log("Set SWB_KEY to the value of SWB_KEY_CHANNEL from the server's .env")
     process.exit(1)
   }
   await mcp.connect(new StdioServerTransport())
-  void follow()
+  void follow(url, key, agent, stateDir)
 }

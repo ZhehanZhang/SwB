@@ -11,14 +11,19 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.extension import Extension, MethodBinding
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
 from mcp_types import RequestParams
 
 from ...audit import iso
+from .policy import CONVERSATION_NOT_FOUND, can_read_conversation
 
 
 
 EXTENSION = "io.modelcontextprotocol/tasks"
 CAPS_KEY = "io.modelcontextprotocol/clientCapabilities"
+PROTOCOL_VERSIONS = frozenset({"2026-07-28"})
 POLL_MS = 10_000
 INVALID_PARAMS = -32602
 TASK_FAILED = -32000
@@ -48,8 +53,9 @@ def _structured(result: Any) -> tuple[bool, dict[str, Any] | None]:
 class TasksExtension(Extension):
     identifier = EXTENSION
 
-    def __init__(self, origin: Any):
+    def __init__(self, origin: Any, destinations: set[str]):
         self.origin = origin
+        self.destinations = destinations
 
     @property
     def core(self) -> Any:
@@ -62,7 +68,7 @@ class TasksExtension(Extension):
     async def intercept_tool_call(self, params: Any, ctx: Any, call_next: Any) -> Any:
         from . import TASK_MODE
 
-        if params.name not in ("send", "capy_delegate") or not wants_tasks(ctx.meta):
+        if ctx.protocol_version not in PROTOCOL_VERSIONS or params.name not in ("send", "capy_delegate") or not wants_tasks(ctx.meta):
             return await call_next(ctx)
         token = TASK_MODE.set(True)
         try:
@@ -73,13 +79,11 @@ class TasksExtension(Extension):
         if is_error or not data or not data.get("handle"):
             return result
         h = self.core.inbox.handle(data["handle"])
-        if h is None or h["destination"] not in self.core.blocks:
+        if h is None or h["destination"] not in self.destinations:
             return result
         return {"resultType": "task", **self._task(h, detailed=False)}
 
     def _principal(self, ctx: Any) -> Any:
-        from mcp.shared.exceptions import MCPError
-
         from . import principal_of
 
         p = principal_of(ctx.request)
@@ -87,13 +91,14 @@ class TasksExtension(Extension):
             raise MCPError(code=INVALID_PARAMS, message="unauthenticated")
         return p
 
-    def _handle(self, ctx: Any, task_id: str) -> dict[str, Any]:
-        from mcp.shared.exceptions import MCPError
-
+    def _handle(self, ctx: Any, task_id: str, *, read: bool = False) -> dict[str, Any]:
         p = self._principal(ctx)
         h = self.core.inbox.handle(task_id)
-        if h is None or h["owner"] != p.source or h["destination"] not in self.core.blocks:
-            raise MCPError(code=INVALID_PARAMS, message=f"unknown task {task_id!r}")
+        if read and (h is None or h["destination"] not in self.destinations or not can_read_conversation(self.core, p, h)):
+            self.origin.mcp._audit_refusal(p, "tasks/get", CONVERSATION_NOT_FOUND)
+            raise MCPError(code=INVALID_PARAMS, message=CONVERSATION_NOT_FOUND)
+        if h is None or h["destination"] not in self.destinations or (not read and h["owner"] != p.source):
+            raise MCPError(code=INVALID_PARAMS, message=CONVERSATION_NOT_FOUND)
         return h
 
     def _task(self, h: dict[str, Any], detailed: bool = True) -> dict[str, Any]:
@@ -124,6 +129,7 @@ class TasksExtension(Extension):
         prs = state.get("pull_requests") or []
         body = text + ("\n\nPull requests:\n" + "\n".join(f"- {u}" for u in prs) if prs else "") + f"\n\n({title} {where}, handle {h['handle']})"
         result = {
+            "resultType": "complete",
             "content": [{"type": "text", "text": body}],
             "structuredContent": {"handle": h["handle"], "thread_id": h["ref"], "status": status, "reply": text, "pull_requests": prs},
             "isError": False,
@@ -132,7 +138,7 @@ class TasksExtension(Extension):
 
     def methods(self) -> list[MethodBinding]:
         async def get(ctx: Any, params: TaskParams) -> dict[str, Any]:
-            return {"resultType": "complete", **self._task(self._handle(ctx, params.taskId))}
+            return {"resultType": "complete", **self._task(self._handle(ctx, params.taskId, read=True))}
 
         async def update(ctx: Any, params: UpdateParams) -> dict[str, Any]:
             self._handle(ctx, params.taskId)
@@ -140,11 +146,15 @@ class TasksExtension(Extension):
 
         async def cancel(ctx: Any, params: TaskParams) -> dict[str, Any]:
             h = self._handle(ctx, params.taskId)
-            await self.core.verb(self._principal(ctx), "cancel", h["handle"])
+            server = self.origin.mcp
+            try:
+                await server.call_tool("cancel", {"conversation": h["handle"]}, Context(request_context=ctx, mcp_server=server))
+            except ToolError as exc:
+                raise MCPError(code=INVALID_PARAMS, message=str(exc)) from exc
             return {"resultType": "complete"}
 
         return [
-            MethodBinding(method="tasks/get", params_type=TaskParams, handler=get),
-            MethodBinding(method="tasks/update", params_type=UpdateParams, handler=update),
-            MethodBinding(method="tasks/cancel", params_type=TaskParams, handler=cancel),
+            MethodBinding(method="tasks/get", params_type=TaskParams, handler=get, protocol_versions=PROTOCOL_VERSIONS),
+            MethodBinding(method="tasks/update", params_type=UpdateParams, handler=update, protocol_versions=PROTOCOL_VERSIONS),
+            MethodBinding(method="tasks/cancel", params_type=TaskParams, handler=cancel, protocol_versions=PROTOCOL_VERSIONS),
         ]

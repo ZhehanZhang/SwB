@@ -1,0 +1,84 @@
+---
+title: Grok Bot
+description: Connect Grok Bot to SwB with a custom connector and a routine that SwB wakes.
+---
+
+Grok Bot is xAI’s desktop agent app. A routine is a saved task. This connection uses a webhook, a web address that SwB calls to start the routine.
+
+## Before you start
+
+Install [Grok Bot](https://x.ai/bot) on a supported computer. Sign in with a plan that includes Grok Bot.
+
+Set up a public HTTPS address and owner sign-in for SwB. Enable the `grok-routine` block. Choose a SwB project. With OAuth, you approve access in your browser.
+
+## Copy the setup prompt
+
+<SetupPrompt name="grok-bot" lang="en" />
+
+Paste the prompt into your Bot chat after you add SwB.
+
+## Connect Grok Bot
+
+### Make a Bot
+
+Use the Bot from onboarding, or select **New Bot** with **+** in the sidebar. Enter a name. Select **Create**.
+
+### Open Connect apps
+
+In the sidebar, open **Connect apps**. Select **Add a custom connector**.
+
+### Enter the address
+
+Enter `SwB` in **Name**. Select **Remote HTTPS** under **Type**. Enter `https://swb.example.com/mcp` in **Server URL**. Select **Add plugin**.
+
+### Sign in
+
+Leave the optional OAuth client fields empty. If Grok Bot opens SwB sign-in, sign in as the owner. Approve access. {/* unverified */}
+
+### Open the routine
+
+Open the routine under **Details** in your Bot chat. Check the **Webhook** trigger.
+
+### Save the webhook URL
+
+Open the claim link for the webhook address. Copy **POST to** from the routine. Paste it into **Webhook URL**. Select **Save webhook url**.
+
+### Save the key
+
+Open the claim link for the webhook key. Copy **key** from the routine. Paste it into **Token**. Select **Save token**.
+
+### Tell Grok Bot
+
+Say done in the Bot chat. Grok Bot then tests the routine.
+
+## What the agent does
+
+Use an agent with owner access to call `connect(what="grok-bot")`. SwB returns the MCP address, the OAuth state and a routine prompt. The prompt uses the webhook `trust` field to tell the routine which requests it can act on. The routine answers with `reply`.
+
+Ask Grok Bot to create the routine with the prompt. In your owner client, register it with `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB makes separate claim links for the address and key. After you save both, run the `send` call that `connect` returns.
+
+When you send to the routine, SwB calls its webhook to start it.
+
+## Credentials
+
+| Token | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| Webhook URL | **POST to** under **Webhook** in the routine **Details** | HTTPS address | **Webhook URL** on its SwB claim link |
+| Webhook key | **key** under **Webhook** in the routine **Details** | Random text | **Token** on its SwB claim link |
+| SwB sign-in token | Grok Bot gets it when you sign in | Random text | Grok Bot keeps it for you |
+
+A claim link is a private one-time SwB page for one token. Paste each value there only.
+
+## Check the connection
+
+Open the routine **Details**. Check the **Webhook** trigger. Call `connect(what="grok-bot")` again from your owner client. The status line names the routine. Check `inbox` on the sending client for the test reply.
+
+## Fix problems
+
+If OAuth sign-in fails, use another SwB owner client to register the routine. If the connector accepts a bearer key, use [a paired key](/docs/setup/mcp-client#pair-a-client).
+
+Copy the **key** value. With the default header, SwB adds `Authorization: Bearer`.
+
+Use `grok-routine:routine:<routine>` to start the routine. Use `agent:grok` to send to the Grok mailbox.
+
+Claim links work one time and expire after 30 minutes. For a new link, call `connect` again. To change a saved value, call `connect` with `choose.replace` set to `url` or `secret`.

@@ -1,0 +1,38 @@
+name: switchboard-caddy
+services:
+  switchboard:
+    build:
+      context: ../..
+      target: paas
+    environment:
+      PORT: "8000"
+      SWB_DEPLOY_PLATFORM: compose
+      SWB_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      SWB_KEY_OWNER: "${SWB_KEY_OWNER-${SWITCHBOARD_KEY_OWNER-}}"
+      SWB_TRUSTED_PROXIES:
+      SWB_SETUP_CODE:
+    volumes:
+      - switchboard_data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      switchboard:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  switchboard_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,88 @@
+---
+title: Mémoire
+description: Partagez ce que vos agents apprennent et gardez le contrôle total.
+---
+
+La **mémoire** est un ensemble de notes que vos agents partagent via SwB. Chaque note est une **entrée**. Une entrée a un titre, un corps en Markdown et un historique de chaque modification.
+
+## Portées
+
+Une **portée** est un groupe d'entrées avec un ensemble de règles d'accès. Chaque entrée appartient à une portée.
+
+| Portée | Dossier | Usage |
+| --- | --- | --- |
+| `general` | `/memories/general/` | Faits sur vous valables pour tous les projets |
+| `project:<slug>` | `/memories/projects/<slug>/` | Faits sur un projet |
+| `agent:<name>` | `/memories/agents/<name>/` | Notes privées d'un agent |
+
+Un agent qui utilise la connexion du propriétaire peut lire toutes les portées. Une clé appairée lit et écrit uniquement dans les portées que vous lui accordez. Une clé appairée reçoit toujours sa propre portée d'agent.
+
+## Fichiers et dossiers
+
+Les agents voient la mémoire comme des fichiers dans `/memories`. Un dossier dans une portée est un **sujet**, comme `decisions` ou `notes/meetings`. Le nom du fichier est la clé de l'entrée.
+
+Ces outils utilisent les mêmes commandes que l'outil de mémoire de Claude. Les modèles Claude les connaissent déjà.
+
+| Outil | Usage |
+| --- | --- |
+| `memory_summary` | Charge un court index de la mémoire au début d'une session |
+| `memory_view` | Affiche un dossier, ou un fichier avec les numéros de ligne |
+| `memory_create` | Crée un fichier |
+| `memory_str_replace` | Modifie un passage exact dans un fichier |
+| `memory_insert` | Ajoute du texte après une ligne |
+| `memory_rename` | Déplace un fichier vers un nouveau nom, sujet ou portée |
+| `memory_delete` | Supprime un fichier |
+| `memory_search` | Trouve des entrées par mots, la meilleure correspondance en premier |
+| `memory_list` | Affiche les entrées, les plus récentes en premier |
+| `memory_history` | Affiche chaque modification d'une entrée |
+| `memory_restore` | Rétablit une version antérieure d'une entrée |
+
+Les anciens outils `memory_write`, `memory_read`, `memory_move` et `memory_promote` restent disponibles.
+
+SwB garde une seule copie de chaque fait dans une portée. Un agent qui enregistre à nouveau le même texte reçoit l'entrée existante.
+
+## Synchronisation de la mémoire
+
+La **synchronisation de la mémoire** copie dans SwB ce qu'un agent enregistre dans sa propre mémoire. Tous les agents peuvent alors l'utiliser. Elle fonctionne avec la mémoire de Claude, la mémoire de ChatGPT, la mémoire de Grok, les fichiers de mémoire de Claude Code et d'autres systèmes de mémoire.
+
+Chaque prompt de configuration demande à l'agent de synchroniser. Après la configuration, l'agent envoie avec `memory_sync` ce qu'il sait de vous. Il envoie uniquement les faits que vous voulez partager avec tous les agents. Il garde les mots de passe, les clés et les données personnelles sensibles dans sa propre mémoire. Ensuite, l'agent synchronise chaque nouveau souvenir dans la même réponse.
+
+`memory_sync` peut être répété en toute sécurité. Il met à jour la même entrée à chaque fois. Vos modifications et suppressions dans SwB ont la priorité. Une synchronisation ultérieure garde votre version et signale un conflit à l'agent.
+
+Le [compagnon](/fr/docs/companion) avec `--cap hooks` synchronise les fichiers de mémoire de Claude Code à chaque enregistrement.
+
+La synchronisation de la mémoire est activée par défaut. Pour la désactiver, ouvrez **Memory** dans la console et désactivez **Memory sync**. Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_settings` pour le même réglage.
+
+## Provenance
+
+La **provenance** est l'enregistrement de l'auteur d'une entrée et de sa date. SwB enregistre l'agent qui a créé l'entrée et l'agent qui l'a modifiée en dernier.
+
+SwB marque le texte écrit par un agent quand il transmet ce texte à un autre agent. La marque indique l'auteur et la date. Les agents utilisent le texte marqué uniquement comme information. Seules vos propres instructions les dirigent.
+
+## Contrôler votre mémoire
+
+Ouvrez **Memory** dans la console pour voir chaque entrée. Sélectionnez une entrée pour la modifier. Sélectionnez **History** pour voir chaque modification. Sélectionnez **Restore** sur une modification pour rétablir cette version. Vous pouvez aussi déplacer et supprimer des entrées.
+
+Chaque modification faite par un agent apparaît dans **History** et dans le journal d'audit. Vous pouvez rétablir chaque modification.
+
+## Télécharger et restaurer
+
+Sélectionnez **Download** sur la page **Memory** pour enregistrer toute la mémoire dans un fichier zip. Le fichier contient un fichier Markdown par entrée, dans des dossiers par portée et par sujet. Il contient aussi `manifest.json` avec l'historique et la provenance de chaque entrée.
+
+Sélectionnez **Restore from file** pour charger un fichier zip. Une restauration ajoute les entrées manquantes et met à jour celles qui ont changé. Elle garde toutes les autres entrées. Vous pouvez charger le même fichier à nouveau en toute sécurité.
+
+Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_export` et `memory_import` pour les mêmes tâches.
+
+## Sauvegarder dans Git
+
+SwB peut copier la mémoire dans un dépôt Git privé qui vous appartient. Chaque modification devient un commit, comme « Claude updated projects/swb/decisions/ownership.md ».
+
+Tout le contenu de la mémoire va dans ce dépôt. Utilisez un dépôt privé.
+
+Ouvrez **Memory** dans la console. Dans **Git backup**, saisissez l'adresse du dépôt et la branche. Pour une adresse HTTPS, collez un jeton avec un accès en écriture à ce dépôt. Pour une adresse SSH, collez une clé de déploiement avec un accès en écriture. SwB garde le jeton ou la clé chiffrés.
+
+SwB attend 30 secondes après une modification, puis crée un commit pour les modifications de cette période. Sélectionnez **Back up now** pour créer le commit tout de suite. SwB réessaie plus tard quand un envoi échoue. La ligne d'état affiche la dernière sauvegarde et la dernière erreur.
+
+Sélectionnez **Restore from repository** pour charger la mémoire depuis le dernier commit.
+
+Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` et `memory_backup_restore`. `memory_backup_configure` renvoie un lien de saisie pour le jeton ou la clé.

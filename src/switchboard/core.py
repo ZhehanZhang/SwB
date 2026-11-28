@@ -10,28 +10,44 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import secrets
+import sqlite3
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 import httpx
 
 from .audit import Audit, iso
+from .bot_identity import BotIdentities
 from . import targets as tgt
 from .agents import Agents
 from .auth import Auth, Principal
-from .blocks import Action, Address, Block, BlockError, Call
+from .blocks import ON_DEMAND_BLOCKS, Action, Address, Block, BlockError, Call, on_demand_blocks
 from .blocks import load as load_block
 from .claims import Claims
-from .config import Config, load_config
-from .connect import Connections
-from .inbox import Inbox
-from .memory import GENERAL, Memory, MemoryError_
+from .companions import Companions
+from .config import INSTANCE_DB, RETIRED_BLOCKS, Config, Instance, load_config
+from .connect import AGENT_RE, Connections
+from .env import env_value
+from .hook_wake import HookWake
+from .inbox import PENDING_OWNER_ROUTE, Inbox
+from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCE_LABELS, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath,
+                     MemoryRefused, frame_entry, missing_path)
+from .memory_git import MemoryGit
+from .modes import ChannelModes
+from .owner_delivery import OWNER_DELIVERY_PROBLEM, OwnerDelivery
 from .projects import Project, ProjectError, Projects
-from .routes import RouteError, Routes
-from .store import Store
-from .visibility import Visibility
+from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
+                       SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal)
+from .routes import Route, RouteError, Routes
+from .slack.avatar_files import AvatarFiles, agent_avatar
+from .store import Store, ensure_private_data_dir
+from .subject import display_subject, mailbox_subject
+from .trust import FramedText, frame_sender, memory_label, unframe_memory
+from .visibility import LOCAL_SESSION_RESOURCE, RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
 
@@ -45,11 +61,15 @@ class CoreError(Exception):
     pass
 
 
+class CoreRefused(PolicyRefusal, CoreError):
+    pass
+
+
 class Switchboard:
     def __init__(
         self,
-        config_path: str | Path | None,
-        data_dir: str | Path,
+        config_path: str | Path | None = None,
+        data_dir: str | Path | None = None,
         env: dict[str, str] | None = None,
         clock: Callable[[], float] = time.time,
         http_transport: httpx.AsyncBaseTransport | None = None,
@@ -58,29 +78,40 @@ class Switchboard:
         destination_options: dict[str, dict[str, Any]] | None = None,
         slack_options: dict[str, Any] | None = None,
         block_options: dict[str, dict[str, Any]] | None = None,
+        tunnel_url: str | None = None,
+        loopback_origin: str | None = None,
+        instance: Instance | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env)
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, loopback_origin=loopback_origin, instance=instance)
+        self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
+        ensure_private_data_dir(self.data_dir)
         self.clock = clock
         self.http_transport = http_transport
         legacy = self.data_dir / "capy-bridge.db"
-        db = self.data_dir / "switchboard.db"
+        db = self.data_dir / INSTANCE_DB
         if legacy.exists() and not db.exists():
             for suffix in ("", "-wal", "-shm"):
                 if Path(str(legacy) + suffix).exists():
                     Path(str(legacy) + suffix).rename(str(db) + suffix)
         self.store = Store(db, clock=clock)
+        self.bot_identities = BotIdentities(self.store, self.data_dir)
         self.audit = Audit(self.store, self.cfg.timezone)
         self.projects = Projects(self.store)
         self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir, self.cfg.mirror_debounce_s)
         self.routes = Routes(self.store)
         self.inbox = Inbox(self.store)
+        for use in self.cfg.retired_blocks:
+            log.warning(RETIRED_BLOCKS[use])
         types = {name: load_block(str(sec.get("use") or name)) for name, sec in self.cfg.blocks.items()}
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
-        self.connections = Connections(self.store)
+        self.connections = Connections(self.store, self.cfg.key_scopes)
+        if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
+            log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
+        self.memory_git = MemoryGit(self)
+        self.companions = Companions(self.store, self.audit, self)
+        self.hook_wake = HookWake(self)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
@@ -92,13 +123,24 @@ class Switchboard:
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         self.target_errors: dict[str, str] = {}
+        self._avatar_http: httpx.AsyncClient | None = None
+        self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
+        self._on_demand: dict[str, Block] = {}
+        self.modes = ChannelModes(self)
+        self.owner_delivery = self.inbox.owner_delivery = OwnerDelivery(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
+        for use, block_type in on_demand_blocks().items():
+            if use not in self.cfg.block_env and not any(issubclass(configured, block_type) for configured in types.values()):
+                self._on_demand[use] = block_type(self, {})
         for b in self.blocks.values():
             b.bind()
         self._seed_routes(self.cfg.routes)
+
+    def visible_blocks(self) -> dict[str, Block]:
+        return {name: block for name, block in self.blocks.items() if not block.hidden}
 
     @property
     def origins(self) -> dict[str, Block]:
@@ -118,6 +160,31 @@ class Switchboard:
             if engine is not None:
                 return engine
         return None
+
+    @property
+    def avatars(self) -> AvatarFiles:
+        slack = self.slack
+        if slack is not None and slack.config.public_base_url:
+            return slack.avatars
+        if self._avatar_files is None:
+            self._avatar_files = AvatarFiles(self.data_dir, self.cfg.public_url, slack.config.avatar_dirs if slack is not None else ())
+        return self._avatar_files
+
+    @property
+    def avatar_http(self) -> httpx.AsyncClient:
+        if self._avatar_http is None:
+            self._avatar_http = httpx.AsyncClient(transport=self.http_transport)
+        return self._avatar_http
+
+    @property
+    def avatar_cache(self) -> Path:
+        return self.avatars.rendered
+
+    def find_avatar(self, name: str) -> Path | None:
+        return self.bot_identities.icon_path(name) or self.avatars.find_avatar(name)
+
+    def avatar_url(self, name: str) -> str | None:
+        return self.avatars.avatar_url(name)
 
     def _seed_routes(self, seeds: list[dict[str, Any]]) -> None:
         """The config's routes: seed each agent/project slot once (routes_set and the page manage them after). Empty by default."""
@@ -141,7 +208,7 @@ class Switchboard:
         return path.read_bytes()
 
     def secret(self, name: str) -> str | None:
-        return self.cfg.env.get(name) or self.claims.secret(name)
+        return env_value(self.cfg.env, name) or self.claims.secret(name)
 
     @property
     def base_url(self) -> str:
@@ -158,40 +225,78 @@ class Switchboard:
     async def start(self) -> None:
         for b in self.blocks.values():
             await b.start()
+        self.spawn(self.modes.run(), name="watch-digests")
+        self.memory_git.start()
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
             t.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self._avatar_http is not None:
+            await self._avatar_http.aclose()
         for b in reversed(list(self.blocks.values())):
             await b.aclose()
         await self.auth.http.aclose()
         if self.memory.mirror_pending:
             self.memory.flush_mirror()
+        await asyncio.to_thread(self.memory_git.close)
         self.store.close()
 
-    def status(self) -> dict[str, Any]:
+    def status(self, principal: Principal | None = None, *, public: bool = False,
+               mode_slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         problems = list(self.cfg.problems())
-        next_steps = {n: b.next_step() for n, b in self.blocks.items()}
-        for b in self.blocks.values():
-            problems += b.problems()
+        pending = self.inbox.pending_owner_count() if not public and (
+            principal is None or principal.is_unrestricted_owner or principal.kind == "owner_session"
+        ) else None
+        if pending:
+            problems.append(OWNER_DELIVERY_PROBLEM)
+        next_steps = {}
+        blocks = self.visible_blocks()
+        for name, block in blocks.items():
+            issues = block.problems()
+            problems += issues
+            next_steps[name] = block.next_step() or (f"Run swb connect {block.manifest.id} to check {block.manifest.title} setup." if issues else None)
+
+        def block_status(block: Block) -> dict[str, Any]:
+            out = block.status() if principal is None else block.status_for(principal)
+            restricted = principal is not None and not principal.is_unrestricted_owner
+            if public:
+                out.pop("modes", None)
+            elif "modes" in out and restricted:
+                out["modes"] = self.modes.status(principal, block.name, slugs=mode_slugs)
+            if block.manifest.id == "github" and (public or restricted):
+                for field in ("installation", "checked_at", "installations", "missing_installations", "installation_problem", "token_scopes"):
+                    out.pop(field, None)
+            return out
+
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
+            **({"owner_delivery": {"pending": pending}} if pending is not None else {}),
             "next_steps": [step for step in next_steps.values() if step],
+            "mcp_enabled": self.cfg.mcp_enabled,
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
-            "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
-                           "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
+            "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
+                           "online": b.online, "next_step": next_steps[n]} for n, b in blocks.items()},
+            "block_setup": self.block_setup(),
             "origins": sorted(self.origins),
-            "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
-            "static_keys": [k.name for k in self.cfg.static_keys],
+            "destinations": {n: {"online": d.online, **block_status(d)} for n, d in blocks.items() if d.has_out},
+            "static_keys": [k.name for k in self.cfg.static_keys] if principal is None or principal.is_unrestricted_owner else [],
+            **({"companions": self.companions.list()} if principal is not None and principal.is_unrestricted_owner and not public else {}),
             "mirror": bool(self.cfg.mirror_dir),
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
                          "paused": self.store.one("SELECT COUNT(*) AS n FROM conversation_turns WHERE paused_at IS NOT NULL")["n"]},
         }
 
     health = status
+
+    def block_setup(self) -> dict[str, dict[str, Any]]:
+        blocks = self.visible_blocks()
+        return {name: {"enabled": name in self.blocks,
+                       "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
+                for name, keys in self.cfg.block_env.items()
+                if name in blocks or (name not in self.blocks and name not in ON_DEMAND_BLOCKS)}
 
     # Routing an action to a destination -----------------------------------------------------
 
@@ -201,44 +306,82 @@ class Switchboard:
         names |= set(self.cfg.inbox_keys.values())
         names |= {r["agent"] for r in self.store.q("SELECT DISTINCT agent FROM routes WHERE agent IS NOT NULL AND agent != ''")}
         names |= set(self.connections.agents())
+        if resources := self.cfg.resources:
+            names |= {r["source"] for r in self.store.q(
+                f"SELECT DISTINCT source FROM oauth_tokens WHERE revoked_at IS NULL AND expires_at >= ? "
+                f"AND resource IN ({','.join('?' for _ in resources)})", (self.clock(), *resources)
+            )}
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None, _reply: bool = False) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, title: str | None = None,
+                         _reply: bool = False, dry_run: bool = False, _allow_unregistered: bool = False,
+                         _session_target: str | None = None) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
-        allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
-        to = (to or "").strip().lower()
+        allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine).
+        A session target opens a reply handle without publishing a mailbox item."""
+        to = (to or "").strip().lower().removeprefix("agent:")
+        for_owner = to == "owner" and _session_target is None
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
+        if original is not None and original["meta"].get("channel_mode") and not _reply:
+            raise CoreRefused(MODE_REQUIRED, "channel-mode conversations can only be answered with reply")
         root = (original["meta"].get("root") or original["handle"]) if original is not None else None
         if original is not None and self._listen_conversation(original) and not (
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
-            raise CoreError("listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
+            raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
+        if not for_owner and not _allow_unregistered and to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
-        if to == principal.source and not (allow_self or own):
+        if not for_owner and to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
-        text = (text or "").strip()
+        if _reply and original is not None and original["status"] == "cancelled":
+            return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
+        framed = isinstance(text, FramedText)
+        if not framed:
+            text = (text or "").strip()
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
+        project_slug = p.slug if p else None
+        if dry_run:
+            if for_owner:
+                resolution = self.owner_delivery.resolve(project_slug)
+                return {"to": f"agent:{resolution[0]}" if resolution else "agent:owner", "mailbox": True, "project": project_slug,
+                        **({"status": PENDING_OWNER_ROUTE} if resolution is None else {"resolved_by": resolution[1]})}
+            return {"to": f"agent:{to}", "mailbox": _session_target is None, "project": project_slug}
         if root is not None:
             self.turn(root, principal)
-        sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text if framed else text[:20_000], label, principal.source, owner=principal.trust == "owner")
+        sender = {"kind": "agent", "agent": principal.source, "label": label,
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
-                  "trust": principal.trust}
+                  "trust": trust}
+        delivery_subject = mailbox_subject(title, label, text, trust=trust, reply=bool(in_reply_to))
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
-        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
-                                        meta=meta, status="delivered", target=f"agent:{to}")
-        self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender,
-                                                 **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
-        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
-                          outcome="ok", target=to, ref=handle, excerpt=text)
-        return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
+        title = (meta.pop("display_subject") if "display_subject" in meta else display_subject(title, text, "")) or None
+        data = {"subject": delivery_subject, "text": display, "project": project_slug, "from": sender, "trust": trust,
+                **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})}
+        if for_owner:
+            handle, recipient = self.inbox.store_owner_item(handle=handle, source=principal.source, project=project_slug, title=title,
+                                                            meta=meta, kind="message", data=data)
+            if recipient:
+                self.inbox.record_reply(handle, "message", data)
+        else:
+            recipient = to
+            handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=project_slug, title=title,
+                                            meta=meta, status="delivered", target=_session_target or f"agent:{to}")
+            self.inbox.update_handle(handle, open=False)
+            if _session_target is not None:
+                return {"to": to, "handle": handle, "conversation": handle, "mailbox": False, "project": project_slug}
+            await self.inbox.add(handle, "message", data)
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
+                          outcome="ok" if recipient else "pending", target=recipient, ref=handle,
+                          excerpt="" if for_owner or principal.kind == "companion" else text)
+        return {"to": recipient or to, "handle": handle, "conversation": handle, "delivered": recipient is not None, "mailbox": True,
+                "project": project_slug, **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
 
     def turn(self, root: str, principal: Principal) -> None:
         """Count one more turn on a mailbox conversation: a send's handle plus every forward and reply (a new send starts
@@ -265,16 +408,25 @@ class Switchboard:
                           outcome="refused", ref=root, detail=f"paused at {cap} turns")
         engine = self.slack
         if engine is not None:
-            task = asyncio.ensure_future(engine.dm_owner(f"switchboard paused conversation {root} after {cap} turns (last from "
-                                                         f"{principal.source}); it looks like a loop. Other conversations are unaffected."))
+            task = asyncio.ensure_future(engine.dm_owner(f"SwB paused conversation {root} after {cap} turns. "
+                                                         f"The last turn came from {principal.source}. Other conversations continue."))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
         raise CoreError(stop)
 
+    def resume_conversation(self, principal: Principal, root: str) -> bool:
+        if not principal.is_unrestricted_owner and not (principal.kind == "owner_session" and principal.trust == "owner"):
+            raise CoreError("only the owner can resume paused conversations")
+        if not self.store.n("UPDATE conversation_turns SET turns = 0, paused_at = NULL WHERE root = ? AND paused_at IS NOT NULL", (root,)):
+            return False
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="core",
+                          action="conversation_resume", outcome="ok", ref=root)
+        return True
+
     def destination(self, name: str) -> Block:
-        d = self.blocks.get(name)
+        d = self.blocks.get(name) or self._on_demand.get(name)
         if d is None:
-            raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.blocks) or 'none'}")
+            raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.visible_blocks()) or 'none'}")
         return d
 
     block = destination
@@ -297,7 +449,21 @@ class Switchboard:
 
     # Targets ------------------------------------------------------------------------------------
 
-    async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
+    async def _render_target(self, block: Block, target: dict[str, Any]) -> dict[str, Any]:
+        persona = target.get("persona")
+        if not persona:
+            return target
+        slack = self.slack
+        try:
+            avatar = await block.render_avatar({**persona, "target_id": target["id"]}, self.avatar_http, self.avatar_cache,
+                                               slack is None or slack.config.captain_avatars)
+        except OSError as exc:
+            log.warning("Avatar cache for %s:%s is unavailable: %s", block.name, target["id"], type(exc).__name__)
+            return target
+        return {**target, "persona": {**persona, "avatar_file": avatar}} if avatar else target
+
+    async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False,
+                      principal: Principal | None = None) -> list[dict[str, Any]]:
         """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
         A block that fails keeps its last good list, and the error shows in target_errors."""
         out: list[dict[str, Any]] = []
@@ -305,14 +471,19 @@ class Switchboard:
         for name, b in self.blocks.items():
             if type(b).targets is Block.targets or (block and block != name):
                 continue
+            if kind == tgt.CAPTAIN_SLUG and all(t.kind != kind for t in b.manifest.targets):
+                continue
             at, got = self._targets.get(name, (0.0, []))
-            if refresh or now - at > TARGETS_TTL_S or not got:
+            if refresh or now - at > TARGETS_TTL_S or not got or not b.cache_targets:
                 try:
-                    got = await b.targets()
+                    found = await b.targets()
+                    got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
                     self._targets[name] = (now, got)
                     self.target_errors.pop(name, None)
                 except Exception as exc:
                     self.target_errors[name] = f"{type(exc).__name__}: {exc}"[:300]
+            if principal is not None:
+                got = b.filter_targets(principal, got)
             for t in got:
                 out.append({**t, "address": str(Address(name, t["kind"], t["id"])), "block": name, "level": b.manifest.level_out,
                             "slugs": [s for s in t.get("slugs") or [] if s]})
@@ -327,36 +498,117 @@ class Switchboard:
                             "level": None, "routed_to": (str(a) if (a := self.route_address(None, p.slug)) else None)})
         if kind:
             out = [t for t in out if t["kind"] == kind]
+        for t in out:
+            if tgt.CAPTAIN_SLUG in t["slugs"]:
+                t["slugs"].remove(tgt.CAPTAIN_SLUG)
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        slack = self.slack
+        personas = slack.config.personas if slack is not None else {}
+        for t in out:
+            if p := t.get("persona"):
+                configured = personas.get(p.get("id"))
+                avatar = p.get("avatar_file") or p.get("avatar")
+                icon_url = p.get("icon_url")
+                if configured is not None:
+                    avatar, icon_url = configured.avatar, configured.icon_url
+                elif not avatar and not icon_url and p.get("id"):
+                    avatar = f"{p['id']}.png"
+                    if not self.find_avatar(avatar):
+                        avatar = agent_avatar(p["id"])
+                file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
+                t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
+                t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url
         prio = tuple(self.cfg.targets.get("priority") or ())
         return sorted(out, key=lambda t: (tgt.rank(t, prio), t["address"]))
 
     def slug_map(self, targets: list[dict[str, Any]], aliases: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
 
-    def route_address(self, agent: str | None, project: str | None) -> Address | None:
-        """Where a route sends this agent's work for this project, as an address (None: no route)."""
-        for name, b in self.blocks.items():
-            if not b.supports_routes:
-                continue
-            r, _ = self.routes.resolve(destination=name, agent=agent or "", project=project)
-            if r is not None:
-                return b.route_address(r.target)
-        return None
+    def target_agents(self, address: Address) -> set[str]:
+        if address.block == "agent":
+            return {address.id}
+        block = self.blocks.get(address.block)
+        if block is not None and block.manifest.id == "local" and (agent := block.grant_target(address)) is not None:
+            return {agent.id}
+        return {agent.id for agent in block.manifest.agents} if block is not None else set()
 
-    async def resolve_to(self, to: str) -> Address:
+    def target_visibility_resources(self, selector: str, address: Address | None = None, *,
+                                    slugs: dict[str, dict[str, Any]]) -> list[str]:
+        name = selector.casefold()
+        address = address or tgt.parse(selector, self.blocks)
+        if address is None and (row := slugs.get(name) or slugs.get(tgt.slugify(name))):
+            address = Address(row["block"], row["kind"], row["id"])
+        if address is not None and address.block == "agent":
+            return [f"target:{address.id}"] if tgt.SLUG_RE.fullmatch(address.id) else []
+        if address is not None and address.kind == "session" and (block := self.blocks.get(address.block)) is not None and block.manifest.id == "local":
+            canonical = block.canonical_target(address)
+            return [resource] if RESOURCE_RE.fullmatch(resource := f"target:{canonical}") else []
+        ident = tgt.slugify(address.id) if address is not None else tgt.slugify(name)
+        key = f"project:{address.id}" if address and address.block == "project" else str(address) if address else ""
+        aliases = sorted(slug for slug, row in slugs.items() if row["address"] == key)
+        names = (*([name] if tgt.SLUG_RE.fullmatch(name) or name == key.casefold() else []), ident, *aliases, key.casefold())
+        return [resource for slug in dict.fromkeys(names) if RESOURCE_RE.fullmatch(resource := f"target:{slug}")]
+
+    async def visibility_resources(self) -> set[str]:
+        targets = await self.targets()
+        slugs = self.slug_map(targets)
+        resources = {resource for target in targets for resource in self.target_visibility_resources(
+            target["address"], Address(target["block"], target["kind"], target["id"]), slugs=slugs)}
+        resources.update(resource for agent in self.known_agents()
+                         for resource in self.target_visibility_resources(f"agent:{agent}", slugs=slugs))
+        resources.update(f"route:{route.id}" for route in self.routes.list())
+        resources.update((f"memory:{GENERAL}", *(f"memory:{p.scope}" for p in self.projects.list(include_archived=True))))
+        resources.update(resource.lower() for resource in self.modes.channel_resources() if RESOURCE_RE.fullmatch(resource))
+        return resources
+
+    async def set_visibility(self, resource: str, value: Any, actor: str) -> tuple[str, str | list[str]]:
+        resource = self.visibility.key(resource)
+        if resource.startswith(LOCAL_SESSION_RESOURCE):
+            address = tgt.parse(resource.removeprefix("target:"), self.blocks)
+            if address is not None:
+                resource = self.visibility.key(f"target:{self.blocks[address.block].canonical_target(address)}")
+        if resource.startswith("tool:"):
+            raise VisibilityError("Tools are always private.")
+        if self.visibility.explicit(resource) is None and resource not in await self.visibility_resources():
+            raise VisibilityError("Unknown visibility resource. Choose a resource from visibility_list.")
+        return resource, self.visibility.set(resource, value, actor, self.clock())
+
+    def route_address(self, agent: str | None, project: str | None) -> Address | None:
+        """Where a route sends this agent's work for this project."""
+        route, _ = self.routes.resolve(destination=self.route_destinations(), agent=agent or "", project=project)
+        return self.address_for_route(route) if route else None
+
+    def address_for_route(self, route: Route) -> Address | None:
+        if route.destination == "agent":
+            return Address("agent", "agent", route.target["agent"])
+        block = self.blocks.get(route.destination)
+        return block.canonical_target(addr) if block and (addr := block.route_address(route.target)) else None
+
+    async def resolve_to(self, to: str, *, reveal_captains: bool = True) -> Address:
         """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
         text = (to or "").strip()
-        addr = tgt.parse(text, self.blocks)
+        if text.lower() == "owner":
+            return Address("agent", "agent", "owner")
+        if text.casefold() == tgt.CAPTAIN_SLUG:
+            candidates = await self.targets(kind=tgt.CAPTAIN_SLUG, refresh=True)
+            if any(name in self.target_errors and any(t.kind == tgt.CAPTAIN_SLUG for t in block.manifest.targets)
+                   for name, block in self.blocks.items()):
+                raise tgt.CaptainTargetError("Refresh the Captain list or use a full Captain address.")
+            slugs = self.slug_map(candidates)
+            if captain := slugs.get(tgt.CAPTAIN_SLUG):
+                return Address(captain["block"], captain["kind"], captain["id"])
+            raise tgt.CaptainTargetError(tgt.captain_selection_error(candidates, slugs, reveal=reveal_captains))
+        addr = tgt.parse(text, self.blocks.keys() | self._on_demand.keys())
         if addr is not None:
             if addr.block == "project" and not self._is_project(addr.id):
                 owner = self._kind_owner("project")
                 if owner:
                     return Address(owner, "project", addr.id)
                 raise CoreError(f"no project {addr.id!r}")
-            return addr
+            block = self.blocks.get(addr.block)
+            return block.canonical_target(addr) if block else addr
         head, sep, rest = text.partition(":")
         if sep and head.lower() in self.known_agents():
             if self._is_project(rest.strip().lower()):
@@ -373,8 +625,8 @@ class Switchboard:
             if owner:
                 return Address(owner, head.lower(), rest.strip())
         word = text.lower()
-        if word in self.blocks:
-            return Address(word, "", "")
+        if (block := self.visible_blocks().get(word)) is not None:
+            return block.default_address()
         if word in self.known_agents():
             for name, b in self.blocks.items():
                 if b.wakes_agents:
@@ -412,36 +664,43 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None,
+                   handle: str | None = None, dry_run: bool = False) -> dict[str, Any]:
+        """Send work or a message, or preview its resolved destination without delivering it."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)
-        handle = None
         if forward is not None:
+            if dry_run:
+                raise CoreError("a forwarded send cannot be previewed")
+            try:
+                self.modes.check(principal, forward, "forward")
+            except PermissionError as exc:
+                raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
-                raise CoreError("you can only forward a conversation you received")
+                raise CoreRefused(CONVERSATION_REQUIRED, "you can only forward a conversation you received")
             if self._listen_conversation(original):
-                raise CoreError("listen conversations cannot be forwarded; use reply")
+                raise CoreRefused(MODE_REQUIRED, "listen conversations cannot be forwarded; use reply")
             meta = original["meta"]
             sender = meta.get("from") or {}
             trust = meta.get("slack_trust") if sender.get("origin") == "slack" else sender.get("trust")
             if trust != "owner":
-                raise CoreError("you can only forward an owner-trust conversation")
+                raise CoreRefused(CONVERSATION_REQUIRED, "you can only forward an owner-trust conversation")
             if meta.get("boundary"):
-                raise CoreError(f"conversation {forward} is bounded to {meta['boundary']} and cannot be forwarded")
+                raise CoreRefused(CONVERSATION_REQUIRED, f"conversation {forward} is bounded to {meta['boundary']} and cannot be forwarded")
             handle = self.inbox.new_handle()
             if not self.store.n("UPDATE handles SET meta = json_set(meta, '$.forwarded_to', ?) "
                                 "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') IS NULL", (handle, forward)):
                 raise CoreError(f"conversation {forward} has already been forwarded")
             handle_meta = {**(handle_meta or {}), "forward_of": forward, "root": meta.get("root") or forward}
         try:
-            if handle is not None:
+            if forward is not None:
                 self.turn(handle_meta["root"], principal)
-            return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
-                                    new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
+            out = await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
+                                   new_conversation=new_conversation, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
+            return {**out, "dry_run": True} if dry_run else out
         except BaseException:
-            if handle is not None:
+            if forward is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
@@ -451,61 +710,66 @@ class Switchboard:
         """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes.
         The target is checked as it will be delivered, after a project picks a different routine or wake target."""
         if forward is not None:
-            raise CoreError(f"the {principal.source} key can't forward")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key can't forward")
         if not to:
-            raise CoreError(f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
         allowed = set()
         for t in principal.targets or ():
-            with contextlib.suppress(CoreError):
-                allowed.add(str(await self.resolve_to(t)))
-        addr = await self.resolve_to(to)
+            with contextlib.suppress(CoreError, tgt.CaptainTargetError):
+                allowed.add(str(await self.resolve_to(t, reveal_captains=False)))
+        addr = await self.resolve_to(to, reveal_captains=False)
         if not addr.id:
-            raise CoreError(f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
-        if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
+        if addr.block == "agent" and addr.id != "owner" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
         if block is not None:
-            addr = block.effective_target(addr, project)
-        if str(addr) not in allowed:
-            raise CoreError(f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
-        if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
-            raise CoreError(f"the {principal.source} key can't send in project {project}")
+            addr = block.grant_target(block.effective_target(addr, project))
+        if addr is None or str(addr) not in allowed:
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
+        if project and not principal.allows_routing_scope("project:" + project.strip().lower().removeprefix("project:")):
+            raise CoreRefused(SCOPE_REQUIRED, f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
-                    handle: str | None, handle_meta: dict[str, Any] | None) -> dict[str, Any]:
-        addr = await self.resolve_to(to) if to else None
-        if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+                    handle: str | None, handle_meta: dict[str, Any] | None, dry_run: bool) -> dict[str, Any]:
+        addr = await self.resolve_to(to, reveal_captains=principal.is_memory_owner) if to else None
+        if addr is not None and addr.block == "agent" and addr.id != "owner" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
-        if addr is not None and addr.block == "agent":
-            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta), "to": str(addr)}
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
-        if addr is not None:
-            block = self.destination(addr.block)
+        if addr is None:
+            destinations = self.route_destinations()
+            route, _ = self.routes.resolve(destination=destinations, agent=principal.source, project=project)
+            destination = route.destination if route else destinations[0]
+            if destination == "agent":
+                if route is None:
+                    raise CoreError("No route is set. Set a route or pass a target.")
+                addr = self.address_for_route(route)
         else:
-            block = self._routing_block(principal, project)
+            destination = addr.block
+        if addr is not None and addr.block == "agent":
+            out = await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
+                                        title=title, dry_run=dry_run)
+            if not dry_run:
+                out["to"] = f"agent:{out['to']}"
+            return out
+        block = self.destination(destination)
         action = block.verb("send")
         if action is None:
-            raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
+            raise CoreError(block.send_unavailable())
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
-        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta)
+        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
         if isinstance(out, dict):
-            out.setdefault("conversation", out.get("handle"))
+            if not dry_run:
+                out.setdefault("conversation", out.get("handle"))
             out.setdefault("block", block.name)
         return out
 
-    def _routing_block(self, principal: Principal, project: str | None) -> Block:
-        routable = [b for b in self.blocks.values() if b.supports_routes and b.verb("send") is not None]
-        p = project.strip().lower().removeprefix("project:") if project else None
-        levels = ("agent+project", "project", "agent", "global")
-        found = [(levels.index(r.level), i, b) for i, b in enumerate(routable) if (r := self.routes.resolve(destination=b.name, agent=principal.source, project=p)[0])]
-        if found:
-            return min(found, key=lambda x: (x[0], x[1]))[2]
-        if routable:
-            return routable[0]
-        raise CoreError("nothing to send to: no block that takes routes is configured; pass to (an agent:<name> mailbox or a block target)")
+    def route_destinations(self) -> tuple[str, ...]:
+        providers = tuple(b.name for b in self.blocks.values() if b.supports_routes and b.verb("send") is not None and b.name != "agent")
+        return (*providers, "agent")
 
     def project_systems(self, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Per switchboard project, its counterpart in each system: the target each route reaches, block targets that
@@ -532,19 +796,21 @@ class Switchboard:
     def mailbox_replies(self, handle: str, sender: str) -> list[dict[str, Any]]:
         """Replies the other side sent on a mailbox conversation, oldest first: interim (final false) and the answer."""
         out = []
-        for row in self.store.q("SELECT data, at FROM inbox WHERE owner = ? AND kind = 'message' ORDER BY id", (sender,)):
+        for row in self.store.q("""SELECT i.data, i.at FROM inbox i JOIN handles h ON h.handle = i.handle
+                WHERE i.owner = ? AND i.kind = 'message' AND json_extract(h.meta, '$.owner_archived') IS NOT 1
+                ORDER BY i.id""", (sender,)):
             d = json.loads(row["data"])
             if d.get("in_reply_to") == handle:
                 out.append({"text": d.get("text"), "final": d.get("final", True), "from": d.get("from"), "at": iso(row["at"])})
         return out
 
-    def _conversation(self, principal: Principal, ref: str) -> tuple[Block | None, dict[str, Any] | None]:
+    def _conversation(self, principal: Principal, ref: str, *, read: bool = False) -> tuple[Block | None, dict[str, Any] | None]:
         """The block and handle behind a conversation reference (h_ handle, or a block's own id such as a thread id)."""
         ref = (ref or "").strip()
         if ref.startswith("h_"):
             h = self.inbox.handle(ref)
-            if h is None or (h["owner"] != principal.source and not (h["destination"] == "mailbox" and h["ref"] == principal.source)):
-                raise CoreError(f"no conversation {ref!r}")
+            if h is None or not (self.inbox.participant(h, principal.source) or (read and principal.is_unrestricted_owner)):
+                raise CoreRefused(CONVERSATION_REQUIRED, f"no conversation {ref!r}")
             return self.blocks.get(h["destination"]), h
         owner = next((b for b in self.blocks.values() if b.owns_ref(ref)), None)
         if owner is None:
@@ -553,60 +819,136 @@ class Switchboard:
 
     async def verb(self, principal: Principal, verb: str, ref: str, *, to_owner: bool = False, **kw: Any) -> Any:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
-        block, h = self._conversation(principal, ref)
+        block, h = self._conversation(principal, ref, read=verb in ("status", "result"))
         final = kw.pop("final", None)
+        if verb == "reply" and to_owner and h is not None and h["meta"].get("channel_mode"):
+            return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
+        if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
+            raise CoreRefused(CONVERSATION_REQUIRED, "Choose a mailbox conversation you sent.")
+        if verb == "reply" and h is not None and h["destination"] == "mailbox":
+            if h["owner"] != principal.source:
+                raise CoreRefused(CONVERSATION_REQUIRED, "that conversation is one you sent; replies to it come from the other side (see result)")
+            if h["status"] == "cancelled":
+                return {"conversation": h["handle"], "in_reply_to": h["handle"], "final": final is not False,
+                        "delivered": False, "status": "cancelled",
+                        **({"to_owner": True} if to_owner else {"to": f"agent:{h['ref']}", "mailbox": True})}
+        channel_mode = None
+        if verb in ("reply", "cancel"):
+            try:
+                channel_mode = self.modes.check(principal, ref, verb)
+            except PermissionError as exc:
+                raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
+        if channel_mode:
+            if self.blocks[channel_mode["block"]].manifest.id == "github":
+                raise CoreError(f"GitHub conversations use {channel_mode['block']}_reply to post a reply")
+            if channel_mode["mode"] == "assist":
+                kw["text"] = (kw.get("text") or "")[:self.modes.assist_max_chars]
         if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
-            raise CoreError("to_owner is only allowed when replying to a listen conversation")
+            raise CoreRefused(MODE_REQUIRED, "Use a forwarded Slack message or a triage conversation with owner notes enabled.")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
-                if h["owner"] != principal.source:
-                    raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
                 if to_owner:
                     text = (kw.get("text") or "").strip()
                     if not text:
                         raise CoreError("text is empty")
-                    engine, meta = self.slack, h["meta"]
-                    if engine is None:
-                        raise CoreError("Slack is not configured")
+                    meta = h["meta"]
                     self.turn(meta.get("root") or h["handle"], principal)
                     thread = meta["slack_thread"]
                     channel = thread["channel_name"] or thread["channel"]
                     note = f"Note from {meta['boundary']} about {meta['slack_sender']} in #{channel}: {text[:500]}"
                     if meta.get("permalink"):
                         note += f"\n{meta['permalink']}"
-                    if not await engine.dm_owner(note):
-                        raise CoreError("could not DM the owner")
-                    if final is not False:
-                        self.inbox.update_handle(h["handle"], status="answered")
+                    label = self.agents.label(principal.source)
+                    trust, display = frame_sender(note, label, principal.source, "in Slack")
+                    sender = {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                              "client_id": principal.client_id, "origin": principal.origin, "trust": trust}
+                    data = {"text": display, "from": sender, "trust": trust, "in_reply_to": h["handle"], "final": final is not False}
+                    handle, recipient = self.inbox.store_owner_item(source=principal.source, project=h["project"], title="Listen note",
+                                                                   meta={"from": sender, "in_reply_to": h["handle"]}, kind="message", data=data)
+                    if recipient:
+                        self.inbox.record_reply(handle, "message", data)
                     self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="slack",
-                                      action="listen_note", outcome="ok", ref=h["handle"], target="owner")
-                    return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True, "delivered": True, "final": final is not False}
-                return {**await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
-                                                final=final is not False, _reply=True),
-                        "to": f"agent:{h['ref']}", "in_reply_to": h["handle"], "final": final is not False}
+                                      action="listen_note", outcome="ok" if recipient else "pending", ref=h["handle"], target=recipient)
+                    return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True,
+                            "delivered": recipient is not None, "final": final is not False,
+                            **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
+                out = await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
+                                            final=final is not False, _reply=True)
+                if channel_mode:
+                    self.modes.audit_action(principal, channel_mode, "reply")
+                return {**out,
+                        "to": f"agent:{out['to']}", "in_reply_to": h["handle"], "final": final is not False}
             if verb == "result":
                 replies = self.mailbox_replies(h["handle"], h["ref"])
                 done = next((r for r in reversed(replies) if r.get("final", True)), None)
                 return {"conversation": h["handle"], "status": h["status"], "final": done, "replies": replies[-(kw.get("tail") or 10):]}
             if verb == "cancel":
-                return {"conversation": h["handle"], "status": h["status"]}
-            return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],
-                    "note": "a mailbox message; answer it with reply"}
+                if h["status"] != "cancelled":
+                    await self.inbox.cancel_mailbox(h["handle"])
+                    self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                                      destination="mailbox", action="cancel", outcome="ok", ref=h["handle"])
+                return {"conversation": h["handle"], "status": "cancelled"}
+            out = {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"]}
+            recipient = h["owner"]
+            if principal.source == recipient and h["ref"] and h["status"] in ("delivered", "working"):
+                out["note"] = "Answer this message with reply."
+            return out
         if block is None:
             raise CoreError(f"the block behind {ref!r} is not configured")
         action = block.verb(verb)
         if action is None:
             raise CoreError(f"{block.name} conversations take no {verb}")
-        return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        out = await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        if channel_mode:
+            self.modes.audit_action(principal, channel_mode, "reply")
+        return out
+
+    async def notify_mode_owner(self, principal: Principal, conversation: str, text: str, *, to: str | None = None) -> dict[str, Any]:
+        conversation = conversation.strip()
+        try:
+            meta = self.modes.check(principal, conversation, "notify_owner")
+        except PermissionError as exc:
+            raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
+        if meta is None or meta["mode"] != "triage" or not (row := self.inbox.handle(conversation)) or row["status"] == "cancelled":
+            raise CoreRefused(MODE_REQUIRED, "Use an active triage conversation to send the owner a note.")
+        if to is not None and to.strip().lower().removeprefix("agent:") != "owner":
+            raise CoreRefused(TARGET_REQUIRED, "Choose the owner as the target.")
+        if principal.targets is not None:
+            await self.check_target(principal, "agent:owner", meta["project"])
+        text = text.strip()
+        if not 0 < len(text) <= 4000:
+            raise CoreError("Enter a note with up to 4000 characters.")
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text, label, principal.source, owner=principal.trust == "owner")
+        sender = {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                  "client_id": principal.client_id, "origin": principal.origin, "trust": trust}
+        try:
+            note, recipient = self.inbox.store_owner_item(source=principal.source, project=meta["project"], title="Triage note",
+                                                         meta={"from": sender}, kind="triage_note", data={
+                "text": display, "trust": trust, "conversation": conversation, "subject": "Triage note", "from": sender,
+                **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
+            })
+        except sqlite3.Error as exc:
+            refusal = CoreRefused(OWNER_NOTE_REQUIRED)
+            self.modes.audit_action(principal, meta, "notify_owner", "refused", detail=refusal.reason)
+            refusal.audited = True
+            raise refusal from exc
+        self.modes.audit_action(principal, meta, "notify_owner")
+        return {"ok": True, "handle": note, "conversation": note, "to": recipient or "owner",
+                "delivered": recipient is not None, "mailbox": True, "project": meta["project"],
+                **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
-                     handle: str | None = None, handle_meta: dict[str, Any] | None = None) -> Any:
+                     handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:
         """Run one destination action for an origin's caller, enforcing the daily cap and writing the audit record."""
         dest = self.destination(destination)
-        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {})
+        if dry_run and not action.previewable:
+            raise DestinationError(f"{destination} does not support send previews")
+        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {},
+                    dry_run=dry_run)
 
         def record(outcome: str, detail: str | None = None) -> None:
-            if action.is_audited or outcome != "ok":
+            if not dry_run and (action.is_audited or outcome != "ok"):
                 self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                                   action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome,
                                   detail=detail or call.notes.get("detail"), target=call.notes.get("target"), ref=call.notes.get("ref"),
@@ -618,8 +960,18 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"daily cap reached ({used}/{dest.daily_cap})")
                 raise DestinationError(f"daily {destination} {action.name} cap reached ({used}/{dest.daily_cap} today, {self.cfg.timezone}); try tomorrow or raise destinations.{destination}.daily_cap")
+        if dry_run:
+            return await action.handler(call, **kwargs)
         try:
             out = await action.handler(call, **kwargs)
+        except PolicyRefusal as e:
+            if not e.audited:
+                self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                                  destination=destination, action=action.name, outcome="refused", detail=e.reason)
+                e.audited = True
+            if isinstance(e, DestinationError):
+                raise
+            raise DestinationError(str(e)) from e
         except DestinationError as e:
             record("refused", str(e))
             raise
@@ -647,11 +999,16 @@ class Switchboard:
 
     async def set_route(self, principal: Principal, *, destination: str, agent: str | None, project: str | None, target: dict[str, Any],
                         defaults: dict[str, Any] | None, allow_override: bool, note: str = "") -> dict[str, Any]:
-        dest = self.destination(destination)
         if project:
             self.project(project)
         try:
-            target, defaults = await dest.validate_route_target(target, defaults or {})
+            if destination == "agent":
+                name = str(target.get("agent") or "").strip().lower()
+                if name not in self.known_agents():
+                    raise DestinationError(f"Choose a known agent with targets. Agent {name!r} is unknown.")
+                target, defaults = {"agent": name, "name": f"agent:{name}"}, {}
+            else:
+                target, defaults = await self.destination(destination).validate_route_target(target, defaults or {})
         except DestinationError as e:
             self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                               action="route_set", outcome="refused", detail=str(e), target=f"{agent or '*'}/{project or '*'}")
@@ -660,7 +1017,7 @@ class Switchboard:
                             allow_override=allow_override, note=note, by=principal.source)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return r.as_dict()
 
     def changed(self) -> None:
@@ -671,11 +1028,11 @@ class Switchboard:
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-    def remove_route(self, principal: Principal, *, destination: str, agent: str | None, project: str | None) -> dict[str, Any]:
+    def remove_route(self, principal: Principal, *, destination: str | tuple[str, ...], agent: str | None, project: str | None) -> dict[str, Any]:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
         self.changed()
-        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=r.destination,
+                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return {"removed": r.as_dict()}
 
     # Projects: automatic links and routes ------------------------------------------------------
@@ -704,39 +1061,245 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source="auto", client=principal.client_id, destination=destination,
                           action=action, outcome="ok", target=target, excerpt=excerpt, detail=f"automatic, during a call by {principal.source}")
 
-    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
+    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "", *, detail: str | None = None) -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
-                          action=action, outcome="ok", target=target, excerpt=excerpt)
+                          action=action, outcome="ok", target=target, excerpt=excerpt, detail=detail)
+
+    def allows_memory(self, principal: Principal, scope: str) -> bool:
+        if not principal.allows(scope):
+            return False
+        if scope.startswith("project:") and not principal.allows_private_memory(scope):
+            row = self.store.one("SELECT private FROM projects WHERE slug = ?", (scope[8:],))
+            return row is None or not row["private"]
+        return True
+
+    def check_memory_scope(self, principal: Principal, scope: str) -> None:
+        if not self.allows_memory(principal, scope):
+            raise MemoryRefused(SCOPE_REQUIRED)
+
+    def check_memory_writer(self, principal: Principal, scope: str, writer: str | None) -> None:
+        self.check_memory_scope(principal, scope)
+        if principal.is_memory_owner:
+            return
+        if scope == GENERAL:
+            raise MemoryRefused(OWNER_REQUIRED)
+        if writer is None or writer != principal.memory_writer:
+            raise MemoryRefused(MEMORY_WRITER_REQUIRED)
+
+    def memory_actor(self, principal: Principal) -> dict[str, Any]:
+        return {"source": principal.source, "writer": principal.memory_writer,
+                "trust": "owner" if principal.kind == "owner_session" else "agent",
+                "check_writer": lambda scope, writer: self.check_memory_writer(principal, scope, writer)}
+
+    def memory_path(self, principal: Principal, path: str) -> MemoryPath:
+        parsed = MemoryPath.parse(path)
+        if parsed.scope is not None and not self.allows_memory(principal, parsed.scope):
+            raise MemoryRefused("memory not found", missing_path(parsed.path))
+        return parsed
+
+    def memory_directory_scopes(self, principal: Principal) -> list[str]:
+        scopes = [GENERAL, *(p.scope for p in self.projects.list(include_archived=True))]
+        scopes.extend(r["scope"] for r in self.store.q("SELECT DISTINCT scope FROM memories WHERE scope LIKE 'agent:%' AND deleted_at IS NULL"))
+        scopes.extend(s for s in (principal.memory_grants if principal.kind == "connect" else principal.scopes or ())
+                      if s.startswith("agent:"))
+        if AGENT_RE.fullmatch(principal.source):
+            scopes.append(f"agent:{principal.source}")
+        return [s for s in dict.fromkeys(scopes) if self.allows_memory(principal, s)]
+
+    def write_memory(self, principal: Principal, *, scope: str, **fields: Any) -> dict[str, Any]:
+        scope = scope.strip().lower()
+        if not self.allows_memory(principal, scope):
+            raise MemoryRefused(SCOPE_REQUIRED, f"{scope} is outside this key's grants.")
+        out = self.memory.write(source=principal.source, scope=scope, writer_credential=principal.memory_writer,
+                                content_trust="owner" if principal.kind == "owner_session" else "agent",
+                                check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer), **fields)
+        if out["action"] != "duplicate":
+            self.audit_memory(principal, "memory_write", out["scope"], detail=memory_label(out["title"]))
+        return out
+
+    def read_memory(self, principal: Principal, *, path: str | None = None, **fields: Any) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        out = self.memory.read(path=parsed, **fields)
+        self.check_memory_scope(principal, out["scope"])
+        out["title"] = memory_label(out["title"])
+        out["body"] = frame_entry(out, out["body"])
+        out["history"] = [{k: rev[k] for k in ("rev", "at", "source", "action")} for rev in out["history"]]
+        return out
+
+    def view_memory(self, principal: Principal, path: str, view_range: list[int] | None) -> str:
+        parsed = self.memory_path(principal, path)
+        scopes = self.memory_directory_scopes(principal) if parsed.key is None else []
+        return self.memory.view(parsed, scopes, view_range)
+
+    def create_memory(self, principal: Principal, path: str, file_text: str, tags: list[str] | None,
+                      confirm_general: bool, overwrite: bool) -> str | dict[str, Any]:
+        parsed = self.memory_path(principal, path)
+        if parsed.key is None:
+            raise MemoryError_("Error: Use a file ending in .md or .txt.")
+        body = unframe_memory(file_text)
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        heading = next((h[1] for line in lines if (h := re.fullmatch(r"#{1,6}\s+(.+?)(?:\s+#+)?", line))), "")
+        title = (heading or (lines[0] if lines else parsed.key))[:MAX_TITLE]
+        out = self.write_memory(principal, scope=parsed.scope, namespace=parsed.namespace, key=parsed.key, title=title, body=file_text,
+                                tags=tags, confirm_general=confirm_general, path=parsed, overwrite=overwrite)
+        return out if out["action"] == "duplicate" else f"File created successfully at: {out['path']}"
+
+    def delete_memory(self, principal: Principal, id: str | None = None, *, path: str | None = None) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        if parsed and parsed.key is None:
+            self.memory.view(parsed, self.memory_directory_scopes(principal))
+            raise MemoryError_(f"Error: Delete files one at a time: {parsed.normalized} is a folder.")
+        out = self.memory.delete(source=principal.source, id=id, path=parsed,
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
+        self.audit_memory(principal, "memory_delete", out["deleted"], detail="Deleted memory.")
+        return out
+
+    def replace_memory_text(self, principal: Principal, path: str, old_str: str, new_str: str) -> str:
+        out = self.memory.replace_text(self.memory_path(principal, path), old_str, new_str, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", path)
+        return out
+
+    def insert_memory_text(self, principal: Principal, path: str, insert_line: int, insert_text: str) -> str:
+        out = self.memory.insert(self.memory_path(principal, path), insert_line, insert_text, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", path)
+        return out
+
+    def edit_memory(self, principal: Principal, id: str, title: str, body: str, tags: list[str] | None = None) -> dict[str, Any]:
+        out = self.memory.edit_entry(id, title, body, tags, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", id)
+        return out
+
+    def rename_memory(self, principal: Principal, new_path: str, *, old_path: str | None = None, id: str | None = None) -> str:
+        old = self.memory_path(principal, old_path) if old_path is not None else None
+
+        def check_target(source: str, target: str) -> None:
+            if target == GENERAL and source != GENERAL and not principal.is_memory_owner:
+                raise MemoryRefused(OWNER_REQUIRED)
+            self.check_memory_scope(principal, target)
+
+        out = self.memory.rename(source=principal.source, id=id, old=old, new=self.memory_path(principal, new_path),
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer),
+                                 check_target=check_target)
+        self.audit_memory(principal, "memory_rename", id or old.normalized, detail="Renamed memory.")
+        return out
+
+    def memory_history(self, principal: Principal, *, id: str | None, path: str | None, limit: int) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        row = self.memory.locate(self.store, id, parsed, deleted=True)
+        if not self.allows_memory(principal, row["scope"]):
+            raise MemoryNotFound("memory not found")
+        entry = self.memory.read(id=row["id"], deleted=True, history_limit=limit)
+        self.check_memory_scope(principal, entry["scope"])
+        for rev in entry["history"]:
+            rev["title"] = memory_label(rev["title"])
+            rev["excerpt"] = frame_entry(entry, rev["excerpt"], by=rev["source"], at=rev["at"], trust=rev["trust"] or "agent")
+        return {"id": entry["id"], "path": entry["path"], "history": entry["history"]}
+
+    def restore_memory(self, principal: Principal, rev: int, *, id: str | None = None, path: str | None = None) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        out = self.memory.edit(id=id, path=parsed, rev=rev, action=f"restore {rev}", **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_restore", out["id"], detail=f"Restored revision {rev}.")
+        return {"id": out["id"], "path": out["path"], "restored": rev}
+
+    def memory_settings(self) -> dict[str, bool]:
+        row = self.store.one("SELECT value FROM settings WHERE key = 'memory.sync'")
+        return {"sync": row["value"] == "true" if row is not None else self.cfg.memory_sync}
+
+    def set_memory_setting(self, principal: Principal, sync: bool) -> dict[str, bool]:
+        if not principal.is_memory_owner:
+            raise MemoryRefused(OWNER_REQUIRED)
+        self.store.x("INSERT INTO settings(key, value, updated_at, updated_by) VALUES ('memory.sync', ?, ?, ?)"
+                     " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+                     ("true" if sync else "false", self.clock(), principal.source))
+        self.audit_memory(principal, "memory_settings", "memory.sync", detail=self.memory_sync_status())
+        return {"sync": sync}
+
+    def memory_sync_status(self) -> str:
+        return "Memory sync is on." if self.memory_settings()["sync"] else "Memory sync is off."
+
+    def memory_summary(self, principal: Principal, project: str | None, scopes: list[str] | None, limit_chars: int) -> str:
+        slug = (project or "").strip().lower().removeprefix("project:")
+        if scopes is not None:
+            requested = [s.strip().lower() for s in scopes]
+        elif slug:
+            requested = [f"project:{slug}", GENERAL] if slug != GENERAL else [GENERAL]
+        else:
+            requested = [s for s in principal.memory_grants if not s.startswith("agent:")] if principal.kind == "connect" else [GENERAL]
+        if AGENT_RE.fullmatch(principal.source):
+            requested.append(f"agent:{principal.source}")
+        granted = [s for s in dict.fromkeys(requested) if self.allows_memory(principal, s)]
+        return self.memory.metadata_summary(granted, limit_chars, self.memory_sync_status())
+
+    def sync_memory(self, principal: Principal, source: str, items: list[dict[str, Any]], project: str | None = None,
+                    scope: str | None = None) -> dict[str, Any]:
+        if source not in SYNC_SOURCES:
+            raise MemoryError_(f"Use one of these memory sources {SYNC_SOURCE_LABELS}.")
+        if not AGENT_RE.fullmatch(principal.source):
+            raise MemoryError_("Use a credential with an agent name.")
+        if len(items) > 50:
+            raise MemoryError_("Sync at most 50 items per call.")
+        identity = f"{principal.source}/{source}"
+        if not self.memory_settings()["sync"]:
+            self.audit_memory(principal, "memory_sync", identity, detail=json.dumps({"skipped": len(items)}))
+            raise MemoryRefused("The owner turned memory sync off.")
+        fallback = GENERAL if self.allows_memory(principal, GENERAL) else f"agent:{principal.source}"
+        default = scope or (f"project:{project.strip().lower().removeprefix('project:')}" if project else fallback)
+        result = []
+        for item in items:
+            target = (item.get("scope") or default).strip().lower()
+            namespace = (item.get("namespace") or f"synced/{source}").strip().strip("/").lower()
+            result.append(self.memory.sync_item(source=principal.source, sync_source=identity, scope=target, namespace=namespace,
+                                                item=item, writer=principal.memory_writer,
+                                                check_scope=lambda scope: self.allows_memory(principal, scope),
+                                                check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer)))
+        counts = dict(Counter(row["action"] for row in result))
+        self.audit_memory(principal, "memory_sync", identity, detail=json.dumps(counts, sort_keys=True))
+        return {"items": result, "counts": counts}
+
+    def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
+        to_scope = to_scope.strip().lower()
+        if to_scope == GENERAL and not promote:
+            raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        if to_scope == GENERAL and not principal.is_memory_owner:
+            raise MemoryRefused(OWNER_REQUIRED)
+        self.check_memory_scope(principal, to_scope)
+        out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
+                               check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
+        self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
+        return out
 
     # Context pack -----------------------------------------------------------------------------
 
-    async def context_pack(self, principal: Principal, project: str | None) -> str:
-        p = self.project(project)
-        if p and not principal.allows(p.scope):
-            raise CoreError(f"{principal.source} may not read {p.scope}")
-        if not p and not principal.allows(GENERAL):
-            raise CoreError(f"{principal.source} may not read general; pass the project you work in")
-        general = principal.allows(GENERAL)
+    async def context_pack(self, principal: Principal, project: str | None, scopes: list[str]) -> str:
+        p = self.project(None if project and project.strip().lower().removeprefix("project:") == GENERAL else project)
+        if p and not self.allows_memory(principal, p.scope):
+            raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read {p.scope}")
+        scopes = [s for s in scopes if self.allows_memory(principal, s)]
+        general = GENERAL in scopes
         now = self.clock()
         out = [f"# Shared context (switchboard, {iso(now)}){f' for project {p.slug}' if p else ''}"]
 
         def section(title: str, entries: list[dict[str, Any]]) -> None:
             if entries:
                 out.append(f"\n## {title}")
-                out.extend(f"- **{e['title']}** ({e['scope']}/{e['namespace']}, {e['source']}, {e['updated_at'][:10]}, id {e['id']}): {e['body'].strip()}" for e in entries)
+                out.extend(f"- **{memory_label(e['title'])}** ({e['scope']}/{e['namespace']}, {memory_label(e['source'])}, id {e['id']}):\n"
+                           f"{frame_entry(e, e['body'].strip())}" for e in entries)
 
         if p:
             out.append(f"\n## Project {p.name} ({p.scope})" + (f"\n{p.description}" if p.description else "") + (f"\nLinks: {p.links}" if p.links else ""))
             if p.archived:
                 out.append("This project is archived.")
-            section(f"{p.slug}: memory", self.memory.recent(scopes=[p.scope], limit=12, body_limit=500))
+            if p.scope in scopes:
+                section(f"{p.slug}: memory", self.memory.recent(scopes=[p.scope], limit=12, body_limit=500))
+        if extra := [s for s in scopes if s != GENERAL and (p is None or s != p.scope)]:
+            section("Other granted memory", self.memory.recent(scopes=extra, limit=12, body_limit=500))
         if general:
             section("General: profile", self.memory.recent(scopes=[GENERAL], namespace="profile", limit=8, body_limit=500))
             section("General: recent decisions", self.memory.recent(scopes=[GENERAL], namespace="decisions", since=now - 30 * 86400, limit=8, body_limit=300))
         other = self.memory.recent(scopes=[GENERAL], since=now - 7 * 86400, exclude_namespaces=("profile", "decisions"), limit=10, body_limit=0) if general else []
         if other:
             out.append("\n## General: other changes this week")
-            out.extend(f"- {e['title']} ({e['namespace']}, {e['source']}, id {e['id']})" for e in other)
+            out.extend(f"- {memory_label(e['title'])} ({e['namespace']}, {memory_label(e['source'])}, id {e['id']})" for e in other)
         for name, d in self.destinations.items():
             try:
                 text = await d.context_section(principal, p)
@@ -744,5 +1307,13 @@ class Switchboard:
                 text = f"## {d.title or name}\nCould not read: {e}"
             if text:
                 out.append("\n" + text)
-        text = "\n".join(out)
-        return text[:PACK_LIMIT] + ("\n…(truncated)" if len(text) > PACK_LIMIT else "")
+        parts, used = [], 0
+        for part in out:
+            if used + len(part) > PACK_LIMIT:
+                if "\n[swb memory " not in part:
+                    parts.append(part[:PACK_LIMIT - used])
+                parts.append("…(truncated)")
+                break
+            parts.append(part)
+            used += len(part) + 1
+        return "\n".join(parts)

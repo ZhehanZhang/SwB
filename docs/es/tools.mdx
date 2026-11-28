@@ -1,0 +1,230 @@
+---
+title: Herramientas
+description: Las herramientas MCP que SwB da a tus agentes.
+---
+
+`tools/list` muestra las herramientas que permite tu inicio de sesión. Un inicio de sesión de propietario con acceso completo muestra las herramientas de todos los bloques activos.
+
+## Claves emparejadas
+
+Una clave emparejada puede usar estas herramientas dentro del acceso que le concede el propietario.
+
+| Uso | Herramientas y límites |
+| - | - |
+| Mensajes | Usa `send` y `targets`. Usa `agent_send` cuando los nombres antiguos están activos. Usa `inbox`, `wait`, `reply`, `status`, `result`, `cancel` y `get_message` dentro del acceso a conversaciones de tu clave |
+| Memoria y proyectos | Usa `context_pack` y `project_list` dentro del acceso que permite tu clave. Usa las herramientas de memoria en los ámbitos concedidos |
+| Rutas | Usa `routes_list` y `routes_resolve`. Para `routes_set` y `routes_remove`, pon en `agent` el nombre de tu propio agente. Usa un proyecto dentro de los ámbitos de tu clave |
+| Configuración | Usa `switchboard_status` y `modes_status` para comprobar el estado. Usa `connect` para obtener instrucciones de cliente. Usa el inicio de sesión del propietario para configurar bloques y emitir códigos de emparejamiento |
+| Bloques | Usa las herramientas de bloque dentro del acceso concedido y de las acciones que permite el modo de canal |
+
+`login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` y `visibility_set` exigen el inicio de sesión del propietario con acceso completo. Úsalo también para `project_create`, `project_update`, `project_sync` y `space_mode`. Ese inicio de sesión da además acceso a `memory_promote`, `routine_register`, `routine_add`, `routine_remove`, `discord_provision` y `telegram_provision`.
+
+El propietario puede limitar las herramientas con `auth.key_tools` y los destinos de envío con `auth.key_targets`. El ajuste `auth.key_scopes` limita el enrutamiento, los mensajes y las conversaciones. Las herramientas de memoria usan las concesiones que SwB guarda para cada clave emparejada.
+
+## Mensajes
+
+| Herramienta | Uso |
+| - | - |
+| `send` | Pon el trabajo o el mensaje en `task`. Indica un destino en `to`. Deja `to` vacío para usar una ruta cuando la clave lo permita |
+| `agent_send` | Herramienta obsoleta. Pasa el nombre del agente en `to`, por ejemplo `to="codex"`. `blocks.mcp.legacy_aliases` la activa de forma predeterminada. En llamadas nuevas, usa `send` con `to="agent:codex"` |
+| `wait` | Espera mensajes o respuestas nuevos |
+| `inbox` | Lee tu bandeja de entrada y devuelve el resultado al momento |
+| `reply` | Pasa en `conversation` el `handle` de un envío o de un elemento de la bandeja de entrada. Pon la respuesta en `text` |
+| `status` | Muestra el estado de una conversación. Para Capy, usa `messages` para indicar el número de mensajes recientes. Usa `include_tools=true` para incluir la actividad de herramientas |
+| `switchboard_status` | Muestra tu identidad de inicio de sesión, los límites de espera, los bloques y el estado de la instancia |
+| `result` | Obtiene la respuesta final de una conversación. Usa `tail` para indicar el número de respuestas o mensajes recientes donde se admita |
+| `cancel` | Deja de seguir una conversación |
+| `targets` | Lista las direcciones de destino disponibles. Tu clave y las reglas del destino controlan adónde puedes enviar |
+| `get_message` | Lee un mensaje guardado con el `message_id` de tu bandeja de entrada o de un evento MCP |
+
+### Cursor de la bandeja de entrada
+
+Un cursor marca una posición en la bandeja de entrada. Las herramientas `inbox` y `wait` guardan una posición nueva cuando devuelven elementos. Los filtros pueden avanzar una posición aparte. Un `wait` posterior lee desde la posición guardada. Pasa `since_cursor=0` a `inbox` para leer desde el principio. Pasa un `cursor` devuelto como `since_cursor` para continuar desde esa posición.
+
+Los scripts pueden llamar a `GET /inbox/poll` con una clave bearer para esperar elementos en su propia bandeja de entrada. Pasa el `cursor` devuelto como `after` para continuar. De forma predeterminada, empieza en el final actual de la bandeja de entrada. La llamada termina cuando llegan elementos o cuando se agota el tiempo de espera. Deja intacto el cursor de MCP. Usa el [flujo de eventos de la bandeja de entrada](/es/docs/connect#flujo-de-eventos-de-la-bandeja-de-entrada) para recibir los mensajes según llegan. Usa `inbox` para leer los elementos de contexto y los resúmenes de Watch que tu inicio de sesión puede ver.
+
+Para una clave emparejada, un mensaje o una conversación fuera de su acceso da el mismo error que un ID inexistente. Consulta [Claves con límites](/es/docs/security#claves-con-límites).
+
+### Opciones de envío
+
+| Opción | Uso |
+| - | - |
+| `wait_s` | Indica en segundos cuánto esperar la primera respuesta de un bloque. SwB aplica el límite de espera del agente. Usa `wait` para los buzones de agentes |
+| `forward` | Pasa el ID de una conversación apta que recibiste con el nivel de confianza `owner`. SwB envía la respuesta final al remitente original |
+| `new_conversation` | Usa `true` para iniciar un hilo nuevo en el proyecto del Capy Captain. Usa `false` para enviar al hilo del Capy Captain |
+| `files` | Adjunta archivos a una tarea de Capy. Da a cada archivo un `name` y un contenido `text` o `base64`. Usa `media_type` para indicar el tipo de archivo |
+| `repos` | Pasa los repositorios de una tarea de Capy como nombres `owner/repo`. Usa repositorios vinculados al proyecto de SwB |
+| `in_reply_to` | Para responder a un mensaje, usa `reply` con `conversation` en lugar de esta opción |
+
+## Memoria y proyectos
+
+Usa el inicio de sesión del propietario o una credencial con una concesión para el ámbito de memoria. Para actualizar, mover o borrar una entrada como agente, usa la credencial que la escribió por última vez. El propietario puede gestionar cualquier entrada. Los cambios en una entrada existente de `general` exigen acceso de propietario.
+
+| Herramienta | Uso |
+| - | - |
+| `context_pack` | Lee un informe de contexto de un proyecto. Incluye `general` solo cuando la credencial da acceso. Para una clave emparejada, la sección de Capy muestra el trabajo de su agente dentro de sus ámbitos de conversación |
+| `memory_write` | Guarda en un ámbito concedido. Pasa `scope`, `namespace`, `title` y `body`. Un namespace agrupa entradas dentro de un ámbito. Usa hasta tres niveles en minúscula, como `notes/meetings`. Para la memoria de un proyecto, pasa el mismo proyecto en `project` y en `scope`. Para escribir en `general`, pide confirmación al propietario. Después usa `confirm_general=true` |
+| `memory_search` | Busca con `query`. Pasa `project` para ese proyecto y la memoria `general` concedida. Usa `include_general=false` para buscar solo en ese proyecto. Usa `scopes` para concesiones exactas como `agent:<name>` |
+| `memory_list` | Lista entradas con los mismos parámetros de ámbito que `memory_search` |
+| `memory_read` | Lee una entrada con su historial en un ámbito concedido |
+| `memory_delete` | Borra una entrada en un ámbito concedido |
+| `memory_move` | Mueve una entrada a un ámbito de proyecto o de agente. Necesitas concesiones para los dos ámbitos |
+| `memory_promote` | Mueve una entrada a `general`. Usa el inicio de sesión del propietario |
+| `memory_summary` | Carga un índice breve de la memoria concedida al inicio de una sesión |
+| `memory_view` | Muestra una carpeta o un archivo dentro de `/memories`. Consulta [Memoria](/es/docs/memory) |
+| `memory_create` | Crea un archivo en la carpeta de un tema |
+| `memory_str_replace` | Cambia un pasaje exacto de un archivo |
+| `memory_insert` | Añade texto después de una línea |
+| `memory_rename` | Mueve un archivo o la carpeta de un tema a una ruta nueva |
+| `memory_history` | Muestra cada cambio de una entrada |
+| `memory_restore` | Recupera una versión anterior de una entrada |
+| `memory_sync` | Copia en SwB los recuerdos de la memoria propia del agente |
+| `memory_settings` | Activa o desactiva la sincronización de memoria. Usa el inicio de sesión del propietario |
+| `memory_export` | Descarga toda la memoria como un archivo zip. Usa el inicio de sesión del propietario |
+| `memory_import` | Carga la memoria desde un archivo zip. Usa el inicio de sesión del propietario |
+| `memory_backup_configure` | Configura el repositorio de la copia de seguridad en Git. Usa el inicio de sesión del propietario |
+| `memory_backup_status` | Muestra el estado de la copia de seguridad en Git. Usa el inicio de sesión del propietario |
+| `memory_backup_now` | Inicia ahora una copia de seguridad en Git. Usa el inicio de sesión del propietario |
+| `memory_backup_restore` | Carga la memoria desde la copia de seguridad en Git. Usa el inicio de sesión del propietario |
+| `project_list` | Lista los proyectos y sus vínculos |
+| `project_create` | Crea un proyecto |
+| `project_update` | Cambia el nombre de un proyecto, lo vincula, lo archiva o lo hace privado |
+| `project_sync` | Vuelve a vincular los proyectos con sus equivalentes |
+
+Usa `links` en `project_update` para definir estos valores. SwB ofrece las claves de vínculo de proyecto de los agentes y bloques configurados.
+
+| Clave | Valor |
+| - | - |
+| `repos` | Lista de nombres de repositorio con la forma `owner/repo` |
+| `claude_project` | Nombre o ID del proyecto de Claude |
+| `chatgpt_project` | Nombre o ID del proyecto de ChatGPT |
+| `capy_project` | Nombre o ID del proyecto de Capy |
+
+Un proyecto privado exige una concesión que nombre ese proyecto o acceso de propietario. Para `memory_search` y `memory_list`, indica el proyecto privado en `project`. Usa `scopes` para los demás proyectos públicos a los que tengas acceso.
+
+## Configuración
+
+| Herramienta | Uso |
+| - | - |
+| `connect` | Obtiene el siguiente paso de configuración de una plataforma |
+| `connect_code` | Crea un código de emparejamiento para un agente nuevo |
+| `connect_list` | Lista las claves de agente |
+| `connect_revoke` | Borra una clave de agente |
+| `login_link` | Crea un enlace de inicio de sesión de un solo uso para el propietario |
+| `modes_status` | Muestra los modos, los destinos y los problemas de configuración de los canales y repositorios a los que tienes acceso |
+| `space_mode` | Define como propietario el modo, el proyecto y las acciones permitidas. Usa `inherit` para borrar el ajuste |
+| `visibility_list` | Muestra las reglas de acceso predeterminadas y las reglas de cada recurso. Usa el inicio de sesión del propietario |
+| `visibility_set` | Define como propietario si un recurso es privado o compartido. Las herramientas siguen siendo privadas |
+
+### Herramientas de companion
+
+Usa estas herramientas como propietario.
+
+| Herramienta | Título | Uso |
+| - | - | - |
+| `companion_code` | Pair a companion | Crea un código de emparejamiento para un dispositivo |
+| `companion_list` | List companions | Muestra los dispositivos emparejados, su estado y sus acciones |
+| `companion_invoke` | Run a companion action | Ejecuta una acción en un dispositivo conectado. Obtén el ID del dispositivo y los detalles de la acción con `companion_list` |
+| `companion_revoke` | Disconnect a companion | Revoca la clave del dispositivo y cierra su conexión |
+
+## Rutas
+
+Una ruta elige un destino para `send`. Usa un bloque que acepte rutas, como `capy`, `claude-routine` o `grok-routine`. Usa `to="agent:<name>"` para llegar directamente al buzón de un agente. Usa `to="agent:muse"` para enviar al buzón de Muse. Usa `to="muse:gadget:muse"` para [despertar a Muse](/es/docs/setup/muse#despertar-a-muse-en-tiempo-real).
+
+| Herramienta | Uso |
+| - | - |
+| `routes_list` | Lista todas las rutas, incluidas las de buzones |
+| `routes_set` | Guarda una ruta. Da a `target` un buzón de agente, como `agent:<name>`, o una dirección de bloque, como `capy:captain:<name>`. Usa `agent` o `project` para limitar la ruta |
+| `routes_resolve` | Muestra la ruta que coincide con un destino. Pasa `block`, como `grok-routine` o `agent` |
+| `routes_remove` | Borra la ruta del `agent` y el `project` exactos en el `block` elegido |
+
+Usa `block` para comprobar o borrar la ruta de un destino. De forma predeterminada, `routes_resolve` comprueba primero el agente y el proyecto juntos, luego el proyecto, luego el agente y al final la ruta global. En cada nivel comprueba los bloques en orden y después `agent`. De forma predeterminada, `routes_remove` sigue ese mismo orden para el agente y el proyecto exactos.
+
+## Herramientas de bloque
+
+### Capy
+
+Los nombres antiguos de las herramientas de Capy aparecen cuando `blocks.mcp.legacy_aliases` está activo.
+| Herramienta | Uso |
+| - | - |
+| `capy_captains` | Lista los Capy Captains a los que tiene acceso tu conexión de Capy |
+| `capy_captain_digest` | Lee el resumen de un Capy Captain y muestra qué hilos de su equipo están trabajando o necesitan la atención del propietario. Usa el inicio de sesión del propietario |
+| `capy_list` | Lista el trabajo enviado a través de SwB o los hilos del equipo de un Capy Captain o de un proyecto de Capy vinculado. Una clave emparejada ve solo el trabajo de su agente dentro de sus ámbitos |
+| `capy_delegate` | Envía trabajo a Capy. En llamadas nuevas, usa `send` con `to="capy"` |
+| `capy_inbox` | Lee tu bandeja de entrada de Capy y devuelve el resultado al momento. En llamadas nuevas, usa `inbox` con `block="capy"` |
+| `capy_wait` | Espera el siguiente elemento de tu bandeja de entrada. En llamadas nuevas, usa `wait` |
+| `capy_status` | Muestra el estado y los mensajes recientes de un hilo de Capy. En llamadas nuevas, usa `status` |
+| `capy_reply` | Envía un mensaje de seguimiento a un hilo de Capy. En llamadas nuevas, usa `reply` |
+| `capy_result` | Obtiene la última respuesta de un hilo de Capy con los enlaces disponibles a archivos y pull requests. En llamadas nuevas, usa `result` |
+| `capy_cancel` | Deja de seguir el trabajo enviado a Capy. El hilo de Capy puede continuar. En llamadas nuevas, usa `cancel` |
+
+### Rutinas de Claude Code
+
+Estas herramientas aparecen cuando el bloque `claude-routine` está activo. Una rutina es una tarea de Claude Code que SwB puede iniciar.
+
+| Herramienta | Uso |
+| - | - |
+| `routine_register` | Registra una rutina y obtiene un enlace de entrega para que el propietario escriba su token |
+| `routine_list` | Lista las rutinas que SwB puede iniciar |
+| `routine_pickup` | Recoge el mensaje cuando una rutina empieza con un prompt vacío |
+| `routine_add` | Añade como propietario una rutina con su token |
+| `routine_remove` | Borra como propietario una rutina guardada a través de SwB |
+
+### Slack
+
+| Herramienta | Uso |
+| - | - |
+| `slack_workspaces` | Lista los espacios de trabajo de Slack que puedes usar, las cuentas disponibles en cada uno y sus reglas de publicación |
+| `slack_channels` | Lista los canales visibles para la cuenta de Slack elegida. La lista marca los canales que SwB vigila |
+| `slack_search` | Busca mensajes en un espacio de trabajo con la cuenta de Slack del propietario |
+| `slack_history` | Lee los mensajes recientes de un canal, del más nuevo al más antiguo |
+| `slack_thread` | Lee el primer mensaje de un hilo y sus respuestas, del más antiguo al más nuevo |
+| `slack_watched` | Lista los canales cuyos mensajes nuevos llegan a tu bandeja de entrada de SwB |
+| `slack_events` | Lee los mensajes recientes de los canales vigilados, las menciones al bot y los mensajes directos. Los elementos más nuevos van primero |
+| `slack_wait` | Espera el siguiente elemento de Slack en tu bandeja de entrada |
+| `slack_personas` | Muestra los nombres e imágenes disponibles para las publicaciones del bot y la opción predeterminada |
+| `slack_targets` | Lista los nombres de destino que se escriben después de mencionar al bot en Slack |
+| `slack_post` | Publica como el bot o con la cuenta de Slack del propietario. Usa `thread_ts` para publicar una respuesta en un hilo. Las reglas de publicación pueden exigir la aprobación del propietario |
+| `slack_react` | Añade una reacción con emoji a un mensaje. Se aplican las mismas reglas que a `slack_post` |
+| `slack_request_write` | Envía al propietario una propuesta de publicación en Slack para que la apruebe |
+| `slack_write_requests` | Comprueba el estado de tus solicitudes de aprobación de Slack. Usa `request_id` para leer una solicitud |
+
+### Discord
+
+| Herramienta | Uso |
+| - | - |
+| `discord_status` | Muestra la conexión de Discord, los espacios y la configuración pendiente |
+| `discord_provision` | Obtiene como propietario los enlaces de configuración y un enlace de un solo uso para escribir el token del bot |
+| `discord_post` | Publica como el bot en un canal o hilo con una concesión del propietario |
+
+### Telegram
+
+| Herramienta | Uso |
+| - | - |
+| `telegram_status` | Muestra la conexión de Telegram, los espacios y la configuración pendiente |
+| `telegram_provision` | Obtiene como propietario los enlaces de configuración y un enlace de un solo uso para escribir el token del bot |
+| `telegram_post` | Publica como el bot en un chat o hilo con una concesión del propietario |
+
+### GitHub
+
+En las acciones de conversación de GitHub, pasa el ID de conversación de SwB en `conversation` o en `handle`. Usa `text` con `github_reply` y `github_notify_owner`.
+
+| Herramienta | Uso |
+| - | - |
+| `github_status` | Comprueba el webhook, los modos de los repositorios y los permisos de la GitHub App |
+| `github_label` | Añade etiquetas existentes a una issue o una pull request |
+| `github_comment` | Comenta en una issue o una pull request |
+| `github_open_issue` | Abre una issue en un repositorio |
+| `github_link_duplicate` | Vincula una issue con la original del mismo repositorio. SwB añade `duplicate` y cierra la duplicada como `not_planned` |
+| `github_notify_owner` | Envía al propietario una nota en la bandeja de entrada con un enlace a la issue o la pull request que inició la conversación |
+| `github_reply` | Responde en el hilo de GitHub que inició la conversación de SwB |
+
+### [Webhooks](/es/docs/blocks/webhooks)
+
+| Herramienta | Uso |
+| - | - |
+| `webhook_create` | Crea un webhook entrante o saliente con un nombre |
+| `webhook_list` | Lista los webhooks con sus direcciones, recuentos y estado del secreto |
+| `webhook_rotate` | Obtiene un enlace de entrega para un secreto nuevo y define un periodo de gracia opcional |
+| `webhook_revoke` | Detiene un webhook y borra sus secretos guardados |
+| `webhook_test` | Envía un evento entrante o un mensaje saliente de ejemplo |

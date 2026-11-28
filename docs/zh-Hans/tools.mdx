@@ -1,0 +1,239 @@
+---
+title: 工具
+description: SwB 为智能体提供的 MCP 工具。
+---
+
+`tools/list` 显示你的登录身份有权使用的工具。用权限完整的所有者身份登录，可以看到所有已启用模块的工具。
+
+## 配对密钥
+
+在所有者授予的访问权限内，配对密钥可以使用下列工具。
+
+| 用途 | 工具和限制 |
+| - | - |
+| 消息 | 使用 `send` 和 `targets`。启用旧版名称时，使用 `agent_send`。在密钥的对话访问权限内使用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` |
+| 记忆和项目 | 在密钥允许的访问权限内使用 `context_pack` 和 `project_list`。在已授权的范围内使用记忆工具 |
+| 路由 | 使用 `routes_list` 和 `routes_resolve`。调用 `routes_set` 和 `routes_remove` 时，把 `agent` 设为你自己的智能体名称，并使用密钥范围内的项目 |
+| 设置 | 用 `switchboard_status` 和 `modes_status` 检查状态。用 `connect` 获取客户端的操作说明。设置模块和签发配对码要使用所有者的登录身份 |
+| 模块 | 在获得的访问权限和频道模式允许的操作内使用模块工具 |
+
+`login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要权限完整的所有者登录。`project_create`、`project_update`、`project_sync` 和 `space_mode` 也用它来调用。它还可以使用 `memory_promote`、`routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
+
+所有者可以用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制发送目标。`auth.key_scopes` 这项设置限制路由、消息和对话的访问。记忆工具以 SwB 为每个配对密钥保存的授权为准。
+
+## 消息
+
+| 工具 | 用途 |
+| - | - |
+| `send` | 在 `task` 中填写任务或消息。设置 `to` 选择目标。密钥允许时，把 `to` 留空即可使用路由 |
+| `agent_send` | 已弃用的工具。在 `to` 中传入智能体名称，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 默认启用它。新的调用改用 `send`，并设置 `to="agent:codex"` |
+| `wait` | 等待新消息或新回复 |
+| `inbox` | 读取你的收件箱并立即返回 |
+| `reply` | 在 `conversation` 中传入发送结果或收件箱条目里的 `handle`。在 `text` 中填写回复内容 |
+| `status` | 显示某个对话的状态。如果是 Capy 对话，用 `messages` 指定最近消息的条数。设置 `include_tools=true` 可以包含工具活动 |
+| `switchboard_status` | 显示你的登录身份、等待限制、模块和实例健康状况 |
+| `result` | 获取某个对话的最终回复。在支持的情况下，用 `tail` 设置最近回复或消息的条数 |
+| `cancel` | 停止跟踪某个对话 |
+| `targets` | 列出可用的目标地址。你可以发送到哪里，由你的密钥和目标的规则共同决定 |
+
+在 `send` 中设置 `to="agent:owner"`，即可发消息给所有者。SwB 按[所有者消息规则](/zh-Hans/docs/config#发给所有者的消息)选择接收消息的智能体。
+| `get_message` | 凭收件箱或 MCP Events 中的 `message_id` 读取一条已保存的消息 |
+
+### 读取位置
+
+读取位置（cursor）标记收件箱中的一个位置。`inbox` 和 `wait` 工具返回条目时，会保存新的位置。筛选条件可以推进一个单独的位置。之后的 `wait` 从已保存的位置开始读取。向 `inbox` 传入 `since_cursor=0`，可以从头读取。把返回的 `cursor` 作为 `since_cursor` 传入，可以从这个位置继续。
+
+脚本可以携带 Bearer 密钥调用 `GET /inbox/poll`，等待自己收件箱中的条目。把返回的 `cursor` 作为 `after` 传入，可以从中断处继续。默认从收件箱当前的末尾开始。有条目到达或等待时间结束时，调用返回。MCP 的读取位置保持原样。要在消息到达时立即接收，使用[收件箱事件流](/zh-Hans/docs/connect#收件箱事件流)。要读取你的登录身份可见的上下文条目和 Watch 摘要，使用 `inbox`。
+
+配对密钥请求超出其访问权限的消息或对话时，得到的错误与 ID 不存在时相同。详见[受限密钥](/zh-Hans/docs/security#受限密钥)。
+
+### 发送选项
+
+| 选项 | 用途 |
+| - | - |
+| `wait_s` | 设置等待模块首条回复的时间，单位为秒。SwB 会套用该智能体的等待限制。智能体邮箱使用 `wait` |
+| `forward` | 传入一个符合条件的对话标识，这个对话是你收到的，信任等级为 `owner`。SwB 把最终回复发给最初的发送方 |
+| `new_conversation` | 设为 `true`，在 Capy Captain 的项目中开启一个新线程。设为 `false`，发送到 Capy Captain 的线程 |
+| `files` | 为 Capy 任务附加文件。每个文件要有 `name`，以及 `text` 或 `base64` 内容二者之一。用 `media_type` 设置文件类型 |
+| `repos` | 以 `owner/repo` 形式的名称传入 Capy 任务所用的仓库。使用已关联到 SwB 项目的仓库 |
+| `in_reply_to` | 要回复一条消息，改用 `reply` 并传入 `conversation` |
+
+## 记忆和项目
+
+使用所有者的登录身份，或使用持有该记忆范围授权的凭据。智能体要更新、移动或删除某个条目，使用最后一次写入它的凭据。所有者可以管理任何条目。更改 `general` 中的已有条目需要所有者权限。
+
+| 工具 | 用途 |
+| - | - |
+| `context_pack` | 读取项目简报。只有凭据获得相应访问权限时，简报才包含 `general`。使用配对密钥时，Capy 部分显示所属智能体在对话范围内的任务 |
+| `memory_write` | 保存到已授权的范围。传入 `scope`、`namespace`、`title` 和 `body`。命名空间在一个范围内给条目分组，最多使用 3 层小写名称，例如 `notes/meetings`。写入项目记忆时，在 `project` 和 `scope` 中传入同一个项目。要写入 `general`，先让所有者确认，再设置 `confirm_general=true` |
+| `memory_search` | 用 `query` 搜索。传入 `project` 可以搜索该项目以及已授权的 `general` 记忆。设置 `include_general=false` 则只搜索该项目。用 `scopes` 指定确切的授权范围，例如 `agent:<name>` |
+| `memory_list` | 列出条目，范围参数与 `memory_search` 相同 |
+| `memory_read` | 读取已授权范围内的一个条目及其历史 |
+| `memory_delete` | 删除已授权范围内的一个条目 |
+| `memory_move` | 把一个条目移动到项目范围或智能体范围。两个范围的授权都要具备 |
+| `memory_promote` | 把一个条目移动到 `general`。使用所有者的登录身份 |
+| `memory_summary` | 在会话开始时载入已授权记忆的简短索引 |
+| `memory_view` | 显示 `/memories` 下的文件夹或文件。参阅[记忆](/zh-Hans/docs/memory) |
+| `memory_create` | 在主题文件夹中创建文件 |
+| `memory_str_replace` | 替换文件中一段完全匹配的文本 |
+| `memory_insert` | 在某一行后添加文本 |
+| `memory_rename` | 把文件或主题文件夹移动到新路径 |
+| `memory_history` | 显示条目的每次修改 |
+| `memory_restore` | 恢复条目的早期版本 |
+| `memory_sync` | 把智能体自身记忆中的内容复制到 SwB |
+| `memory_settings` | 开启或关闭记忆同步。使用所有者的登录身份 |
+| `memory_export` | 把全部记忆下载为 zip 文件。使用所有者的登录身份 |
+| `memory_import` | 从 zip 文件载入记忆。使用所有者的登录身份。可设置 `overwrite` 和 `trust_owner` |
+| `memory_backup_configure` | 设置 Git 备份仓库。使用所有者的登录身份 |
+| `memory_backup_status` | 显示 Git 备份状态。使用所有者的登录身份 |
+| `memory_backup_now` | 立即开始 Git 备份。使用所有者的登录身份 |
+| `memory_backup_restore` | 从 Git 备份载入记忆。使用所有者的登录身份。可设置 `overwrite` 和 `trust_owner` |
+| `project_list` | 列出项目及其关联 |
+| `project_create` | 创建项目 |
+| `project_update` | 重命名、关联或归档项目，或把项目设为私有 |
+| `project_sync` | 重新把各个项目关联到其他应用中对应的项目 |
+
+在 `project_update` 中用 `links` 设置下列值。SwB 会根据已配置的智能体和模块提供相应的项目关联键。
+
+| 键 | 值 |
+| - | - |
+| `repos` | 仓库名称列表，格式为 `owner/repo` |
+| `claude_project` | Claude 项目的名称或 ID |
+| `chatgpt_project` | ChatGPT 项目的名称或 ID |
+| `capy_project` | Capy 项目的名称或 ID |
+
+访问私有项目需要一项针对该项目的授权，或者所有者权限。调用 `memory_search` 和 `memory_list` 时，在 `project` 中指定这个私有项目。你有权访问的其他公开项目用 `scopes` 指定。
+
+## 设置
+
+| 工具 | 用途 |
+| - | - |
+| `connect` | 获取某个平台的下一个设置步骤 |
+| `connect_code` | 为新智能体生成配对码 |
+| `connect_list` | 列出智能体密钥 |
+| `connect_revoke` | 移除一个智能体密钥 |
+| `login_link` | 为所有者生成一次性登录链接 |
+| `modes_status` | 显示你有权访问的频道和仓库的模式、目标和设置问题 |
+| `space_mode` | 以所有者身份设置模式、项目和允许的操作。用 `inherit` 清除设置 |
+| `visibility_list` | 显示默认访问规则和各个资源的规则。使用所有者的登录身份 |
+| `visibility_set` | 以所有者身份把资源设为私有或共享。工具始终保持私有 |
+
+### Companion 工具
+
+以所有者身份使用这些工具。
+
+| 工具 | 标题 | 用途 |
+| - | - | - |
+| `companion_code` | Pair a companion | 为设备创建配对码 |
+| `companion_list` | List companions | 查看已配对的设备及其状态和操作 |
+| `companion_invoke` | Run a companion action | 在已连接的设备上执行一项操作。设备 ID 和操作详情从 `companion_list` 获取 |
+| `companion_revoke` | Disconnect a companion | 撤销设备密钥并关闭它的连接 |
+
+## 路由
+
+路由为 `send` 选定目标。使用接受路由的模块，例如 `capy`、`claude-routine` 或 `grok-routine`。用 `to="agent:<name>"` 直接发送到某个智能体的邮箱。用 `to="agent:muse"` 发送到 Muse 邮箱。用 `to="muse:gadget:muse"` [唤醒 Muse](/zh-Hans/docs/setup/muse#实时唤醒-muse)。
+
+| 工具 | 用途 |
+| - | - |
+| `routes_list` | 列出所有路由，包括邮箱路由 |
+| `routes_set` | 保存一条路由。`target` 填智能体邮箱（例如 `agent:<name>`）或模块地址（例如 `capy:captain:<name>`）。用 `agent` 或 `project` 限定路由 |
+| `routes_resolve` | 显示某个目的地匹配到的路由。传入 `block`，例如 `grok-routine` 或 `agent` |
+| `routes_remove` | 在选定的 `block` 上，移除与 `agent` 和 `project` 完全一致的路由 |
+
+用 `block` 可以检查或移除某一个目的地的路由。默认情况下，`routes_resolve` 先检查同时匹配智能体和项目的路由，再依次检查项目、智能体和全局路由。在每一层，它先按顺序检查各个模块，再检查 `agent`。默认情况下，`routes_remove` 针对完全一致的智能体和项目，按同样的目的地顺序检查。
+
+## 模块工具
+
+### Capy
+
+`blocks.mcp.legacy_aliases` 开启时，会出现旧版的 Capy 工具名称。
+
+| 工具 | 用途 |
+| - | - |
+| `capy_captains` | 列出你的 Capy 连接可以访问的 Capy Captain |
+| `capy_captain_digest` | 读取某个 Capy Captain 的摘要，查看团队（crew）中哪些线程正在工作，哪些要由所有者处理。使用所有者的登录身份 |
+| `capy_list` | 列出经 SwB 发送的任务，或某个 Capy Captain 团队中的线程，或关联的 Capy 项目中的线程。配对密钥只能看到所属智能体在其范围内的任务 |
+| `capy_delegate` | 把任务发送给 Capy。新的调用改用 `send`，并设置 `to="capy"` |
+| `capy_inbox` | 读取你的 Capy 收件箱并立即返回。新的调用改用 `inbox`，并设置 `block="capy"` |
+| `capy_wait` | 等待收件箱中的下一个条目。新的调用改用 `wait` |
+| `capy_status` | 显示某个 Capy 线程的状态和最近的消息。新的调用改用 `status` |
+| `capy_reply` | 向某个 Capy 线程发送后续消息。新的调用改用 `reply` |
+| `capy_result` | 获取某个 Capy 线程的最新回复，并附上可用的文件链接和 Pull Request 链接。新的调用改用 `result` |
+| `capy_cancel` | 停止跟踪发送给 Capy 的任务。Capy 线程可以继续运行。新的调用改用 `cancel` |
+
+### Claude Code routine
+
+`claude-routine` 模块开启时，会出现这些工具。routine 是 SwB 可以启动的 Claude Code 任务。
+
+| 工具 | 用途 |
+| - | - |
+| `routine_register` | 注册一个 routine，并获取认领链接，供所有者填写它的令牌 |
+| `routine_list` | 列出 SwB 可以启动的 routine |
+| `routine_pickup` | routine 以空提示词启动时，用它领取消息 |
+| `routine_add` | 以所有者身份添加一个 routine 及其令牌 |
+| `routine_remove` | 以所有者身份移除经 SwB 保存的 routine |
+
+### Slack
+
+| 工具 | 用途 |
+| - | - |
+| `slack_workspaces` | 列出你可以使用的 Slack 工作区、每个工作区中可用的账号，以及它们的发布规则 |
+| `slack_channels` | 列出所选 Slack 账号可见的频道。列表会标出 SwB 监听的频道 |
+| `slack_search` | 用所有者的 Slack 账号搜索某个工作区中的消息 |
+| `slack_history` | 读取频道中最近的消息，最新的排在最前 |
+| `slack_thread` | 读取消息列中的首条消息及其回复，最早的排在最前 |
+| `slack_watched` | 列出受监听的频道，这些频道的新消息会进入你的 SwB 收件箱 |
+| `slack_events` | 读取所监听频道中最近的消息、对机器人的提及和私信。最新的条目排在最前 |
+| `slack_wait` | 等待收件箱中的下一个 Slack 条目 |
+| `slack_personas` | 显示机器人发布消息时可用的名称和头像，以及默认选项 |
+| `slack_targets` | 列出在 Slack 中提及机器人之后可以填写的目标名称 |
+| `slack_post` | 以机器人或所有者的 Slack 账号发布消息。用 `thread_ts` 在消息列中发布回复。发布规则可以要求所有者批准 |
+| `slack_react` | 给一条消息添加表情回应。适用的规则与 `slack_post` 相同 |
+| `slack_request_write` | 把拟发布的 Slack 消息发给所有者审批 |
+| `slack_write_requests` | 查看你的 Slack 审批请求的状态。用 `request_id` 读取某一个请求 |
+
+### Discord
+
+| 工具 | 用途 |
+| - | - |
+| `discord_status` | 显示 Discord 连接、空间和尚待完成的设置 |
+| `discord_provision` | 以所有者身份获取设置链接，以及一个用来填写机器人令牌的一次性链接 |
+| `discord_post` | 获得所有者的授权后，以机器人身份向频道或子区发布消息 |
+
+### Telegram
+
+| 工具 | 用途 |
+| - | - |
+| `telegram_status` | 显示 Telegram 连接、空间和尚待完成的设置 |
+| `telegram_provision` | 以所有者身份获取设置链接，以及一个用来填写机器人令牌的一次性链接 |
+| `telegram_post` | 获得所有者的授权后，以机器人身份向聊天或话题发布消息 |
+
+### GitHub
+
+执行 GitHub 对话操作时，在 `conversation` 或 `handle` 中传入 SwB 对话标识。`github_reply` 和 `github_notify_owner` 要配合 `text` 使用。
+
+| 工具 | 用途 |
+| - | - |
+| `github_status` | 检查 Webhook、仓库模式和 GitHub App 权限 |
+| `github_label` | 为议题或 Pull Request 添加已有的标签 |
+| `github_comment` | 在议题或 Pull Request 下发表评论 |
+| `github_open_issue` | 在仓库中创建议题 |
+| `github_link_duplicate` | 把一个议题关联到同一仓库中的原议题。SwB 会添加 `duplicate`，并以 `not_planned` 关闭重复的议题 |
+| `github_notify_owner` | 投递发给所有者的消息，并附上议题或 Pull Request 的链接 |
+| `github_reply` | 在发起该 SwB 对话的 GitHub 议题或 Pull Request 下回复 |
+
+### [Webhooks](/zh-Hans/docs/blocks/webhooks)
+
+| 工具 | 用途 |
+| - | - |
+| `webhook_create` | 创建一个具名的入站或出站 Webhook |
+| `webhook_list` | 列出各个 Webhook 及其地址、计数和密钥状态 |
+| `webhook_rotate` | 获取一个用来填写新密钥的认领链接，并可设置宽限期 |
+| `webhook_revoke` | 停用一个 Webhook，并删除它已保存的密钥 |
+| `webhook_test` | 发送一个示例入站事件或一条示例出站消息 |
+
+创建出站 Webhook 或轮换它的密钥时，可以设置 `allow_private` 和 `senders`。使用内网 HTTPS 接收端或 443 以外的端口时，把 `allow_private` 设为 `true`。在 `senders` 中填写已连接智能体的地址，授予发送权限。默认只有所有者可以发送。轮换密钥时，省略的字段保留原值。
+
+如果 SwB 拒绝向 `webhook:out` 目标发送消息，会返回 MCP 工具错误。通过 HTTP 调用时，响应状态为 `200`，工具结果中的 `isError` 为 `true`。
+
+对于所有者以外的调用者，目标缺失或超出授权范围时，SwB 都会返回 `No such target.` 错误。

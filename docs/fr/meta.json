@@ -1,0 +1,32 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "get-started",
+    "---Lancer SwB---",
+    "install",
+    "deploy",
+    "cloudflare",
+    "first-run",
+    "owner-login",
+    "operate",
+    "---Connecter des agents---",
+    "connect",
+    "setup",
+    "companion",
+    "---Blocs---",
+    "...blocks",
+    "---Concepts---",
+    "index",
+    "how-it-works",
+    "memory",
+    "channel-modes",
+    "---Référence---",
+    "tools",
+    "config",
+    "credentials",
+    "security",
+    "---",
+    "faq",
+    "about"
+  ]
+}

@@ -1,0 +1,99 @@
+---
+title: 安裝
+description: 使用 uvx、pipx 或 Docker 安裝 SwB。
+---
+
+{/* prepublication */}
+
+SwB 可在 Linux、macOS 和 Windows 上執行。要從原始碼建置 SwB，參閱 [Docker Compose](/zh-Hant/docs/deploy#docker-compose)。套件或映像檔發布後，再使用下列方式。
+
+## 安裝並啟動
+
+準備一個空資料夾來存放 SwB 的檔案。有了擁有者金鑰，`swb` 指令就能以你的身分登入。
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    [安裝 uv](https://docs.astral.sh/uv/getting-started/installation/)。SwB 需要 Python 3.12 或更新版本。
+
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx 會下載並啟動 SwB。在 5 分鐘內開啟終端機顯示的一次性登入連結。在其他範例中，把開頭的 `swb` 換成 `uvx swb-one`。
+  </Tab>
+  <Tab value="pipx">
+    [安裝 pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html)。SwB 需要 Python 3.12 或更新版本。
+
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx 會為你的使用者帳號安裝 `swb` 指令。在 5 分鐘內開啟終端機顯示的一次性登入連結。
+
+    如果 pipx 使用較舊的 Python，改用 `pipx install --python 3.12 swb-one`。
+  </Tab>
+  <Tab value="Docker">
+    [安裝 Docker](https://docs.docker.com/get-started/get-docker/)。
+
+    ```bash
+    (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
+    docker run -d --name swb --env-file .env \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    這些指令會建立私有的 `.env` 檔案並啟動容器。映像檔把資料存放在 `/data`。執行 `docker exec swb swb login-link` 取得登入連結。要在容器內執行其他 SwB 指令，以 `docker exec -it swb swb` 開頭。
+  </Tab>
+</Tabs>
+
+第一次在本機啟動時，`swb up` 會在執行個體資料夾中建立 `.env`、`config/switchboard.yaml` 和 `data/`。之後需要新連結時，執行 `swb login-link`。
+
+如果要在啟動伺服器前先建立這些檔案，執行 `swb init`，再執行 `swb up`。然後開啟第二個終端機，在同一個資料夾中執行 `swb login-link`。
+
+`swb up` 預設監聽 `127.0.0.1` 的 `8870` 連接埠，本機 MCP 網址預設為 `http://localhost:8870/mcp`。要改用其他連接埠，在 shell 或 `.env` 中設定 `SWB_PORT`。
+
+用 `swb up --dir ./my-swb` 指定執行個體資料夾。執行 `swb init`、`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 時，加上相同的 `--dir`。監聽位址、設定檔和資料目錄的說明見[設定](/zh-Hant/docs/config)。
+
+## 檢查伺服器
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+這個請求免登入，會顯示 `status` 和 `version`。執行 `swb status`，或帶著擁有者金鑰呼叫 `/healthz`，可列出各個模組、模組的狀態和缺少的變數。
+
+如果是公開的 SwB 伺服器，使用它的 HTTPS 網址。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
+## 伺服器指令
+
+執行 `swb --help` 查看指令群組。在指令後加上 `--help`，可查看該指令的選項。
+
+| 指令 | 用途 |
+| - | - |
+| `swb init` | 寫入私有的擁有者金鑰和最精簡的設定。 |
+| `swb up` | 在這台電腦上啟動 SwB。 |
+| `swb connect PLATFORM` | 取得連接某個平台的步驟。 |
+| `swb companion` | 配對、執行 Companion，或中斷它的連線。 |
+| `swb hook HARNESS` | 把本機代理的事件轉送給 Companion。 |
+| `swb status` | 顯示狀態和後續步驟。 |
+| `swb login-link` | 建立一次性的擁有者登入連結。 |
+| `swb claim` | 用認領連結或認領碼儲存憑證。 |
+| `swb serve` | 依設定的主機和連接埠執行伺服器。 |
+| `swb export DIR` | 把已儲存的記憶寫成 Markdown 檔案，存到輸出資料夾 `DIR`。 |
+| `swb log [--limit N]` | 印出最近的稽核記錄。預設上限是 `50`。 |
+| `swb config migrate` | 以第 2 版格式印出第 1 版的設定。 |
+| `swb blocks list` | 列出已設定的模組。 |
+| `swb blocks show BLOCK` | 顯示某個模組的設定。 |
+| `swb blocks check` | 檢查模組設定。 |
+| `swb targets` | 列出 `send` 可用的目標。 |
+
+## 版本
+
+{/* prepublication */}
+
+發布後，`swb-one` 套件由 PyPI 提供，`ghcr.io/zhehanzhang/swb` 映像檔由 GitHub Container Registry 提供。要指定某個發行版本，使用 `1.0.0` 這樣的版本號。映像檔標籤 `latest` 會跟著最新的穩定版更新。

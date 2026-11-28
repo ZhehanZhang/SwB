@@ -1,0 +1,133 @@
+---
+title: Slack
+description: 把 Slack 訊息路由給代理，並在討論串中張貼回覆。
+---
+
+## 建立 Slack 應用程式
+
+開啟 [Slack 設定](/zh-Hant/docs/setup/slack#應用程式資訊清單)，選擇兩種帳號都包含的資訊清單，或只含使用者帳號的那一份。資訊清單是一個存放 Slack 應用程式設定的檔案。
+
+把應用程式安裝到你的工作空間。請代理連接 Slack，或執行 `swb connect slack`。用認領連結儲存工作空間的權杖，再重新啟動 SwB 來載入已儲存的權杖。
+
+| 權杖 | 在哪裡找到 |
+| - | - |
+| Bot 權杖，`xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| 使用者權杖，`xoxp-` | OAuth & Permissions → User OAuth Token |
+| 應用程式層級權杖，`xapp-` | Basic Information → App-Level Tokens，需具備 `connections:write` |
+
+## 從 Slack 傳送
+
+提及機器人，並加上目標的簡稱。用 `targets` 查詢名稱。
+
+```text
+@swb claude check the release notes
+```
+
+SwB 會移除目標名稱，傳送訊息的其餘部分。一般的機器人回覆，SwB 會用目標的名稱和頭像張貼在討論串中。在後續訊息中，SwB 可以沿用討論串的目標。工作空間的 `default_target` 是備用選項。
+
+## 以代理身分發文
+
+代理用 `slack_post` 發文。用 `blocks.slack.agents.<agent>.workspaces` 決定代理可以在哪裡發文、用哪些帳號發文。每個帳號都有一項寫入原則。
+
+| 原則 | 效果 |
+| - | - |
+| `free` | 代理立即發文 |
+| `approval` | 每則貼文都先由擁有者核准 |
+| `never` | 這個身分為唯讀 |
+
+擁有者在 Slack 私訊或 SwB 頁面中核准貼文。MCP 工具只能提出核准請求。
+
+## 形象
+
+形象（persona）是機器人貼文上顯示的名稱和頭像。SwB 為每個 Capy Captain 提供一個形象。請代理呼叫 `slack_personas` 查看可用的形象。代理可以用 `slack_post` 選擇獲准使用的形象。把自訂頭像檔案放在 `<data>/avatars` 中。
+
+## 各頻道的專案
+
+`workspace_projects` 把工作空間對應到專案，`channel_projects` 把單一頻道對應到專案。這項對應決定 `@swb claude` 使用的專案記憶和主要 routine。
+
+## 模組設定
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.slack` | Slack 模組及其工作空間的設定 |
+| `blocks.slack.use` | 載入 `slack` 模組 |
+| `blocks.slack.enabled` | 設為 `true` 載入模組，設為 `false` 則關閉 |
+| `blocks.slack.refresh_minutes` | 更新目標清單的間隔，單位為分鐘。預設為 `30` |
+| `blocks.slack.target_aliases` | 把額外的目標名稱對應到現有目標 |
+| `blocks.slack.workspace_projects` | 設定每個工作空間的預設 SwB 專案 |
+| `blocks.slack.channel_projects` | 依工作空間和頻道名稱或 ID 設定 SwB 專案 |
+| `blocks.slack.listen_channels` | 依頻道名稱或 ID，為各工作空間中的頻道設定 `assist` 模式。頻道模式可以覆寫這項設定 |
+| `blocks.slack.max_text_chars` | 每則傳入訊息保留的字元數上限。預設為 `4000` |
+| `blocks.slack.event_retention_days` | Slack 事件的保留天數。預設為 `14` |
+
+用[頻道模式](/zh-Hant/docs/channel-modes)經由專案路由喚醒代理。
+
+## 工作空間與帳號
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.slack.workspaces` | 把 SwB 中使用的工作空間名稱對應到各自的 Slack 設定 |
+| `blocks.slack.workspaces.*.team_id` | Slack 工作空間 ID |
+| `blocks.slack.workspaces.*.app_id` | Slack 應用程式 ID。SwB 用它略過自身應用程式發出的訊息 |
+| `blocks.slack.workspaces.*.intake` | `socket` 接收即時事件，`poll` 讀取頻道歷史記錄，`none` 關閉訊息接收 |
+| `blocks.slack.workspaces.*.app_token_env` | 環境變數名稱，存放 Socket Mode 使用的應用程式權杖 |
+| `blocks.slack.workspaces.*.identities` | SwB 可以在這個工作空間中使用的 Slack 帳號 |
+| `blocks.slack.workspaces.*.identities.bot` | 機器人帳號的設定 |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | 存放 Bot 權杖的環境變數名稱 |
+| `blocks.slack.workspaces.*.identities.bot.write` | 機器人帳號的寫入原則。預設為 `free` |
+| `blocks.slack.workspaces.*.identities.user` | Slack 使用者帳號的設定 |
+| `blocks.slack.workspaces.*.identities.user.token_env` | 存放使用者權杖的環境變數名稱 |
+| `blocks.slack.workspaces.*.identities.user.write` | 使用者帳號的寫入原則。預設為 `approval` |
+| `blocks.slack.workspaces.*.user_only` | 設為 `true` 時只使用使用者帳號。它的寫入原則要設為 `approval` 或 `never` |
+| `blocks.slack.workspaces.*.watched` | 為列出的頻道設定 `watch` 模式。`*` 代表機器人已加入的所有頻道 |
+| `blocks.slack.workspaces.*.default_target` | 新訊息寫給 SwB 且省略目標名稱時使用的目標 |
+| `blocks.slack.workspaces.*.ack_reaction` | 確認收到提及和私訊時使用的 Slack 表情符號名稱。機器人預設為 `eyes` |
+| `blocks.slack.workspaces.*.owner_user_ids` | 視為擁有者的 Slack 使用者 ID。預設為工作空間的核准者 |
+| `blocks.slack.workspaces.*.known` | 把已知的 Slack 使用者 ID 或機器人 ID 對應到顯示名稱。用來協助判斷要接受誰的訊息 |
+| `blocks.slack.workspaces.*.sender_rate` | 限制擁有者以外每個傳送者的訊息接收量。適用於 `assist`、`triage` 和當作脈絡使用的訊息 |
+| `blocks.slack.workspaces.*.sender_rate.count` | 時間區間內每個傳送者的訊息數上限。預設為 `5` |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | 時間區間的長度，單位為秒。預設為 `600` |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | 每個討論串 1 小時內允許的機器人貼文數，超過後的貼文需要核准。預設為 `20` |
+
+## 代理存取權與核准
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.slack.agents` | 把 SwB 代理對應到各自的 Slack 權限 |
+| `blocks.slack.agents.*.workspaces` | 設定代理在每個工作空間中可以使用的帳號 |
+| `blocks.slack.agents.*.allow_persona_override` | 設為 `true` 時，代理可以為機器人貼文選擇形象 |
+| `blocks.slack.agents.*.allowed_personas` | 代理有權選擇形象時，可以選用的形象 ID |
+| `blocks.slack.approvals` | Slack 貼文核准請求的預設設定 |
+| `blocks.slack.approvals.approver_user_id` | 接收預設核准請求並能做出決定的 Slack 使用者 ID |
+| `blocks.slack.approvals.notify_workspace` | 由這個工作空間的機器人為預設核准者傳送核准請求 |
+| `blocks.slack.approvals.ttl_minutes` | 核准請求過期前的分鐘數。預設為 `60` |
+| `blocks.slack.workspaces.*.approver_user_id` | 接收這個工作空間的請求並能做出決定的 Slack 使用者 ID。優先於預設值 |
+
+## 名稱與頭像
+
+在設定中開啟 Slack，即可修改機器人發文時顯示的名稱與頭像。每個工作空間可使用自己的名稱與頭像。Slack 透過 `chat:write.customize` 授權。在 Slack 應用程式設定中更改應用程式圖示。
+
+開啟 **Post every agent as this bot** 後，代理透過機器人的回覆會顯示工作空間設定的名稱與頭像。稽核記錄會保留回覆的代理。使用使用者權杖傳送的訊息會顯示使用者個人檔案。
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.slack.personas` | 定義機器人可以在貼文中使用的名稱和頭像 |
+| `blocks.slack.personas.*.name` | 使用這個形象的機器人貼文所顯示的名稱 |
+| `blocks.slack.personas.*.avatar` | 形象的頭像檔名。設定 `blocks.slack.public_base_url` 後，Slack 才能擷取檔案 |
+| `blocks.slack.personas.*.emoji` | 形象頭像的備用 Slack 表情符號 |
+| `blocks.slack.avatar_dirs` | SwB 搜尋頭像檔案的額外資料夾，順序在內建頭像之前 |
+| `blocks.slack.public_base_url` | Slack 用來擷取頭像檔案的公開 HTTPS 網址，例如 `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | 這個工作空間中機器人貼文的預設形象 ID |
+
+## 事件傳遞
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | 設定把 Slack 事件傳送到其他服務的 Webhook |
+| `blocks.slack.workspaces.*.sinks.*.name` | 在記錄和狀態中識別這個 Webhook 的名稱 |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | 存放 Webhook URL 的環境變數名稱 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | 設為 `stripe` 時，以 Stripe 格式簽署請求 |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 存放簽署金鑰的環境變數名稱 |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | 要傳送的事件類型，可選 `watched`、`mention` 和 `dm`。預設三種都傳送 |
+| `blocks.slack.workspaces.*.sinks.*.targets` | 只傳送這些目標名稱的事件 |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 把事件收集成一個請求的秒數。預設值 `0` 會逐一傳送每個事件 |

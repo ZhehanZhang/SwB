@@ -1,0 +1,226 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-version:
+    if: github.event_name == 'release' && github.repository == 'ZhehanZhang/SwB'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify the published release and package version
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -e '.release.draft == false and .repository.private == false' "$GITHUB_EVENT_PATH" >/dev/null || {
+            echo "Expected a public, published release." >&2
+            exit 1
+          }
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$GITHUB_REF" != "refs/tags/v$version" ]]; then
+            echo "Expected a numeric package version and a matching release tag." >&2
+            exit 1
+          fi
+          status=$(gh api --method GET "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...main" -f per_page=1 --jq .status)
+          if [[ "$status" != identical && "$status" != ahead ]]; then
+            echo "The release commit must be on main." >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+  verify-helper:
+    needs: release-version
+    runs-on: macos-15
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      sha256: ${{ steps.verify.outputs.sha256 }}
+      team_id: ${{ steps.verify.outputs.team_id }}
+    env:
+      APP_NAME: SwB Companion.app
+      ARCHIVE_NAME: swb-companion-macos.zip
+      APPLE_TEAM_ID: Q64ZL36CJN
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Verify the locally notarized release asset
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          VERSION: ${{ needs.release-version.outputs.version }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          work=$(mktemp -d "$RUNNER_TEMP/verified.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          archive="$work/$ARCHIVE_NAME"
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID")
+          digest=$(jq -er --arg name "$ARCHIVE_NAME" --arg tag "$GITHUB_REF_NAME" '
+            select(.tag_name == $tag and .draft == false)
+            | [.assets[] | select(.name == $name)]
+            | select(length == 1) | .[0]
+            | select(.state == "uploaded" and .size > 0 and .size <= 33554432)
+            | .digest | select(type == "string" and test("^sha256:[a-f0-9]{64}$"))
+          ' <<< "$release")
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$ARCHIVE_NAME" --dir "$work"
+          sha256=${digest#sha256:}
+          printf '%s  %s\n' "$sha256" "$archive" | shasum -a 256 --check
+
+          PYTHONPATH=src python3 - "$archive" "$work" "$APPLE_TEAM_ID" "$VERSION" <<'PY'
+          import sys
+          from pathlib import Path
+
+          from switchboard.companion.macos_app import _MAX_ARCHIVE, _bundle_info, _extract, verify_app
+
+          archive, destination = map(Path, sys.argv[1:3])
+          if archive.stat().st_size > _MAX_ARCHIVE:
+              raise SystemExit("The helper archive exceeds the installer download limit")
+          app = _extract(archive, destination)
+          verify_app(app, sys.argv[3], current=False, gatekeeper=True)
+          info = _bundle_info(app)
+          if (info.get("CFBundleShortVersionString") != sys.argv[4]
+                  or info.get("CFBundleVersion") != sys.argv[4]
+                  or info.get("SwBCompanionServiceVersion") != "1"
+                  or any(key.startswith("NSBluetooth") for key in info)):
+              raise SystemExit("The helper metadata does not match the release launcher")
+          PY
+
+          app="$work/$APP_NAME"
+          slices=$(xcrun lipo -archs "$app/Contents/MacOS/SwBCompanion")
+          [[ " $slices " == *" arm64 "* && " $slices " == *" x86_64 "* ]]
+          xcrun stapler validate "$app"
+          printf 'sha256=%s\nteam_id=%s\n' "$sha256" "$APPLE_TEAM_ID" >> "$GITHUB_OUTPUT"
+
+  build:
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.verify-helper.result == 'success') }}
+    needs: [release-version, verify-helper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+      - run: npm run build --prefix web
+      - name: Pin the signed helper in the package
+        if: github.event_name == 'release'
+        env:
+          SHA256: ${{ needs.verify-helper.outputs.sha256 }}
+          TEAM_ID: ${{ needs.verify-helper.outputs.team_id }}
+        run: |
+          uv run --no-project python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          sha256 = os.environ["SHA256"]
+          team_id = os.environ["TEAM_ID"]
+          if not re.fullmatch("[0-9a-f]{64}", sha256) or not re.fullmatch("[A-Z0-9]{10}", team_id):
+              raise SystemExit("Missing or invalid signed helper metadata")
+          manifest = Path("src/switchboard/companion/macos-helper.json")
+          manifest.write_text(json.dumps({"sha256": sha256, "team_id": team_id}) + "\n", encoding="utf-8")
+          PY
+      - run: uv build
+      - name: Check that both distributions pin the signed helper
+        if: github.event_name == 'release'
+        env:
+          VERSION: ${{ needs.release-version.outputs.version }}
+        run: |
+          uv run --no-project python - <<'PY'
+          import os, tarfile, zipfile
+          from pathlib import Path
+
+          base = f"swb_one-{os.environ['VERSION']}"
+          member = "switchboard/companion/macos-helper.json"
+          manifest = Path("src", member).read_bytes()
+          wheel, = Path("dist").glob(f"{base}-*.whl")
+          with zipfile.ZipFile(wheel) as archive:
+              if archive.read(member) != manifest:
+                  raise SystemExit("Wheel helper manifest differs from the pinned manifest")
+          with tarfile.open(Path("dist", f"{base}.tar.gz")) as archive:
+              if archive.extractfile(f"{base}/src/{member}").read() != manifest:
+                  raise SystemExit("Source helper manifest differs from the pinned manifest")
+          PY
+      - run: python3 scripts/verify-dist.py dist
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [verify-helper, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/swb.one/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+      - name: Verify the public helper download before publishing
+        env:
+          SHA256: ${{ needs.verify-helper.outputs.sha256 }}
+        run: |
+          archive=$(mktemp)
+          trap 'rm -f "$archive"' EXIT
+          curl -fsSL --proto '=https' --proto-redir '=https' --retry 3 --retry-all-errors --retry-max-time 60 --max-time 30 \
+            "https://github.com/ZhehanZhang/SwB/releases/download/$GITHUB_REF_NAME/swb-companion-macos.zip" -o "$archive"
+          printf '%s  %s\n' "$SHA256" "$archive" | sha256sum --check
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-test:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/swb.one/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/

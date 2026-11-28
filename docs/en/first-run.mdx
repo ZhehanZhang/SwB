@@ -1,0 +1,74 @@
+---
+title: First run
+description: Make SwB reachable, sign in and see your instance.
+---
+
+## Run on this computer
+
+{/* prepublication */}
+
+After package publication, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal within five minutes. SwB uses `http://localhost:8870` by default. If you set `SWB_PORT`, SwB uses that port in the address. For other ways to start, including a source build, see [Install](/docs/install).
+
+## Get a public address
+
+Claude, ChatGPT and Grok run in the cloud. They need a public HTTPS address to reach SwB. A tunnel gives your local SwB server a public address.
+
+Install [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Make sure your terminal can run `cloudflared --version`. If SwB is running, stop it first. Run this command in your SwB instance folder.
+
+```bash
+uvx swb-one up --tunnel cloudflare
+```
+
+SwB opens a Cloudflare Quick Tunnel and prints the public MCP address. Each restart with this option gives you a new address. Update the address in your apps.
+
+For Tailscale, [install Tailscale](https://tailscale.com/download). Sign in to Tailscale. Enable [Funnel](https://tailscale.com/docs/features/tailscale-funnel). Make sure your terminal can run `tailscale version`. Use `--tunnel tailscale` in the command above.
+
+For a fixed address on your own domain, read [Named tunnel](/docs/cloudflare#named-tunnel).
+
+## See the next step
+
+```bash
+swb status
+```
+
+The command shows the server status and which blocks are on. Read **Next steps** for any setup work. The `switchboard_status` tool also reports the next steps.
+
+To check a server at another address, set `--url`. For example, run `swb status --url http://127.0.0.1:8871`. The CLI uses the `SWB_PORT` value from the shell or instance `.env` for its default local address. Pass the same instance folder with `--dir` if you used it with `swb up`.
+
+## Sign in to the web page
+
+The web page shows your projects, agents, inbox, memory and audit log. It is also the safe place to paste tokens.
+
+![The SwB sign-in page](/shots/login-light.webp)
+
+To get a new link, run this command in a second terminal from the same instance folder.
+
+```bash
+swb login-link
+```
+
+The command prints a one-time sign-in link. Open it in your browser within five minutes. Use `--url` and `--dir` here as you would with `swb status`. After your first sign-in, add a [passkey](/docs/owner-login#passkey). Use it for later sign-ins. See [Owner sign-in](/docs/owner-login) for setup codes and other methods.
+
+## Web console
+
+| Page | Use |
+| - | - |
+| `/` | See the server status and project list. |
+| `/agents/*` | See registered agents and open the details of each agent. |
+| `/audit` | Filter the log of changes and other events. |
+| `/inbox` | See conversations and requests that need your attention. |
+| `/inbox/:handle` | Read the messages in one conversation. |
+| `/memory/*` | Browse and search saved notes. |
+| `/projects/:slug` | See one project's routes, history, conversations and memory. |
+| `/connections/:platform` | See the connection status and [**Channel modes**](/docs/channel-modes) for Slack, Discord, Telegram or GitHub. |
+| `/settings` | View server settings and manage passkeys. |
+| `/tokens` | See token requests and stored credentials. |
+| `/about` | See the SwB version and the list of enabled blocks. |
+
+## Connect the first agent
+
+Give your first agent owner access if it will set up other apps. For an app that runs on a server, approve its [OAuth sign-in](/docs/owner-login#agent-sign-in) in the browser. Use a connection with access to all SwB tools.
+
+On the SwB computer, set up a [local owner client](/docs/setup/mcp-client#local-owner-client). Use `SWB_KEY_OWNER` from the instance `.env` for the client's sign-in. Send that key only to the local `/mcp` address.
+
+If the first agent uses a paired key, ask it for the matching terminal command for each owner-only step. Run the command in the SwB instance folder. For example, run `swb connect slack`. See [Connect your agents](/docs/connect) for the other apps.

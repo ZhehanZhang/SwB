@@ -9,7 +9,7 @@ import pytest
 import yaml
 from starlette.testclient import TestClient
 
-from conftest import call, error_text, payload
+from conftest import call, error_text, payload, use_capy
 from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, TEAM_A, FakeWorld, Hooks
 from switchboard.app import create_app
 from switchboard.core import CoreError, Switchboard
@@ -25,11 +25,12 @@ EXTERNAL = "USTRANGER"
 @pytest.fixture
 def opened(tmp_path):
     @contextmanager
-    def build(*, channels=None, mapped="docs", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
+    def build(*, channels=None, mapped="docs", workspace_project="workspace", shared="shared", turn_cap=200, rate=5, write="free", intake="socket",
+              hooks=None, capy=None):
         world, fires = FakeWorld(), []
         ws = {"team_id": TEAM_A, "app_token_env": "A_APP", "identities": {"bot": {"token_env": "A_BOT", "write": write}},
               "sender_rate": {"count": rate}, "known": {"BKNOWN001": "Build bot"}, "ack_reaction": "eyes", "intake": intake}
-        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": "workspace"},
+        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": workspace_project},
                  "channel_projects": {"team": {} if mapped == "default" else {CHANNEL: mapped}},
                  "listen_channels": {"team": [f"#{NAME}"] if channels is None else channels},
                  "approvals": {"notify_workspace": "team", "approver_user_id": OWNER_A},
@@ -47,15 +48,16 @@ def opened(tmp_path):
         cfg = {"version": 2, "turn_cap": turn_cap, "blocks": {"mcp": {}, "slack": slack, "claude-routine": {"routines": routines}},
                "visibility": {"defaults": {"channel": shared, "target": "shared"}}}
         path = tmp_path / "config.yaml"
-        path.write_text(yaml.safe_dump(cfg))
 
         def fire(request):
             fires.append((request.url.path, json.loads(request.content)["text"]))
             return httpx.Response(200, json={"claude_code_session_id": "session_example"})
 
-        core = Switchboard(path, tmp_path / "data", env={**ENV, "SWITCHBOARD_KEY_CLAUDE": KEY_FULL, "ROUTINE_TOKEN": "example-token"},
-                           slack_options=slack_options,
-                           block_options={"claude-routine": {"transport": httpx.MockTransport(fire)}})
+        env = {**ENV, "SWITCHBOARD_KEY_CLAUDE": KEY_FULL, "ROUTINE_TOKEN": "example-token"}
+        options = {"claude-routine": {"transport": httpx.MockTransport(fire)}}
+        use_capy(capy, cfg, env, options)
+        path.write_text(yaml.safe_dump(cfg))
+        core = Switchboard(path, tmp_path / "data", env=env, slack_options=slack_options, block_options=options)
         for project in ("docs", "workspace", "no-routine"):
             core.projects.create(slug=project, name=project.title())
         with TestClient(create_app(core)) as client:
@@ -99,15 +101,34 @@ def test_unaddressed_message_wakes_primary(opened, channels, mapped, project, tr
         assert push["addressed_to_us"] is False
         (fire,) = fires
         assert fire[0].endswith(trigger)
-        assert "listen-mode message from name-ustranger, trust external" in fire[1]
+        assert fire[1].splitlines()[0] == f"name-ustranger (external) in Slack #{NAME} asks: Can we fix this?"
         assert "<<<swb-untrusted\nCan we fix this?\nswb-untrusted>>>" in fire[1]
         assert "You may stay silent" in fire[1] and "to_owner=true" in fire[1] and "message the coordinator" not in fire[1]
         handle = core.inbox.handle(handle_of(fire[1]))
         assert handle["project"] == project
+        [item] = core.inbox.read(owner="claude", handle=handle["handle"])["items"]
+        assert item["trust"] == item["from"]["trust"] == "external"
+        assert item["text"] == fire[1].split("\n\n---\n", 1)[0]
         assert {key: handle["meta"][key] for key in ("listen", "boundary", "slack_trust", "permalink")} == {
             "listen": True, "boundary": project, "slack_trust": "external", "permalink": push["permalink"],
         }
         assert not {"chat_postMessage", "chat_postEphemeral", "reactions_add"}.intersection(world.names())
+
+
+def test_listen_wake_keeps_the_original_wrapper_and_the_optional_reply_tail(opened):
+    with opened() as (core, client, world, fires):
+        world.canned["users_info"] = lambda *_: {"user": {"name": "Dana"}}
+        push = ingest(core, client, text="> Can we check the **canary**?")
+        (_, text), = fires
+        title = f"Dana (external) in Slack #{NAME} asks: Can we check the canary?"
+        handle = core.inbox.handle(handle_of(text))
+        assert handle["title"] == "Can we check the canary?" and text.startswith(title + "\n\n")
+        task, tail = text.split("\n\n---\n", 1)
+        assert task == (
+            f"{title}\n\n{push['text']}\n\n{push['permalink']}\n\n"
+            "A reply is optional. If anything needs action, send only a short note to the owner."
+        )
+        assert tail.endswith("Don't use another handle for this message.")
 
 
 @pytest.mark.parametrize(("options", "audit", "fires_general"), [
@@ -141,7 +162,7 @@ def test_listen_bots_and_own_posts(opened):
         assert not fires
         ingest(core, client, ts="1700000500.000005", user="UBUILD001", bot_id="BKNOWN001")
         (fire,) = fires
-        assert "from Build bot, trust known" in fire[1]
+        assert fire[1].splitlines()[0] == f"Build bot (external) in Slack #{NAME} asks: Can we fix this?"
         assert not {"chat_postMessage", "chat_postEphemeral"}.intersection(world.names())
 
 
@@ -246,16 +267,51 @@ def test_listen_can_note_owner_without_posting_to_thread(opened):
         handle = handle_of(fires[0][1])
         reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "x" * 700, "to_owner": True}))
         assert reply["delivered"] and reply["to_owner"] and reply["conversation"] == handle
-        (post,) = posted(client, world, 1)
-        assert post == {"channel": "DAPPROVER", "text": f"Note from docs about name-ustranger in #{NAME}: " + "x" * 500 + f"\n{push['permalink']}"}
+        [note] = [item for item in core.inbox.read(owner="claude", since=0)["items"] if item.get("for_owner")]
+        assert (f"<<<swb-untrusted\nNote from docs about name-ustranger in #{NAME}: " + "x" * 500
+                + f"\n{push['permalink']}\nswb-untrusted>>>") in note["text"]
+        assert note["resolved_by"] == "active" and note["trust"] == "external"
+        assert not {"conversations_open", "chat_postMessage"}.intersection(world.names())
         assert core.inbox.handle(handle)["status"] == "answered"
+
+
+def test_cancelled_listen_conversation_cannot_note_owner(opened):
+    with opened() as (core, client, world, fires):
+        ingest(core, client, thread_ts=THREAD)
+        handle = handle_of(fires[0][1])
+        args = {"conversation": handle}
+        sender = core.blocks["slack"].principal
+        cancel = client.portal.call(core.verb, sender, "cancel", handle)
+        assert cancel["status"] == "cancelled"
+        reply = payload(call(client, KEY_FULL, "reply", {**args, "text": "Check the report", "to_owner": True}))
+        assert reply["status"] == "cancelled" and not reply["delivered"]
+        assert core.inbox.handle(handle)["status"] == "cancelled"
+        assert not {"conversations_open", "chat_postMessage"}.intersection(world.names())
+        assert not core.audit.recent(action="listen_note")
+
+
+def test_pending_owner_note_cannot_reopen_cancelled_listen_conversation(opened, monkeypatch):
+    with opened() as (core, client, _, fires):
+        ingest(core, client)
+        handle = handle_of(fires[0][1])
+        sender = core.blocks["slack"].principal
+
+        with monkeypatch.context() as patch:
+            patch.setattr(core.owner_delivery, "resolve", lambda *_: None)
+            reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "Check the report", "to_owner": True}))
+            assert not reply["delivered"] and reply["status"] == "pending_owner_route"
+        assert client.portal.call(core.verb, sender, "cancel", handle)["status"] == "cancelled"
+        client.portal.call(core.modes.flush)
+        assert core.inbox.pending_owner_count() == 0
+        assert core.inbox.handle(handle)["status"] == "cancelled"
 
 
 def test_to_owner_refused_for_non_listen_conversation(opened):
     with opened() as (core, client, world, fires):
         ingest(core, client, type="app_mention", user=OWNER_A, text=f"<@{BOT_USER}> claude hello")
         handle = handle_of(fires[0][1])
-        assert "only allowed" in error_text(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "no", "to_owner": True}))
+        assert "Use a forwarded Slack message or a triage conversation with owner notes enabled." in error_text(
+            call(client, KEY_FULL, "reply", {"conversation": handle, "text": "A note", "to_owner": True}))
         assert "chat_postMessage" not in world.names()
 
 
@@ -287,7 +343,9 @@ def test_listen_thread_reply_and_owner_note_share_turn_cap(opened):
         assert [(row["root"], row["turns"]) for row in rows] == [(handle, 3)]
         error = error_text(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "never delivered"}))
         assert f"{handle} is paused" in error
-        assert all(p["text"] != "never delivered" for p in posted(client, world, 3))
+        posts = posted(client, world, 2)
+        assert all(p["text"] != "never delivered" for p in posts)
+        assert any(p["text"].startswith(f"SwB paused conversation {handle} after 3 turns") for p in posts)
 
 
 def test_poll_resolves_listen_names_without_watching_owner_messages(opened):

@@ -1,0 +1,84 @@
+---
+title: MCP client
+description: Connect an MCP client with a local owner key or a pairing code.
+---
+
+MCP is the standard way an app uses outside tools. This guide pairs an app with SwB using a key.
+
+## Before you start
+
+Use an app that supports remote MCP over Streamable HTTP. This method lets apps call tools over the web. The app must also support custom request headers for the key. You need a SwB owner client or a terminal on the SwB computer.
+
+To start SwB on the same computer as the app, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal. See [Install](/docs/install) for more options.
+
+Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in. Use those pages for those apps.
+
+## Copy the setup prompt
+
+<SetupPrompt name="mcp-client" lang="en" />
+
+Paste the prompt into a SwB owner client or the app you want to connect.
+
+## Local owner client
+
+Use a private client on the SwB computer to set up other apps. Use the local `/mcp` address shown at startup. Use `SWB_KEY_OWNER` from the instance `.env` as `Authorization: Bearer <key>`. This key gives full owner access. Save it in the client’s private local config with file mode `0600`. Send it only to local SwB.
+
+## Pair a client
+
+Let your agent configure the app if it can edit settings locally. Store the key in the app’s private settings. Use file mode `0600` for a settings file.
+
+### Name the app
+
+Tell the agent a short name for the app, for example `notes-bot`. SwB shows this name on messages from the app.
+### Get the pairing code
+
+Ask a SwB owner agent to call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb-one connect mcp-client --choose agent=notes-bot`. Replace `notes-bot` with your app’s name.
+### Get the key
+
+On the computer that runs the app, open a private folder in your terminal. Replace `https://swb.example.com` with your SwB address. Keep `/connect` at the end. For local SwB, use `http://localhost:8870/connect` with the port shown at startup. Enter the pairing code at the hidden prompt within 10 minutes.
+
+```bash
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
+```
+### Keep the key private
+
+Open `.swb-pairing.json` in a private editor. The command saves the response with file mode `0600`. Use its `key` in the app settings. SwB returns the key once.
+### Add SwB to the app
+
+Add a server named `swb` in the app’s MCP settings. Select Streamable HTTP. Use `mcp_url` from the file for a public SwB server. For local SwB, use the MCP address shown at startup.
+### Add the key
+
+Add the header `Authorization: Bearer <key>` in the app's private settings. Delete `.swb-pairing.json` after you save the key.
+
+## What the agent does
+
+The agent calls `connect(what="mcp-client")` from the owner sign-in. SwB returns the MCP address and asks for the app name. The agent calls `connect` again with `choose={"agent":"notes-bot"}`.
+
+SwB makes a pairing code for that name and returns the `POST /connect` step. A pairing code is a one-time code that works for 10 minutes. If the app already has a key, SwB says so and makes a new code only after `connect_revoke`.
+
+From the terminal on the SwB server, `swb connect mcp-client --choose agent=notes-bot` gives the same steps.
+
+## Credentials
+
+| Item | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| Pairing code | The `connect` or `connect_code` result | `XXXXX-XXXXX`, valid 10 minutes, one use | The `POST /connect` request |
+| Agent key | The `POST /connect` answer, one time | Starts with `swb_` | The `Authorization` header in the private settings of the app |
+
+Store the key in the app’s private settings. SwB stores a hash of the key instead of the key itself.
+
+## Check the connection
+
+Ask the new agent to call `inbox`. Ask the agent signed in as the owner to call `connect_list` and check the new key's last call time. Have the owner agent send a test message to `agent:notes-bot`. Have the new agent read it with `inbox` and answer with `reply`.
+
+## Fix problems
+
+Check the SwB address if `POST /connect` fails. Ask the owner for a new code if the code expired or was used. If a key leaks, revoke it with `connect_revoke`. SwB then rejects calls that use that key.

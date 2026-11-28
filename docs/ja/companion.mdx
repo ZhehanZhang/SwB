@@ -1,0 +1,99 @@
+---
+title: コンパニオン
+description: デバイスを接続して、そのデバイスのローカル機能をエージェントが使えるようにします。
+---
+
+**コンパニオン**とは、SwB サーバーに接続するデバイスです。接続すると、エージェントがそのデバイスの機能を使えます。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="companion" lang="ja" />
+
+## デバイスをペアリングする
+
+オーナーとしてサインインしたエージェントに、`companion_code` の呼び出しを頼んでください。コードを権限 `0600` のファイルに保存するよう、エージェントに頼んでください。この権限では、ファイルの所有者だけがアクセスできます。
+
+コンソールでコードを取得するときは、[パスキーでサインイン](/ja/docs/owner-login#パスキー)してください。**Settings** を開いてください。**Connections** で **Pair a device** を選択してください。Cloudflare Access を使っている場合は、`companion_code` ツールを使ってください。
+
+デバイスでこのコマンドを実行してください。例のアドレスを、実際の SwB の HTTPS アドレスに置き換えてください。SwB が同じデバイスにある場合は、`http://127.0.0.1:8870` も使えます。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+入力内容を隠すプロンプトに、ペアリングコードを入力してください。コードは 1 回だけ使えて、10 分で期限が切れます。監査ログには、コードを作った人が記録されます。
+
+デバイスは、専用のキーを非公開のファイルに保存します。
+
+## 機能を選ぶ
+
+有効にする機能ごとに、`--cap` オプションを 1 つずつ追加してください。
+
+| オプション | 機能 |
+| --- | --- |
+| `--cap notify` | デバイスにデスクトップ通知を表示します |
+| `--cap drop` | `~/SwB Drop` フォルダーで、1 つ 10 MiB までのファイルを共有します |
+| `--cap mcp --mcp NAME=COMMAND` | デバイス上の MCP サーバーのツールをエージェントが使えるようにします |
+| `--cap herdr` | [Herdr](/ja/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex app server](/ja/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode server](/ja/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/ja/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [ステータスフック](/ja/docs/blocks/local-sessions#ステータスフック) |
+
+Linux では、通知に `notify-send` を使います。Debian と Ubuntu では、`libnotify-bin` パッケージでインストールしてください。
+
+MCP サーバーごとに `--mcp` オプションを 1 つずつ追加してください。プログラムの場合は `--mcp 'NAME=COMMAND'` を使います。`NAME` をサーバーの名前に置き換えてください。`COMMAND` をプログラムの起動コマンドに置き換えてください。デバイス上の HTTP サーバーの場合は、`--mcp notes=http://127.0.0.1:8000/mcp` のようにローカルアドレスを使ってください。
+
+エージェントは `companion_list` で、ペアリング済みの各デバイスとその操作を確認します。操作の実行には `companion_invoke` を使います。
+
+コンパニオンのテキスト結果の上限は 1 MiB です。Drop のファイルデータは `structuredContent.result.content_b64` から読み取ってください。
+
+## ローカルセッション
+
+**ローカルセッション**とは、デバイス上でコーディングエージェントが開いている会話です。SwB は、そのセッションの状態を `local:session:<companion>:<harness>:<session>` というアドレスとともに一覧表示します。
+
+機能の表にある、お使いのコーディングエージェントのリンクを使ってください。ペアリングの前にエージェントを設定してください。ペアリング後は、コンパニオンを動かし続けてください。オーナーとしてサインインしたエージェントに、`targets(block="local")` の呼び出しを頼んでください。セッションのアドレスが表示されることを確認してください。
+
+SwB は、各メッセージを開いているセッションに届けようとします。送信者がエージェントのメールボックスを使える場合は、メッセージをそのメールボックスに入れます。回答は同じ会話に返ってきます。
+
+`targets` に表示されるセッションのアドレスを使ってください。そのアドレスのリソースを `visibility_list` で探してください。`visibility_set` でそのリソースを共有してください。
+
+コマンドと対応エージェントについては、[ローカルセッション](/ja/docs/blocks/local-sessions)をご覧ください。
+
+## 動かし続ける
+
+ペアリングするとコンパニオンが起動します。もう一度起動するときは `swb companion run` を使います。ローカルのデバイス ID と機能は `swb companion status` で確認できます。
+
+`uvx` でペアリングした場合は、`swb` の代わりに `uvx swb-one` を使ってください。フォアグラウンドでは、Python がコンパニオンを直接実行します。
+
+SwB への接続は、毎回デバイスの側から始めます。
+
+## バックグラウンドで実行する
+
+コンパニオンを自動で起動するには、バックグラウンドサービスをインストールしてください。`uv tool install swb-one` で SwB をインストールしてください。
+
+新たにペアリングするときは、ペアリング用のオプションに `--no-run` を追加してください。そのオプションを指定して `swb companion connect` を実行してください。コマンドはペアリングを終えると終了します。ターミナルでコンパニオンが動作中の場合は、サービスをインストールする前に停止してください。サービスを操作するときは、インストールした `swb` を使ってください。
+
+```sh
+swb companion service install
+```
+
+Linux では、`systemd --user` がユーザーのアカウントでサービスを実行します。起動時にサービスを開始し、ログアウト後も実行を続けるには、`loginctl enable-linger "$USER"` を実行してください。
+
+macOS では、デスクトップにログインしてからサービスをインストールしてください。SwB の正式版では、署名済みの **SwB Companion** アプリが `~/Applications` に自動でインストールされます。インストール時に署名も検証されます。`launchd` はこのアプリを使ってサービスを起動します。
+
+Windows では、サインイン時にタスク スケジューラがサービスを起動します。
+
+ローカルのツールに必要な変数は、サービスの管理ツールで設定してください。
+
+`swb companion service start` でサービスを開始してください。`swb companion service status` でサービスの状態を確認してください。`swb companion service logs` でログを確認してください。
+
+`swb companion status` でコンパニオンの実行状態、接続状態、SwB のアドレスを確認してください。
+
+すぐにサービスを停止するには、`swb companion service stop` を使ってください。自動起動の設定を削除するには、`swb companion service uninstall` を使ってください。デバイスのキーは保持されます。
+
+## 接続を解除する
+
+デバイスのキーを削除するときは、そのデバイスで `swb companion disconnect` を実行してください。コンソールでキーを取り消すときは、**Settings** の **Connections** を開いてください。そのデバイスの **Disconnect** を選択してください。
+
+動作中のコンパニオンは、取り消しを検出するとローカルのキーを削除します。デバイスにキーが残っている場合は、再びペアリングする前に `swb companion disconnect` を実行してください。

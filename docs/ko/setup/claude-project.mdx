@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: Claude Project 안에서 일하는 Claude Code 루틴을 SwB이 시작하게 합니다.
+---
+
+루틴은 저장해 두고 스스로 실행되는 Claude Code 작업입니다. 다른 에이전트가 작업을 보내면 SwB이 Claude Project에서 루틴을 시작합니다. 루틴은 같은 SwB 대화에 답장합니다.
+
+## 시작하기 전에
+
+Claude Code Projects에 접근할 수 있는 Claude Pro, Max 또는 Ultra가 필요합니다. [Claude Code](https://claude.ai/code)를 열고 **Projects**를 선택하세요. 접근 권한을 받으려면 [대기자 명단에 등록](https://claude.com/form/projects)하세요.
+
+같은 Claude 계정에 SwB을 추가하세요. [Claude](/ko/docs/setup/claude)를 참고하세요. `config/switchboard.yaml`에서 `claude-routine` 블록을 켜세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="claude-project" lang="ko" />
+
+[Claude Code](https://claude.ai/code)에서 프로젝트를 여세요. 왼쪽의 코디네이터 채팅에 프롬프트를 붙여 넣으세요. 코디네이터가 프로젝트에 `swb <project>`라는 루틴을 만듭니다.
+
+## 루틴 열기
+
+코디네이터가 준 루틴 링크를 열거나 아래 경로 중 하나를 사용하세요.
+
+### Routines 페이지에서 열기
+
+[Routines 페이지](https://claude.ai/code/routines)를 여세요. 숨겨진 프로젝트 루틴을 보려면 맨 위의 배너를 클릭하세요. `swb <project>`를 여세요.
+
+### 프로젝트에서 열기
+
+오른쪽 패널의 맨 위 탭 줄에서 **+**를 클릭하세요. **Routines**를 선택하세요. `swb <project>`를 여세요. **View full page**를 클릭하세요.
+
+## API 트리거 열기
+
+루틴 이름 옆의 메뉴를 여세요. **Edit**를 선택하세요. 편집 양식에서 **Trigger**, **+**, **API**를 차례로 선택하세요.
+
+**Fire URL**을 복사하세요. 이 URL을 코디네이터에게 알려 주세요.
+
+## 토큰 생성과 저장
+
+소유자가 Claude에서 토큰을 만듭니다. **Generate token**을 선택하세요. **Token generated** 대화 상자가 열려 있는 동안 토큰을 복사하세요.
+
+코디네이터가 준 등록 링크를 여세요. **Claude routine token** 페이지에서 프로젝트와 루틴 ID를 확인하세요. **Token**에 토큰을 붙여 넣으세요. **Save token**을 선택하세요.
+
+SwB에 **Routine saved** 또는 **Routine and project saved**가 표시됩니다. 토큰을 저장했다고 코디네이터에게 알려 주세요.
+
+## 에이전트가 하는 일
+
+코디네이터는 소유자 권한을 모두 가진 SwB 클라이언트에서 `connect(what="claude-project")`를 호출합니다. SwB은 `claude-routine` 블록을 확인하고 그 루틴을 나열합니다. 코디네이터는 `project_list`를 호출해 SwB 프로젝트를 찾을 수 있습니다.
+
+코디네이터는 API 트리거를 추가합니다. 정확한 Claude Project 이름을 넣어 루틴 프롬프트에 이 지침을 포함합니다.
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+코디네이터는 `choose`에 `fire_url`, `claude_project`, `project`를 넣어 `connect`를 다시 호출합니다. SwB은 등록 링크를 돌려줍니다. 등록 링크는 자격 증명을 입력하는 비공개 SwB 페이지입니다. 이 링크는 한 번만 쓸 수 있고 30분 뒤에 만료됩니다.
+
+SwB이 비슷한 프로젝트를 찾으면 에이전트가 하나를 고르라고 요청합니다. 새 프로젝트라면 새 슬러그를 넣고 `create_new`를 `true`로 설정해 `connect`를 호출합니다.
+
+## 자격 증명
+
+| 항목 | Claude에서 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| 루틴 토큰 | API 패널의 **Token generated**, 한 번만 표시 | `sk-ant-oat01-`로 시작 | SwB 등록 링크의 **Token** 필드 |
+| Fire URL | API 패널의 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 코디네이터 채팅의 에이전트. 이 URL은 루틴을 가리키기만 합니다. |
+
+## 연결 확인
+
+코디네이터는 `routine_list`를 호출해 프로젝트와 `untested` 상태를 확인합니다. `send`로 테스트 메시지를 보냅니다. 시작에 성공하면 `fired: true`가 돌아오고 상태가 `tested`로 바뀝니다. Claude가 세션 링크를 돌려주면 그 링크를 여세요. 세션이 내 프로젝트에서 실행되는지 확인하세요.
+
+## 문제 해결
+
+등록 링크가 만료되었다면 에이전트에게 `connect`를 다시 호출해 새 링크를 받아 달라고 요청하세요. API 패널에서 **Regenerate**를 클릭하면 이전 토큰은 즉시 무효가 됩니다. 에이전트에게 루틴을 다시 등록해 달라고 요청하고, 새 등록 링크에 새 토큰을 저장하세요.
+
+텍스트가 있는 요청에 Claude가 **this project is paused**를 돌려주면 SwB은 빈 요청으로 다시 시도합니다. 그러면 루틴이 `routine_pickup`으로 메시지를 가져옵니다. 프로젝트가 일시 중지되었다면 Claude에서 재개하세요.

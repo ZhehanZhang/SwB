@@ -1,0 +1,57 @@
+# Copy to config/local.yaml, or point SWB_OVERLAY at your private file.
+# Delete sections you don't need and replace placeholders before using them.
+# Keep tokens in the environment. A blocks mapping makes the enabled block list explicit.
+version: 2
+
+# public_url: https://switchboard.example.com
+# Use SWB_TRUSTED_PROXIES to set the ranges in the environment.
+# trusted_proxies: []
+# data_dir: /data
+# timezone: Etc/UTC
+# auth:
+#   owner_emails: [owner@example.com]
+#   cloudflare_access:
+#     team_domain: <TEAM_NAME>.cloudflareaccess.com
+#     aud: <ACCESS_APP_AUDIENCE>
+
+branding:
+  display_name: SwB
+  # icon: https://switchboard.example.com/icon.svg
+  # accent_color: "#64748b"
+  # logo_assets_dir: /config/branding
+
+# blocks:
+#   mcp: {use: mcp}
+#   capy: {use: capy, identity: personal}
+#   claude-routine:
+#     use: claude-routine
+#     routines:
+#       example-project: {project: example, routine_id: trig_EXAMPLE, token_env: CLAUDE_ROUTINE_TOKEN_EXAMPLE}
+#   github:
+#     use: github
+#     secret_env: GITHUB_WEBHOOK_SECRET
+#     sinks:
+#       project: {url_env: PROJECT_GITHUB_SINK_URL}
+#     routes:
+#       example-org/example-repo: [project]
+#   dots: {use: dots, workspace: team, channel: "#agents"}
+#   slack:
+#     use: slack
+#     public_base_url: https://switchboard.example.com
+#     avatar_dirs: [/config/branding/avatars]
+#     workspaces:
+#       team:
+#         team_id: T0EXAMPLE
+#         app_id: A0EXAMPLE
+#         approver_user_id: U0EXAMPLE
+#         app_token_env: SLACK_APP_TOKEN
+#         identities:
+#           bot: {token_env: SLACK_BOT_TOKEN, write: free}
+#         watched: ["#agents"]
+#     agents:
+#       claude: {workspaces: {team: [bot]}}
+
+# targets:
+#   aliases: {builds: "capy:captain:<CAPTAIN_ID>"}
+# routes:
+#   - {match: {project: app}, to: "capy:captain:<CAPTAIN_ID>"}

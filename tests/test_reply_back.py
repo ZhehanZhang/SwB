@@ -5,9 +5,10 @@ import httpx
 import uvicorn
 
 from switchboard.app import create_app
+from switchboard.blocks.mcp.policy import CONVERSATION_NOT_FOUND
 
 from switchboard.origins.mcp import WaitCaps
-from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, eventually, payload
+from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, base_config, eventually, payload
 
 
 async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
@@ -24,7 +25,9 @@ async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
     assert [i["text"] for i in got["items"]] == ["Working on it."] and got["timed_out"] is False and got["handle_status"] == "following"
     assert loop.time() - t0 < 5
     again = payload(await acall(c, STATIC_KEY, "capy_wait", {"handle": out["handle"], "timeout_s": 0.1}))
-    assert again["items"] == [] and again["timed_out"] is True and "still working" in again["next"]
+    assert again["items"] == [] and again["timed_out"] is True and again["next"] == "Check again with wait or inbox."
+    owner = payload(await acall(c, STATIC_KEY, "wait", {"conversation": out["handle"], "timeout_s": 0, "owner_facing": True}))
+    assert owner["timed_out"] is True and owner["next"].startswith("Tell the owner")
 
 
 async def test_capy_wait_is_capped_per_agent(amake):
@@ -59,7 +62,12 @@ async def test_tasks_extension_end_to_end_and_across_restart(amake, capy):
     tid = created["taskId"]
     got = (await arpc(c, STATIC_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]
     assert got["resultType"] == "complete" and got["status"] == "working" and CAPTAIN in got["statusMessage"]
-    assert (await arpc(c, SECOND_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]["code"] == -32602
+    outsider = core.connections.mint(agent="outsider", project=None, client=None, by="owner")
+    outside_key = core.connections.redeem(outsider["code"])["key"]
+    foreign = (await arpc(c, outside_key, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]
+    missing = (await arpc(c, outside_key, "tasks/get", {"taskId": "h_missing"}, modern=True)).json()["error"]
+    assert foreign == missing == {"code": -32602, "message": CONVERSATION_NOT_FOUND}
+    assert (await arpc(c, SECOND_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]["status"] == "working"
     await eventually(lambda: capy.streams(CAPTAIN))
     capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Report attached."}, id="01B")
@@ -86,6 +94,18 @@ async def test_tasks_cancel(amake):
     assert (await arpc(c, STATIC_KEY, "tasks/cancel", {"taskId": tid}, modern=True)).json()["result"]["resultType"] == "complete"
     got = (await arpc(c, STATIC_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]
     assert got["status"] == "cancelled"
+
+
+async def test_tasks_cancel_honors_the_tool_allowlist(amake):
+    cfg = base_config()
+    cfg["auth"]["key_tools"] = {"capy": ["capy_delegate"]}
+    core, c = await amake(config=cfg)
+    tid = (await acall(c, STATIC_KEY, "capy_delegate", {"task": "Test task policy"}, tasks=True))["taskId"]
+    response = (await arpc(c, STATIC_KEY, "tasks/cancel", {"taskId": tid}, modern=True)).json()
+    assert response["error"]["code"] == -32602
+    assert core.inbox.handle(tid)["open"]
+    [row] = core.audit.recent(action="tool_refused")
+    assert (row["target"], row["detail"]) == ("cancel", "Use a key granted this tool.")
 
 
 async def test_channel_key_reads_claude_codes_inbox_only(amake, capy):
@@ -136,6 +156,61 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
                         frames.append(json.loads(line[6:]))
                         break
             assert frames[0]["text"] == "pushed" and frames[0]["handle"] == out["handle"] and int(event_id) == frames[0]["cursor"]
+            pair = core.connections.mint(agent="claude-code", project=None, client=None, by="owner")
+            key = core.connections.redeem(pair["code"])["key"]
+            [item] = payload(await acall(c, key, "inbox"))["items"]
+            assert item["message_id"] == frames[0]["message_id"]
+            looked_up = payload(await acall(c, key, "get_message", {"message_id": item["message_id"]}))
+            assert looked_up == item
+            core.projects.create(slug="allowed", name="Allowed")
+            core.projects.create(slug="other", name="Other")
+            core.cfg.key_scopes["stream-reader"] = ("project:allowed",)
+            pair = core.connections.mint(agent="stream-reader", project=None, client=None, by="owner")
+            scoped = core.connections.redeem(pair["code"])["key"]
+            outside = await acall(c, STATIC_KEY, "send", {"to": "agent:stream-reader", "project": "other", "task": "Outside scope"})
+            assert not outside.get("isError")
+            allowed = payload(await acall(c, STATIC_KEY, "send", {"to": "agent:stream-reader", "project": "allowed", "task": "Within scope"}))
+            async with c.stream("GET", "/inbox/events", headers={
+                "Authorization": f"Bearer {scoped}", "Last-Event-ID": str(int(event_id) - 1),
+            }) as r:
+                assert r.status_code == 200
+                lines = r.aiter_lines()
+                async for line in lines:
+                    if line == "event: item":
+                        data = json.loads((await anext(lines))[6:])
+                        assert (data["handle"], data["text"]) == (allowed["handle"], "Within scope")
+                        break
+                else:
+                    raise AssertionError("The scoped stream closed before its allowed item")
+    finally:
+        server.should_exit = True
+        await task
+
+
+async def test_inbox_events_skips_context_items(tmp_path, capy):
+    from conftest import new_core
+
+    core = new_core(tmp_path, capy)
+    server = uvicorn.Server(uvicorn.Config(create_app(core), host="127.0.0.1", port=0, log_level="warning", lifespan="on"))
+    task = asyncio.create_task(server.serve())
+    await eventually(lambda: server.started, timeout=10)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    try:
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=20) as c:
+            async with c.stream("GET", "/inbox/events", headers={"Authorization": f"Bearer {CHANNEL_KEY}"}) as r:
+                lines = r.aiter_lines()
+                async for line in lines:
+                    if line.startswith("event: ready"):
+                        break
+                handle = core.inbox.open_handle(owner="claude-code", destination="github", ref="acme/app", project=None,
+                                                title="GitHub acme/app", meta={}, status="following")
+                await core.inbox.add(handle, "context", {"text": "context only"})
+                payload(await acall(c, STATIC_KEY, "agent_send", {"to": "claude-code", "text": "after context"}))
+                async for line in lines:
+                    if line == "event: item":
+                        data = json.loads((await anext(lines))[6:])
+                        break
+            assert data["text"] == "after context"
     finally:
         server.should_exit = True
         await task

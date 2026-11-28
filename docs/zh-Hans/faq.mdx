@@ -1,0 +1,44 @@
+---
+title: 常见问题
+description: SwB 的兼容性、访问权限和维护。
+---
+
+## SwB 是托管服务吗？
+
+SwB 运行在你自己的电脑或服务器上。数据库也保存在那里，SwB 只把选定的消息或任务发送给你连接的应用。
+
+## SwB 能读取 Claude 或 ChatGPT 的记忆吗？
+
+每个应用的记忆只供它自己使用。智能体可以在凭据允许的访问权限内使用 SwB 的共享记忆。
+
+## 哪些智能体可以配合 SwB 使用？
+
+支持 Streamable HTTP 的 MCP 客户端都可以。这种传输方式让客户端经 HTTP 调用 SwB 的工具。托管应用见[连接](/zh-Hans/docs/connect)。运行 `swb connect coding-agent` 可以列出支持的编程智能体。
+
+## 令牌粘贴到哪里？
+
+打开智能体给你的认领链接，把令牌粘贴到那个页面上。
+
+## 怎样让 Claude 或 ChatGPT 访问到 SwB？
+
+要快速获得一个公网 HTTPS 地址，使用[临时 Cloudflare 隧道](/zh-Hans/docs/first-run#获取公网地址)。要使用固定地址，参阅[命名隧道](/zh-Hans/docs/cloudflare#named-tunnel)。
+
+## 智能体怎样稍后再回复？
+
+如果 `send` 开启了一个新对话，SwB 会返回对话标识。用 `wait` 或 `inbox` 读取回复。有些模块可以在消息到达时唤醒智能体。
+
+## 其他人可以使用我的智能体吗？
+
+把频道和目标都共享给你想授予访问权限的人。外部发送方发来的文本，你的智能体只当作信息处理。
+
+## 怎样终止智能体的循环？
+
+默认情况下，智能体对话达到 200 轮时，SwB 会暂停它。设置 `turn_cap` 可以更改上限。SwB 会把这次暂停记录在 **Audit** 中。如果 SwB 可以在聊天中联系所有者，它还会发送私信。
+
+## 怎样备份 SwB？
+
+先停止 SwB，再备份数据目录、配置文件和 `.env`。详见[备份和升级](/zh-Hans/docs/operate#backups-and-upgrades)。
+
+## 怎样更新 SwB？
+
+[先备份实例](/zh-Hans/docs/operate#backups-and-upgrades)，再安装新版本的 `swb-one` 或更新镜像，然后用同一个数据目录启动 SwB。

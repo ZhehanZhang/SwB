@@ -5,11 +5,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import html
+import json
 import logging
 import re
+from functools import partial
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
+from PIL import Image
+
 from ...chat import RETENTION_S, ChatBlock, Incoming, Persona
+from ...env import env_value
 from .. import BlockError, Manifest
 from .api import BotAPI, TelegramError
 
@@ -26,6 +32,8 @@ CREATE TABLE IF NOT EXISTS telegram_offsets (block TEXT NOT NULL, bot INTEGER NO
   at REAL NOT NULL, PRIMARY KEY (block, bot));
 CREATE TABLE IF NOT EXISTS telegram_topics (block TEXT NOT NULL, chat TEXT NOT NULL, message TEXT NOT NULL,
   topic INTEGER NOT NULL, at REAL NOT NULL, PRIMARY KEY (block, chat, message));
+CREATE TABLE IF NOT EXISTS telegram_topic_names (block TEXT NOT NULL, chat TEXT NOT NULL, topic INTEGER NOT NULL,
+  name TEXT NOT NULL, PRIMARY KEY (block, chat, topic));
 """
 
 
@@ -76,6 +84,7 @@ def _chunks(text: str, prefix: str | None) -> Iterator[str]:
 
 class TelegramBlock(ChatBlock):
     platform = "telegram"
+    connect_kinds = ("telegram",)
     manifest = Manifest(id="telegram", title="Telegram", kind="both", level_out="L3", level_in="events",
                         verbs={"reply": "reply"}, tools=("post", "status", "provision"),
                         secrets=("TELEGRAM_BOT_TOKEN",), network=("api.telegram.org",))
@@ -113,6 +122,7 @@ class TelegramBlock(ChatBlock):
         self._online = self._rejected = self._running = False
         self._unseen: set[int] = set()
         self._seen: dict[int, dict[str, Any]] = {}
+        self._group_names: dict[int, str] = {}
         self._connection: asyncio.Task[None] | None = None
         self._connection_lock = asyncio.Lock()
 
@@ -129,24 +139,28 @@ class TelegramBlock(ChatBlock):
             steps.append(f"no bot token: open the link from {self.name}_provision, or set {self.token_env}")
         if self._rejected:
             steps.append("token rejected: open a new token link")
-        if self._privacy and any(s.listen for s in self.spaces.values()):
+        if self._privacy and any(self.core.modes.resolve(self.name, label, str(chat))[0] in ("watch", "assist", "triage")
+                                 for chat, label in self._groups.items()):
             steps.append("in @BotFather: /setprivacy, choose the bot, Disable, then remove and re-add the bot to the group")
         steps.extend(f"add the bot to {label} chat {chat}" for chat, label in self._groups.items() if chat in self._unseen)
         steps.extend(f"set blocks.{self.name}.spaces.{s.label}.owner_ids (DM the bot and look up your id in {self.name}_status)"
                      for s in self.spaces.values() if not s.owner_ids)
         return steps
 
+    def get_token_steps(self) -> list[str]:
+        return ["Create a bot in @BotFather with /newbot."]
+
     def setup(self) -> dict[str, Any]:
         url = f"https://t.me/{self._bot['username']}" if self._bot else None
         return {"bot_father_url": "https://t.me/BotFather", "bot_url": url,
                 "add_to_group_url": f"{url}?startgroup=swb" if url else None, "bot": dict(self._bot) if self._bot else None,
-                "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
-                ("stored" if self.token() else None), "claim_pending": self.claims.pending("bot_token"),
+                "privacy_mode": self._privacy, "token_source": "env" if env_value(self.core.cfg.env, self.token_env) else
+                ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
-                "steps": ["1. Create a bot in @BotFather with /newbot.",
-                          f"2. Open the token link from {self.name}_provision and paste the token.",
-                          f"3. Add the bot to the group, send /swb@<bot username>, then copy the id from {self.name}_status into chats.",
-                          f"4. DM the bot, find your id in {self.name}_status, and add it to owner_ids."]}
+                "steps": [*self.get_token_steps(),
+                          f"Open the token link from {self.name}_provision and paste the token.",
+                          f"Add the bot to the group, send /swb@<bot username>, then copy the id from {self.name}_status into chats.",
+                          f"DM the bot, find your id in {self.name}_status, and add it to owner_ids."]}
 
     @contextlib.asynccontextmanager
     async def _telegram_lifespan(self) -> AsyncIterator[None]:
@@ -202,6 +216,9 @@ class TelegramBlock(ChatBlock):
                         raise TelegramError("getMe", "invalid bot username")
                     self._bot = {"id": me["id"], "username": username, "name": me.get("first_name")}
                     self._privacy = not me.get("can_read_all_group_messages", False)
+                    identity = self.core.bot_identities.get(self.name)
+                    if not identity or not identity.icon:
+                        await self.apply_avatar(me["id"], partial(self._set_avatar, token))
                     next_check = 0
                 if clock() >= next_check:
                     for chat in self._groups:
@@ -232,6 +249,28 @@ class TelegramBlock(ChatBlock):
                 log.warning("%s connection: update processing failed", self.name)
                 await asyncio.sleep(delay)
                 delay = min(2 * delay, 60)
+
+    async def _set_avatar(self, token: str, data: bytes) -> None:
+        out = BytesIO()
+        with Image.open(BytesIO(data)) as image:
+            image.convert("RGB").save(out, "JPEG", quality=92)
+        await self._api.multipart(token, "setMyProfilePhoto", data={"photo": json.dumps({"type": "static", "photo": "attach://p"})},
+                                  files={"p": ("avatar.jpg", out.getvalue(), "image/jpeg")})
+
+    async def update_bot_identity(self, name: str | None, icon: bytes | None, *,
+                                  space: str | None = None, reset: bool = False) -> None:
+        if space is not None:
+            raise BlockError("Telegram bot identity applies to every chat.")
+        async with self._connection_lock:
+            token = self.token()
+            if not token:
+                raise BlockError("Connect a Telegram bot token.")
+            if name is not None:
+                await self._api.call(token, "setMyName", retry=False, name=name)
+                if self._bot is not None:
+                    self._bot["name"] = name
+            if icon is not None:
+                await self._set_avatar(token, icon)
 
     async def _poll(self, token: str, bot_id: int, username: str) -> int:
         row = self.core.store.one("SELECT next_id FROM telegram_offsets WHERE block = ? AND bot = ? AND at > ?",
@@ -264,27 +303,45 @@ class TelegramBlock(ChatBlock):
             self._seen[channel] = {"id": channel, "title": chat.get("title"), "type": kind}
             if len(self._seen) > 20:
                 self._seen.pop(next(iter(self._seen)))
+        if space and not dm:
+            created, edited = raw.get("forum_topic_created"), raw.get("forum_topic_edited")
+            topic_info = created or edited
+            topic = raw.get("message_thread_id", mid if created else None)
+            if isinstance(topic_info, dict) and isinstance(name := topic_info.get("name"), str) and name.strip() and type(topic) is int and topic > 0:
+                self.core.store.x("INSERT INTO telegram_topic_names(block, chat, topic, name) VALUES (?,?,?,?) "
+                                  "ON CONFLICT(block, chat, topic) DO UPDATE SET name = excluded.name",
+                                  (self.name, str(channel), topic, name.strip()[:128]))
         text = raw.get("text") or raw.get("caption")
         if space is None or type(user) is not int or not text:
             return
         mention, text = _address(text, raw.get("entities") or raw.get("caption_entities") or [], bot_id, username)
         topic = raw.get("message_thread_id")
-        if raw.get("is_topic_message") and type(topic) is int and topic > 1:
-            self._save_topic(str(channel), str(mid), topic)
+        mode_channel = f"{channel}:{topic}" if raw.get("is_topic_message") and type(topic) is int and topic > 1 else None
         reply_to = (raw.get("reply_to_message") or {}).get("message_id")
         name = " ".join(n for n in (sender.get("first_name"), sender.get("last_name")) if n) or sender.get("username")
         internal = str(channel).removeprefix("-100") if kind == "supergroup" else ""
         link = f"https://t.me/c/{internal}/{mid}" if internal.isdecimal() else None
         await self.ingest(Incoming(space=space, channel=str(channel), message=str(mid), user=str(user), text=text, user_name=name,
                                    channel_name=chat.get("title"), is_bot=bool(sender.get("is_bot")), mention=mention, dm=dm,
-                                   reply_to=str(reply_to) if type(reply_to) is int else None, link=link))
+                                   reply_to=str(reply_to) if type(reply_to) is int else None, link=link, mode_channel=mode_channel))
+
+    def record_message(self, msg: Incoming) -> None:
+        if msg.channel_name and not msg.dm:
+            self._group_names[int(msg.channel)] = msg.channel_name
+        if msg.mode_channel:
+            self._save_topic(msg.channel, msg.message, int(msg.mode_channel.rsplit(":", 1)[1]))
 
     def _save_topic(self, channel: str, message: str, topic: int) -> None:
         self.core.store.x("INSERT OR REPLACE INTO telegram_topics(block, chat, message, topic, at) VALUES (?,?,?,?,?)",
                           (self.name, channel, message, topic, self.core.clock()))
 
+    def topic_name(self, chat: str, topic: int) -> str | None:
+        row = self.core.store.one("SELECT name FROM telegram_topic_names WHERE block = ? AND chat = ? AND topic = ?",
+                                  (self.name, chat, topic))
+        return row["name"] if row else None
+
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                   persona: Persona | None = None) -> str | list[str]:
+                   persona: Persona | None = None, require_reply: bool = False) -> str | list[str]:
         token = self.token()
         if not token or not self.token_re.fullmatch(token):
             raise BlockError("Telegram needs a valid bot token")
@@ -296,7 +353,7 @@ class TelegramBlock(ChatBlock):
         params: dict[str, Any] = {"chat_id": chat_id, "link_preview_options": {"is_disabled": True}}
         topic = None
         if reply_id is not None:
-            params["reply_parameters"] = {"message_id": reply_id, "allow_sending_without_reply": True}
+            params["reply_parameters"] = {"message_id": reply_id, "allow_sending_without_reply": not require_reply}
             found = self.core.store.one("SELECT topic FROM telegram_topics WHERE block = ? AND chat = ? AND message IN (?,?) ORDER BY message = ? DESC",
                                         (self.name, str(chat_id), str(reply_id), root, str(reply_id)))
             if found:

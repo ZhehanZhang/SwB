@@ -1,0 +1,55 @@
+---
+title: Claude
+description: Conecta Claude y Claude Projects, y despiértalos con rutinas.
+---
+
+## Añadir el conector
+
+Sigue la [configuración de Claude](/es/docs/setup/claude) para añadir tu dirección MCP de SwB como conector personalizado. Activa el conector en tu Project o en tu chat. Claude inicia sesión con OAuth como `claude`.
+
+## Conectar un Claude Project
+
+Pega el [prompt de configuración de Claude Project](/es/docs/setup/claude-project) en un chat del Project.
+
+El agente encuentra el proyecto de SwB y configura una rutina con un disparador de API. Llama a `connect` para obtener un enlace de entrega de un solo uso que caduca a los 30 minutos. Abre el enlace. Pega el token de la rutina en el formulario. Guarda el token. El agente envía un mensaje de prueba y comprueba la respuesta.
+
+## Rutinas
+
+Una **rutina** es una tarea de Claude Code que SwB puede iniciar. SwB también deja el mensaje en el buzón de Claude. La rutina usa `reply` para responder al remitente.
+
+| Enviar a | Destino |
+| - | - |
+| `claude` con `project=<slug>` | La rutina principal del proyecto |
+| `claude:<slug>` | La rutina principal del proyecto |
+| `<routine name>` | Esa rutina |
+| `agent:claude` | Solo el buzón |
+
+Un proyecto puede tener varias rutinas. De forma predeterminada, SwB elige la primera rutina de ese agente y ese proyecto. Define `primary=true` al registrar una rutina para que se elija primero.
+
+Si Claude indica que el proyecto está en pausa, SwB lo intenta de nuevo con una petición vacía. La rutina lee el mensaje con `routine_pickup`.
+
+## Configuración
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+Para una configuración manual, asigna a `token_env` el nombre de una variable que contenga el token de la rutina. El ejemplo usa `SWB_EXAMPLE_CLAUDE_TOKEN`.
+
+| Clave | Uso |
+| - | - |
+| `blocks.claude-routine` | Ajustes para despertar rutinas de Claude Code |
+| `blocks.claude-routine.use` | Tipo de bloque. Usa `claude-routine` |
+| `blocks.claude-routine.enabled` | Usa `false` para omitir este bloque |
+| `blocks.claude-routine.routines` | Ajustes de cada rutina, por nombre |
+| `blocks.claude-routine.routines.*.agent` | Agente que recibe el mensaje. Valor predeterminado `claude` |
+| `blocks.claude-routine.routines.*.kind` | Usa `project` para una rutina con proyecto. Usa `general` para una rutina general |
+| `blocks.claude-routine.routines.*.project` | Nombre del proyecto de SwB para una rutina de proyecto |
+| `blocks.claude-routine.routines.*.name` | Nombre visible de la rutina |
+| `blocks.claude-routine.routines.*.primary` | Usa `true` para elegir primero esta rutina para su agente y su proyecto |
+| `blocks.claude-routine.routines.*.routine_id` | ID del disparador de la API de Claude, como `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | Nombres cortos adicionales a los que puedes enviar |
+| `blocks.claude-routine.routines.*.token_env` | Nombre de la variable que contiene el token de la rutina |

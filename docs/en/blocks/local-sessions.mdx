@@ -1,0 +1,120 @@
+---
+title: Local sessions
+description: Send messages to coding agents that run on a paired device.
+---
+
+A local session is an open workspace for a coding agent on a paired device. SwB lists it as a target. A target is an address that can receive a message.
+
+## Pair the device
+
+Follow [Pair a device](/docs/companion#pair-a-device). Use the command for your agent below. Replace `https://swb.example.com` with your SwB address. Use one `--cap` option for each feature. To change the features on a paired device, [disconnect it](/docs/companion#disconnect) first.
+
+From an owner agent, call `targets(block="local")` to check each setup. Copy the address of your session. The format is `local:session:<companion>:<harness>:<session>`. A harness is the program that runs the agent.
+
+## Send a message
+
+Pass the session address as `to` in `send`. SwB tries to deliver the message to the open session. For a session with a matching agent, mailbox delivery requires access to that agent's mailbox. Use the returned conversation ID with `result` to read the reply.
+
+| Status | Meaning |
+| --- | --- |
+| `working` | The agent is working |
+| `blocked` | The agent is waiting for approval or input |
+| `idle` | The agent is ready for work |
+| `done` | The agent completed its work |
+| `unknown` | The status is still to be confirmed |
+
+For a blocked session, respond to the request in the session. SwB keeps the message in the mailbox if the sender can use that mailbox.
+
+The companion reports session status to your SwB server. It can also report the session name and folder name. The companion can send back one answer to each message it delivers directly. The rest of the session stays on the device.
+
+## Status hooks
+
+A hook runs a command when an agent reports a change. Status hooks work on macOS and Linux.
+
+```sh
+swb companion connect https://swb.example.com --cap hooks
+```
+
+Install the `swb` command with [pipx](/docs/install). Make `swb` available on the agent's command search path. If you set `SWB_COMPANION_HOME`, use the same folder for the agent and the companion.
+
+| Agent | Event command | Configuration |
+| --- | --- | --- |
+| Claude Code | `swb hook claude-code` | Merge the `hooks` from `channel/hooks/hooks.json` into `~/.claude/settings.json` |
+| Gemini CLI | `swb hook gemini` | Install the SwB extension from the checkout as shown below |
+| Codex | `swb hook codex` | Merge the `hooks` from `integrations/codex/hooks.json` into `~/.codex/hooks.json` |
+
+Use the files from the [SwB release checkout](/docs/deploy#docker-compose). The SwB Claude Code plugin also includes these hooks. For a custom Codex settings folder, use the `hooks.json` in that folder.
+
+```sh
+gemini extensions install /path/to/SwB/integrations/gemini
+```
+
+Open a new session after you set up the hook. Check for its address in `targets(block="local")`. With the hooks capability by itself, sessions receive messages through their mailboxes.
+
+## Herdr
+
+Open a coding agent in a Herdr pane, an area in the terminal. The companion gets session events through Herdr's socket. A socket is a connection that programs use on the same device.
+
+For a named session or a custom socket path, see the [Herdr companion settings](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48).
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+For replies from the pane, set up the applicable [status hook](#status-hooks). Check for a `local:session:<companion>:herdr:<session>` target. Send a short test message to the target. Check that it appears in the pane. If you set up a status hook, check the reply with `result`.
+
+## Codex
+
+The Codex app server is a process that gives other programs access to open Codex sessions. Start it in one terminal.
+
+```sh
+codex app-server --listen unix://
+```
+
+Open a session from a second terminal.
+
+```sh
+codex --remote unix://
+```
+
+Use a separate terminal for the companion. Use the same Codex settings folder in all terminals. For a custom socket, use `unix://<path>` in both commands above. Set `SWB_CODEX_SOCKET` to that path in the companion's terminal.
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+The companion reads session events from the app server. Check for a `local:session:<companion>:codex:<session>` target. Send a short test message to the target. Check the reply with `result`.
+
+## OpenCode
+
+Start the OpenCode server on the device.
+
+```sh
+opencode serve --hostname 127.0.0.1 --port 4096
+```
+
+Open a session on that server. Set `SWB_OPENCODE_URL` to the server's local address. For a password-protected server, see the [OpenCode companion settings](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228).
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+The companion reads session events from the OpenCode server. Check for a `local:session:<companion>:opencode:<session>` target. Send a short test message to the target. Check the reply with `result`.
+
+## DeepSeek Harness
+
+Use DeepSeek Harness `0.2.2-rc.5`. A profile is a set of app settings. Install the SwB bridge in the `web` profile. The bridge sends session events to the companion.
+
+Use a local copy of the `release/1.0` branch. Replace `/path/to/SwB` with the full path to that copy.
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+Restart DeepSeek Harness with the `web` profile. Open a session. If you set `SWB_COMPANION_HOME`, use the same absolute path for DeepSeek Harness and the companion.
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+Check for a `local:session:<companion>:dsh:<session>` target. Send a short test message to the target. Check the reply with `result`.

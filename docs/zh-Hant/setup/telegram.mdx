@@ -1,0 +1,75 @@
+---
+title: Telegram
+description: 用機器人把 Telegram 聊天和群組連接到 SwB。
+---
+
+SwB 用你在 BotFather 建立的機器人與 Telegram 通訊。新訊息由 SwB 主動向 Telegram 索取，所以 SwB 伺服器可以留在私有網址上。
+
+## 開始之前
+
+準備一個 Telegram 帳號。如果要連接群組，使用有權新增成員的帳號。以擁有者身分登入 SwB。
+
+## 複製設定提示詞
+
+<SetupPrompt name="telegram" lang="zh-Hant" />
+
+把提示詞貼到你的 SwB 擁有者用戶端。
+
+## 設定 Telegram 機器人
+
+### 開啟 BotFather
+
+用 Telegram 開啟 https://t.me/BotFather 連結。如果是第一次與 BotFather 聊天，點一下 **Start**。
+### 建立機器人
+
+傳送 `/newbot`，再回覆一個顯示名稱。
+
+### 選擇使用者名稱
+
+回覆一個以 `bot` 結尾的使用者名稱，BotFather 會回覆權杖。
+### 儲存權杖
+
+開啟代理提供的 SwB 認領連結，把權杖貼到欄位中。
+### 開始私人聊天
+
+在與機器人的私人聊天中點一下 **Start**，再傳送一則訊息，讓 SwB 能找到你的使用者 ID。
+### 把機器人加入群組
+
+開啟代理提供的群組連結，選取群組。
+
+### 傳送設定指令
+
+在群組中傳送 `/swb@<bot username>`，SwB 隨即得知群組 ID。
+### 讀取群組的所有訊息
+
+如果機器人需要讀取群組中的每則訊息，向 BotFather 傳送 `/setprivacy`，選擇你的機器人，再選取 **Disable**。
+
+### 重新加入機器人
+
+把機器人從每個群組中移除，再重新加入群組。
+
+## 代理會做什麼
+
+代理呼叫 `connect(what="telegram")`，必要時會啟用 `telegram` 模組。模組啟用後，`connect` 或 `telegram_provision` 會回傳 Bot 權杖的認領連結。
+
+你儲存權杖後，代理呼叫 `telegram_status`，檢查機器人和隱私模式。群組邀請連結在 `setup.add_to_group_url` 中，最近的聊天 ID 在 `setup.seen_chats` 中。
+
+代理在 `config/switchboard.yaml` 的 `blocks.telegram.spaces` 下設定一個空間。空間（space）把一組聊天對應到一個 SwB 專案。在 `chats` 中填入群組 ID，在 `owner_ids` 中填入你的使用者 ID。編輯檔案後，重新啟動 SwB。
+
+## 憑證
+
+| 權杖 | Telegram 顯示的位置 | 格式 | 去處 |
+| --- | --- | --- | --- |
+| Bot 權杖 | BotFather 在 `/newbot` 或 `/token` 之後的回覆 | 一串數字加一個冒號，再接英文字母和數字 | SwB 認領連結 |
+
+## 檢查連線
+
+請代理再次呼叫 `connect`。設定完成時，它會回報 `connected`。
+
+使用列在 `owner_ids` 中的 Telegram 帳號，在私人聊天中向機器人傳送 `/swb <target> hello`，並把 `<target>` 換成 `targets` 中的目標名稱。確認收到回覆。
+
+## 疑難排解
+
+如果機器人在群組中只讀取指令，到 BotFather 關閉隱私模式，再把機器人移除後重新加入。
+
+Webhook 是 Telegram 傳送訊息的目的網址。請機器人擁有者用 Telegram 的 `deleteWebhook` 方法移除舊 Webhook。

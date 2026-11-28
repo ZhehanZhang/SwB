@@ -1,0 +1,110 @@
+---
+title: Cloudflare
+description: Utilisez Cloudflare Tunnel pour obtenir une adresse publique SwB et Cloudflare Access pour la connexion propriétaire.
+---
+
+Cloudflare Tunnel donne à SwB une adresse publique HTTPS fixe. Un **tunnel** connecte votre serveur à Cloudflare. Cloudflare Access réserve la console SwB à votre compte.
+
+<span id="tunnel-rapide" />
+
+## Tunnel rapide [#quick-tunnel]
+
+Utilisez un tunnel rapide pour essayer SwB à une adresse temporaire. Exécutez cette commande sur l'hôte avec `cloudflared`, le programme qui connecte SwB à Cloudflare.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+Définissez `SWB_PUBLIC_URL` sur l'adresse HTTPS affichée dans le terminal. Si votre configuration contient `public_url`, mettez aussi ce paramètre à jour. Redémarrez SwB. L'adresse change à chaque démarrage du tunnel. Les connexions OAuth et les clés d'accès utilisent cette adresse. Pour une adresse durable, utilisez un tunnel nommé.
+
+<span id="tunnel-nommé" />
+
+## Tunnel nommé [#named-tunnel]
+
+Utilisez un compte Cloudflare gratuit avec votre domaine.
+
+### Avant de commencer
+
+Suivez [Docker Compose](/fr/docs/deploy#docker-compose) pour démarrer SwB. Utilisez un compte Cloudflare autorisé à gérer les tunnels et les applications Access de votre domaine. Autorisez votre serveur à se connecter à Cloudflare sur le port 7844.
+
+### Créer le tunnel
+
+Suivez le guide [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Copiez le jeton du tunnel depuis la commande d'installation. Placez-le dans l'entrée `.env` de SwB indiquée dans [le fichier Compose](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39). Gardez le jeton privé.
+
+Pour le tunnel Compose, faites pointer son adresse de service vers `http://switchboard:8000`. Placez le jeton du tunnel dans `.env` sous le nom `TUNNEL_TOKEN`. Ajoutez l'adresse du connecteur ou son réseau dédié à `trusted_proxies`.
+
+Démarrez le connecteur du tunnel sur le serveur SwB.
+
+```sh
+docker compose --profile tunnel up -d
+```
+
+Pour un tunnel sur l'hôte SwB, faites pointer son adresse de service vers `http://localhost:8870`. Définissez `SWB_TRUSTED_PROXIES` sur l'adresse du connecteur, par exemple `127.0.0.1/32` pour une connexion en boucle locale IPv4.
+
+Quand le connecteur apparaît dans Cloudflare, sélectionnez **Continue**.
+
+<span id="protéger-la-console" />
+
+### Protéger la console [#cloudflare-access]
+
+[Créez une application Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) pour le nom d'hôte de SwB. Définissez l'action de la stratégie sur **Allow**. Sous **Include** → **Emails**, saisissez votre adresse e-mail.
+
+Créez une deuxième application Access sur le même nom d'hôte pour les chemins marqués **Bypass**. Définissez l'action de sa stratégie sur **Bypass**. Sous **Include**, sélectionnez **Everyone**.
+
+| Chemin | Stratégie Access |
+| --- | --- |
+| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
+| `/healthz`, `/connect`, `/avatars/*` | Bypass |
+| `/inbox/poll`, `/inbox/events` | Bypass |
+| `/companion/*` | Bypass |
+| `/github/webhook` | Bypass pour GitHub |
+| `/hooks/*` | Bypass pour Webhooks |
+| Tous les autres chemins, dont `/pairing/companion`, `/authorize` et `/inbox` | Propriétaire |
+
+SwB vérifie les codes d'appairage sur `/companion/pair`. Il vérifie la clé de l'appareil sur les autres requêtes du compagnon. Si vous utilisez Access, demandez à un agent doté de l'accès propriétaire d'appeler `companion_code`.
+
+### Définir l'adresse SwB
+
+Dans `.env`, définissez `SWB_PUBLIC_URL` sur votre adresse publique, par exemple `https://swb.example.com`. Ajoutez à `config/switchboard.yaml` le domaine de votre équipe et la balise d'audience de l'application propriétaire. Cette balise indique à SwB l'application qui a émis le jeton.
+
+Si votre configuration contient `public_url`, mettez-y aussi l'adresse à jour.
+
+| Valeur | Où la trouver | Clé de configuration |
+| --- | --- | --- |
+| Domaine de l'équipe | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
+| Application Audience (AUD) Tag | Application propriétaire → **Additional settings** | `auth.cloudflare_access.aud` |
+| Votre adresse e-mail | Stratégie propriétaire → **Emails** | `auth.owner_emails` |
+
+```yaml
+auth:
+  owner_emails: [owner@swb.example.com]
+  cloudflare_access:
+    team_domain: example.cloudflareaccess.com
+    aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+Exécutez de nouveau `docker compose --profile tunnel up -d` pour appliquer les paramètres.
+
+<span id="proxys-de-confiance" />
+
+### Proxys de confiance [#trusted-proxies]
+
+Un proxy inverse transmet les requêtes à SwB. Ajoutez l'adresse du proxy ou son réseau dédié à `trusted_proxies` dans `config/switchboard.yaml`. Écrivez les plages réseau au format CIDR, par exemple `192.0.2.0/24`.
+
+Vous pouvez aussi définir `SWB_TRUSTED_PROXIES` dans `.env`. Séparez les entrées par des virgules. Le paramètre YAML a la priorité.
+
+Pour un Cloudflare Tunnel sur l'hôte SwB ou sur le réseau Docker, ajoutez l'adresse du connecteur du tunnel ou son réseau dédié. Le connecteur se connecte directement à SwB. Utilisez l'entrée `cloudflare` pour les connexions directes depuis les serveurs en périphérie de Cloudflare.
+
+### Publier le nom d'hôte
+
+Ouvrez l'onglet **Routes** du tunnel. Sélectionnez **Add route**. Choisissez **Published application**. Saisissez votre nom d'hôte public. Définissez **Service URL** sur `http://switchboard:8000`. Sélectionnez **Add route** pour enregistrer la route.
+
+### Vérifier la connexion
+
+Ouvrez `https://swb.example.com` dans un navigateur. Connectez-vous à Cloudflare Access. Ouvrez `https://swb.example.com/healthz` pour vérifier que SwB répond.
+
+Ouvrez `https://swb.example.com/mcp` dans une fenêtre de navigation privée. SwB renvoie `401` avec un en-tête `WWW-Authenticate`. Si Cloudflare affiche sa page de connexion, vérifiez la stratégie **Bypass**.
+
+## Configurer une application
+
+Une fois le nom d'hôte opérationnel, suivez [Connecter vos agents](/fr/docs/connect) pour configurer une application. Utilisez l'adresse MCP publique, par exemple `https://swb.example.com/mcp`. Demandez à votre agent d'appeler `switchboard_status` pour vérifier son identité SwB.

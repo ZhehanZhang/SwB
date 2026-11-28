@@ -1,0 +1,110 @@
+---
+title: Cloudflare
+description: Cloudflare Tunnel で SwB の公開アドレスを用意し、Cloudflare Access でオーナーのサインインを守ります。
+---
+
+Cloudflare Tunnel は、SwB に固定の公開 HTTPS アドレスを与えます。**トンネル**は、サーバーを Cloudflare につなぎます。Cloudflare Access は、SwB のコンソールへのアクセスを自分のアカウントだけに制限します。
+
+<span id="クイックトンネル" />
+
+## クイックトンネル [#quick-tunnel]
+
+一時的なアドレスで SwB を試すときは、クイックトンネルを使ってください。`cloudflared` があるホストで、このコマンドを実行してください。`cloudflared` は、SwB を Cloudflare につなぐプログラムです。
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+ターミナルに表示される HTTPS アドレスを `SWB_PUBLIC_URL` に設定してください。設定ファイルに `public_url` がある場合は、その設定も更新してください。SwB を再起動してください。アドレスは、トンネルを起動するたびに変わります。OAuth のサインインとパスキーは、そのアドレスに結び付きます。固定のアドレスには、名前付きトンネルを使ってください。
+
+<span id="名前付きトンネル" />
+
+## 名前付きトンネル [#named-tunnel]
+
+自分のドメインを登録した無料の Cloudflare アカウントを使ってください。
+
+### 始める前に
+
+[Docker Compose](/ja/docs/deploy#docker-compose) の手順に従って SwB を起動してください。自分のドメインのトンネルと Access アプリケーションを管理できる Cloudflare アカウントを使ってください。サーバーからポート 7844 で Cloudflare に接続できるようにしてください。
+
+### トンネルを作成する
+
+[Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/) の手順に従ってください。インストールコマンドからトンネルのトークンをコピーしてください。そのトークンを、[Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)にある名前で SwB の `.env` に入れてください。トークンは安全に保管してください。
+
+Compose のトンネルでは、サービスのアドレスを `http://switchboard:8000` にしてください。トンネルのトークンを `TUNNEL_TOKEN` として `.env` に入れてください。コネクターのアドレスか専用のネットワークを `trusted_proxies` に追加してください。
+
+SwB のサーバーで、トンネルのコネクターを起動してください。
+
+```sh
+docker compose --profile tunnel up -d
+```
+
+SwB のホスト上のトンネルでは、サービスのアドレスを `http://localhost:8870` にしてください。`SWB_TRUSTED_PROXIES` にコネクターのアドレスを設定してください。IPv4 のループバック接続では `127.0.0.1/32` を使います。
+
+Cloudflare にコネクターが表示されたら、**Continue** を選択してください。
+
+<span id="コンソールを保護する" />
+
+### コンソールを保護する [#cloudflare-access]
+
+SwB のホスト名に対して [Access アプリケーションを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)してください。ポリシーのアクションを **Allow** にしてください。**Include** → **Emails** に、自分のメールアドレスを入力してください。
+
+同じホスト名に、**Bypass** の印があるパス用の Access アプリケーションをもう 1 つ作成してください。そのポリシーのアクションを **Bypass** にしてください。**Include** で **Everyone** を選択してください。
+
+| パス | Access ポリシー |
+| --- | --- |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | Bypass |
+| `/healthz`、`/connect`、`/avatars/*` | Bypass |
+| `/inbox/poll`、`/inbox/events` | Bypass |
+| `/companion/*` | Bypass |
+| `/github/webhook` | GitHub 向けに Bypass |
+| `/hooks/*` | Webhooks 向けに Bypass |
+| `/pairing/companion`、`/authorize`、`/inbox` を含む、ほかのすべてのパス | Owner |
+
+SwB は、`/companion/pair` でペアリングコードを確認します。ほかのコンパニオンのリクエストでは、デバイスのキーを確認します。Access を使う場合は、オーナー権限を持つエージェントに `companion_code` の呼び出しを頼んでください。
+
+### SwB のアドレスを設定する
+
+`.env` の `SWB_PUBLIC_URL` に、SwB の公開アドレスを設定してください。たとえば `https://swb.example.com` を使います。`config/switchboard.yaml` に、チームのドメインと、オーナー用アプリケーションの Audience タグを追加してください。このタグは、トークンを発行したアプリケーションを SwB に伝えます。
+
+設定ファイルに `public_url` がある場合は、そのアドレスも更新してください。
+
+| 値 | 確認する場所 | 設定キー |
+| --- | --- | --- |
+| チームのドメイン | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
+| Application Audience (AUD) Tag | オーナー用アプリケーション → **Additional settings** | `auth.cloudflare_access.aud` |
+| 自分のメールアドレス | オーナー用ポリシー → **Emails** | `auth.owner_emails` |
+
+```yaml
+auth:
+  owner_emails: [owner@swb.example.com]
+  cloudflare_access:
+    team_domain: example.cloudflareaccess.com
+    aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+設定を反映するために、もう一度 `docker compose --profile tunnel up -d` を実行してください。
+
+<span id="信頼済みプロキシ" />
+
+### 信頼済みプロキシ [#trusted-proxies]
+
+リバースプロキシは、リクエストを SwB に渡すサーバーです。`config/switchboard.yaml` の `trusted_proxies` に、プロキシのアドレスか専用のネットワークを追加してください。ネットワークの範囲は、`192.0.2.0/24` のような CIDR 形式で書いてください。
+
+`.env` で `SWB_TRUSTED_PROXIES` を設定することもできます。複数の項目はカンマで区切ってください。YAML の設定が優先されます。
+
+SwB のホストか Docker ネットワーク上で Cloudflare Tunnel を使うときは、トンネルのコネクターのアドレスか専用のネットワークを追加してください。コネクターは SwB に直接接続します。Cloudflare のエッジサーバーからの直接の接続には、`cloudflare` の項目を使ってください。
+
+### ホスト名を公開する
+
+トンネルの **Routes** タブを開いてください。**Add route** を選択してください。**Published application** を選んでください。公開するホスト名を入力してください。**Service URL** を `http://switchboard:8000` に設定してください。**Add route** を選択して保存してください。
+
+### 接続を確認する
+
+ブラウザーで `https://swb.example.com` を開いてください。Cloudflare Access にサインインしてください。`https://swb.example.com/healthz` を開き、SwB が応答することを確認してください。
+
+プライベートウィンドウで `https://swb.example.com/mcp` を開いてください。SwB は、`WWW-Authenticate` ヘッダー付きで `401` を返します。Cloudflare のサインインページが表示された場合は、Bypass のポリシーを確認してください。
+
+## アプリを設定する
+
+ホスト名にアクセスできるようになったら、[接続](/ja/docs/connect)の手順でアプリを設定してください。`https://swb.example.com/mcp` のような公開 MCP アドレスを使ってください。SwB での ID を確認するために、`switchboard_status` を呼び出すようエージェントに頼んでください。

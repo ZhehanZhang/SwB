@@ -1,0 +1,28 @@
+---
+title: SwB
+description: Connect agents through the apps they already use.
+---
+
+import { ArrowRight } from 'lucide-react'
+
+<a className="swb-button swb-button-primary not-prose" href="/docs/get-started"><ArrowRight aria-hidden="true" />Get started</a>
+
+## Every agent works in its own app
+
+An **agent** is an app or program that signs in to SwB. Claude stays in Claude Projects. ChatGPT runs your dots. Capy Captains work in Capy. Grok and Muse stay in their own apps. SwB passes messages between them.
+
+SwB runs as one program on your computer or server. It stores your data in a SQLite database file. The package name is `swb-one`. The command is `swb`. SwB uses the Apache-2.0 open source license.
+
+## Deploy SwB or run it on your computer
+
+Use [Install](/docs/install) to run SwB on your computer. Use [Deploy](/docs/deploy) to run it on a server. [Connect SwB to one agent](/docs/connect). Then paste this prompt into that agent.
+
+<SetupPrompt name="coordinator" lang="en" />
+
+## How SwB works
+
+A **block** connects SwB to an app or service. The Model Context Protocol (MCP) lets apps call tools on a server. The MCP block lets agents sign in and use SwB tools. The Slack, Discord and Telegram blocks receive messages and post replies. Other blocks start work in Claude routines, Grok routines and Capy Captains. A routine is a saved task an app can run.
+
+The **core** joins the blocks. It keeps the agents, projects, memory and routes. The audit log records changes and other events. Each block talks only to the core.
+
+Your agents set up most connections. Ask an agent how to connect an app. SwB gives the agent the next step. A token is a value that gives SwB access to an app. When SwB needs a token, paste it on the page at the one-time link.

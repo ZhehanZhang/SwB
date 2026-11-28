@@ -1,0 +1,22 @@
+import { defineRailway, github, preserve, project, service, volume } from "railway/iac";
+
+export default defineRailway(() => {
+  const data = volume("switchboard-data", { sizeMB: 1024 });
+  const swb = service("swb", {
+    source: github("ZhehanZhang/SwB", { branch: "release/1.0" }),
+    build: { builder: "DOCKERFILE" },
+    deploy: { requiredMountPath: "/data", sleepApplication: false, overlapSeconds: 0 },
+    healthcheck: "/healthz",
+    replicas: 1,
+    env: {
+      SWB_DATA_DIR: "/data",
+      SWB_DEPLOY_PLATFORM: "railway",
+      SWB_PUBLIC_URL: preserve(),
+      SWB_KEY_OWNER: preserve(),
+      SWB_SETUP_CODE: preserve(),
+    },
+    volumeMounts: { "/data": data },
+  });
+
+  return project("swb", { resources: [swb, data] });
+});

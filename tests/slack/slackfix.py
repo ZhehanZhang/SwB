@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
+from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
 from switchboard.slack.config import parse_config
 from switchboard.slack.engine import SlackEngine as Core
@@ -33,9 +34,9 @@ TEAM_A, TEAM_B = "TAAAA1111", "TBBBB2222"
 BOT_USER, BOT_ID, OWNER_A, OWNER_B = "UBOT00001", "BBOT00001", "UOWNERA01", "UOWNERB01"
 
 AUTH = {
-    "xoxb-a": {"ok": True, "team_id": TEAM_A, "user_id": BOT_USER, "bot_id": BOT_ID, "url": "https://a.slack.com/"},
-    "xoxp-a": {"ok": True, "team_id": TEAM_A, "user_id": OWNER_A, "url": "https://a.slack.com/"},
-    "xoxp-b": {"ok": True, "team_id": TEAM_B, "user_id": OWNER_B, "url": "https://b.slack.com/"},
+    "xoxb-a": {"ok": True, "team_id": TEAM_A, "user_id": BOT_USER, "bot_id": BOT_ID, "url": "https://workspace-a.example.test/"},
+    "xoxp-a": {"ok": True, "team_id": TEAM_A, "user_id": OWNER_A, "url": "https://workspace-a.example.test/"},
+    "xoxp-b": {"ok": True, "team_id": TEAM_B, "user_id": OWNER_B, "url": "https://workspace-b.example.test/"},
 }
 
 
@@ -91,7 +92,9 @@ class FakeSlack:
             if name in self.world.canned:
                 return self.world.canned[name](self.token, kwargs)
             if name == "auth_test":
-                return AUTH[self.token]
+                return AsyncSlackResponse(client=self, http_verb="POST", api_url="https://slack.com/api/auth.test",
+                                          req_args={}, data=AUTH[self.token], status_code=200,
+                                          headers={"X-OAuth-Scopes": self.world.bot_scopes if self.token == "xoxb-a" else "chat:write"})
             if name == "chat_postMessage":
                 self.world.counter += 1
                 return {"ok": True, "channel": kwargs["channel"], "ts": f"1700000000.{self.world.counter:06d}"}
@@ -117,6 +120,7 @@ class FakeWorld:
         self.counter = 0
         self.history: dict[str, list[dict]] = {}
         self.canned: dict[str, Any] = {}
+        self.bot_scopes = "chat:write, chat:write.customize"
 
     def factory(self, token: str) -> FakeSlack:
         self.clients[token] = FakeSlack(token, self)

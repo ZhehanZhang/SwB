@@ -1,0 +1,110 @@
+---
+title: 擁有者登入
+description: 使用密碼金鑰、一次性連結、設定碼或身分提供者登入。
+---
+
+擁有者登入後即可管理 SwB。這項存取權讓擁有者能核准代理的登入並儲存權杖。
+
+| 頁面 | 用途 |
+| - | - |
+| `/login` | 以擁有者身分登入。 |
+| `/authorize` | 審核代理的連接請求。 |
+
+## 一次性連結
+
+```bash
+swb login-link
+```
+
+這個指令會印出類似 `https://swb.example.com/login#t=...` 的連結。在 5 分鐘內用瀏覽器開啟，連結只能使用一次。以擁有者身分登入的代理也能用 `login_link` 工具產生連結。權杖位於連結中 `#` 之後的部分。
+
+第一次在本機啟動時，`swb up` 會印出一次性連結。本機網址預設為 `http://localhost:8870`，如果設定了 `SWB_PORT`，網址會改用該連接埠。執行 `swb login-link` 時，用 `--url` 指定其他伺服器，用 `--dir` 從其他執行個體資料夾讀取擁有者金鑰。
+
+如果用連結登入失敗，再執行一次 `swb login-link`，然後用瀏覽器開啟新的連結。
+
+## 設定碼
+
+設定碼只能使用一次，用於擁有者的首次登入。由 SwB 直接處理登入時，就使用設定碼。託管伺服器的設定碼從哪裡取得，見[部署指南](/zh-Hant/docs/deploy)。
+
+要自訂設定碼，先產生 32 個隨機位元組，再編碼成 64 個小寫十六進位字元或標準 Base64。下面的指令會把一組十六進位設定碼加進私有的 `.env` 檔案。執行 `swb init` 之後，在執行個體資料夾中執行這個指令。
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+設定好 `SWB_SETUP_CODE` 後啟動 SwB。用瀏覽器開啟 `/login`，把設定碼貼到 **Setup code**，再選取 **Sign in**。
+
+## 密碼金鑰
+
+**密碼金鑰**利用你的裝置來確認登入。首次登入後，在 **Passkey name** 中輸入裝置名稱，再選取 **Add a passkey**。
+
+要新增其他裝置，開啟 **Settings**，在 **Sign-in** 下選取 **Add a passkey**，輸入名稱後選取 **Add passkey** 儲存。之後就用密碼金鑰登入。
+
+## OIDC
+
+OpenID Connect（OIDC）讓 Google 這類登入服務確認你的身分。把你使用的服務加進設定檔，並把 `SWB_OIDC_CLIENT_SECRET` 設為該服務提供的密鑰。
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+在提供者端把重新導向網址設為 `https://swb.example.com/auth/oidc/callback`。登入頁面會顯示該服務的按鈕。SwB 接受列在 `auth.owner_emails` 中且已驗證的電子郵件地址。也可以把該服務的帳號 ID 列在 `auth.oidc.owner_subjects` 中。
+
+## Cloudflare Access
+
+依照 [Cloudflare 設定](/zh-Hant/docs/cloudflare#cloudflare-access)的說明，用 Cloudflare Access 保護主控台。SwB 會檢查 Access 權杖，並把電子郵件地址與 `auth.owner_emails` 或 `SWB_OWNER_EMAILS` 比對。
+
+## 代理登入
+
+OAuth 讓應用程式在你核准後連接到 SwB。在 `/authorize` 頁面核准連接。應用程式會取得 OAuth 範圍 `switchboard`，也就是它所請求的存取權名稱。應用程式透過 `/token` 取得或更新權杖。
+
+應用程式收到 OAuth 錯誤時，從 `error_description` 查看詳細資訊。
+
+| 錯誤 | 意義 |
+| - | - |
+| `access_denied` | 擁有者拒絕了這次連接。 |
+| `invalid_client` | SwB 拒絕了應用程式的身分或憑證。 |
+| `invalid_client_metadata` | SwB 拒絕了應用程式的註冊設定。 |
+| `invalid_redirect_uri` | 註冊時，SwB 要求提供允許的回呼網址。 |
+| `invalid_request` | 請求格式或某個必要的值無效。 |
+| `invalid_grant` | SwB 拒絕了授權碼或重新整理權杖。 |
+| `invalid_target` | 請求指定了錯誤的 MCP 網址。 |
+| `unsupported_response_type` | 使用 `response_type=code`。 |
+| `unsupported_grant_type` | 使用 `grant_type=authorization_code` 或 `grant_type=refresh_token`。 |
+| `temporarily_unavailable` | 設定 `public_url`，或檢查用戶端註冊數量的上限。 |
+
+SwB 拒絕[配對碼](/zh-Hant/docs/connect#用配對碼連接)時，`/connect` 也會回傳 `invalid_grant`。
+
+## 工作階段
+
+**Cookie** 是瀏覽器儲存的一個值，用來維持登入狀態。SwB 會為這個 Cookie 設定 `Secure` 旗標。公開網址要使用 HTTPS。
+
+變更設定時，瀏覽器會送出一個權杖，供 SwB 檢查請求。到 **Settings** 就能登出。
+
+瀏覽器從 `/auth/session` 讀取目前的登入狀態。
+
+## 登入錯誤
+
+SwB 會把瀏覽器登入失敗的情況記錄在 **Audit** 下。每一列都會顯示原因，並隱藏代碼和權杖。某些失敗重複發生時，SwB 會限制記錄的列數。
+
+| 錯誤 | 意義 |
+| - | - |
+| `link_used` | 已有人在連結過期前用它登入。 |
+| `link_expired` | 連結已過期。 |
+| `link_invalid` | SwB 拒絕了這個連結。 |
+| `setup_failed` | 設定碼格式錯誤，或與 `SWB_SETUP_CODE` 不同。 |
+| `setup_closed` | 設定碼登入已關閉。改用其他登入方式。 |
+| `passkey_failed` | 密碼金鑰的設定或驗證失敗。 |
+| `last_method` | OIDC 和 Cloudflare Access 都停用時，SwB 會保留最後一組密碼金鑰。 |
+| `not_found` | 密碼金鑰 ID 錯誤，或該密碼金鑰已移除。 |
+| `oidc_failed` | 透過身分提供者登入失敗。 |
+| `signed_out` | 這個請求需要擁有者工作階段。 |
+| `csrf` | SwB 拒絕了頁面網址或安全性權杖。 |
+| `slow_down` | 登入嘗試次數已達上限。等待 `Retry-After` 指定的時間。 |

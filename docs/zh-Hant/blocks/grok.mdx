@@ -1,0 +1,50 @@
+---
+title: Grok
+description: 在瀏覽器中連接 Grok，或用 routine 喚醒 Grok Bot。
+---
+
+## 新增連接器
+
+依照 [Grok 設定](/zh-Hant/docs/setup/grok)在瀏覽器中連接 Grok。Grok Bot 是另一個桌面應用程式，依照 [Grok Bot 設定](/zh-Hant/docs/setup/grok-bot)操作。
+
+## 用 routine 喚醒 Grok Bot
+
+請代理連接 Grok Bot。在終端機中則執行 `swb connect grok-bot`。依照它的設定指示取得 routine 提示詞。
+
+用這份提示詞建立一個帶有 Webhook 觸發條件的 Grok Bot routine。SwB 向 Webhook 的 URL 送出請求時，Webhook 就會啟動 routine。把 `example` 換成某個使用中 SwB 專案的短名稱，再執行下面的指令註冊 routine。
+
+```bash
+swb connect grok-bot --choose name=project-triage project=example auth=key
+```
+
+SwB 會為 Webhook 網址和金鑰分別提供認領連結，用各自的連結儲存對應的值。再次執行同一個指令，取得測試呼叫。請代理執行這個呼叫，並確認收到 `pong` 回覆。
+
+## 喚醒的運作方式
+
+使用 `auth=key` 時，SwB 預設把金鑰放在 `Authorization` 標頭中傳送。使用 `auth=signature` 時，SwB 會簽署請求。請求包含文字、對話識別碼、傳送者和信任等級，有專案時也會包含專案。請求的信任等級為 `owner` 時，routine 會呼叫 `reply`。
+
+如果要手動設定，在伺服器環境中設定 `url_env` 和 `secret_env` 所指定的變數。
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
+```
+
+用 routine 的名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主要 routine。
+
+## 設定
+
+| 鍵 | 用途 |
+| - | - |
+| `blocks.grok-routine` | 喚醒 Grok Bot routine 的設定 |
+| `blocks.grok-routine.use` | 模組類型，填入 `grok-routine` |
+| `blocks.grok-routine.enabled` | 設為 `false` 可略過這個模組 |
+| `blocks.grok-routine.routines` | routine 名稱與設定的對應表 |
+| `blocks.grok-routine.routines.*.project` | SwB 專案的短名稱。通用 routine 填 `null` |
+| `blocks.grok-routine.routines.*.primary` | 設為 `true` 時，優先為它的專案選取這個 routine |
+| `blocks.grok-routine.routines.*.auth` | `key` 傳送金鑰，`signature` 簽署請求。預設為 `key` |
+| `blocks.grok-routine.routines.*.header` | 放置金鑰或簽章的 HTTP 標頭。`key` 預設為 `Authorization`，`signature` 預設為 `Webhook-Signature` |
+| `blocks.grok-routine.routines.*.url_env` | 存放公開 HTTPS Webhook 網址的變數名稱 |
+| `blocks.grok-routine.routines.*.secret_env` | 存放金鑰或簽署密鑰的變數名稱 |

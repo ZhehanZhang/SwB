@@ -9,27 +9,59 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Callable
 
 import aiohttp
+import httpx
 from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from ...auth import Principal
+from ...claims import NAME_RE as SECRET_NAME_RE
+from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
-from ...guard import client_ip
+from ...env import env_value
+from ...guard import audit_client_ip
+from ...inbox import CONTEXT_NOTE
+from ...modes import GITHUB_CREDENTIAL_PROBLEM
+from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
-from .. import Block, Manifest
+from ...subject import display_subject, subject, wake_text
+from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
+from ...visibility import Who
+from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
+from .api import (
+    API_URL,
+    APP_ID_ENV,
+    INSTALLATION_ID_ENV,
+    PRIVATE_KEY_ENV,
+    TOKEN_ENV,
+    GitHubAPI,
+    load_rsa_private_key,
+    provider_id,
+    repo_name,
+    validate_app_id,
+)
 
 if TYPE_CHECKING:
-    from ...auth import Principal
     from ...core import Switchboard
 
-SECRET_ENV = "GITHUB_WEBHOOK_SECRET"
 CHECKS = {"check_run", "check_suite", "workflow_run"}
 EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_review",
                    "pull_request_review_comment", "pull_request_review_thread", "push"}
+SUMMARY_ACTIONS = frozenset((
+    "assigned auto_merge_disabled auto_merge_enabled closed completed converted_to_draft created deleted demilestoned "
+    "dequeued dismissed edited enqueued in_progress labeled locked milestoned opened pinned ready_for_review reopened "
+    "requested requested_action rerequested resolved review_request_removed review_requested submitted synchronize "
+    "transferred typed unassigned unlabeled unlocked unpinned unresolved untyped"
+).split())
+SUMMARY_CONCLUSIONS = frozenset((
+    "action_required cancelled failure neutral skipped stale startup_failure success timed_out"
+).split())
 DELIVERY_TTL_S = 86400
 MAX_DELIVERIES = 100_000
 RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
+WRITES = ("label", "comment", "open_issue", "link_duplicate", "notify_owner", "reply")
+PERMISSION_TTL_S = 60
 log = logging.getLogger("switchboard.github")
 
 
@@ -48,14 +80,18 @@ def _excerpt(value: str, budget: int) -> str:
     return value
 
 
-def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | None:
-    """Project the webhook to scalar fields, with a 500-character body and bounded escaped UTF-8 elsewhere."""
+def trim(event: str, delivery: str, data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]] | None:
+    """Bound the payload and retain the author object for each text part."""
     if event not in EVENTS:
         return None
     check = _object(data.get(event)) if event in CHECKS else {}
     if event in CHECKS and check.get("status") != "completed":
         return None
-    item = _object(data.get("issue" if event in {"issues", "issue_comment"} else "pull_request"))
+    item = {}
+    if event in {"issues", "issue_comment"}:
+        item = _object(data.get("issue"))
+    elif event.startswith("pull_request"):
+        item = _object(data.get("pull_request"))
     sender = _object(data.get("sender"))
     review = _object(data.get("review")) if event == "pull_request_review" else {}
     comment = _object(data.get("comment")) if event in {"issue_comment", "pull_request_review_comment"} else {}
@@ -64,6 +100,7 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
         if isinstance(comments, list) and comments:
             comment = _object(comments[0])
     detail = comment or review
+    primary = detail if isinstance(detail.get("body"), str) else item
     head = _object(item.get("head"))
     push = event == "push"
     commits = data.get("commits") if push else None
@@ -80,8 +117,13 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
         "check": check.get("name"), "conclusion": check.get("conclusion"), "review_state": review.get("state"),
         "ref": data.get("ref") if push else None,
         "commits": data.get("size", len(commits) if isinstance(commits, list) else None) if push else None,
-        "body": detail.get("body") if detail.get("body") is not None else item.get("body"),
+        "body": primary.get("body"),
     }
+    authors = {"title": _object(item.get("user")), "body": _object(primary.get("user")), "check": {}}
+    if primary is detail:
+        context_field = "issue_body" if event == "issue_comment" else "pull_request_body"
+        fields[context_field] = item.get("body")
+        authors[context_field] = _object(item.get("user"))
     out = {}
     for key, value in fields.items():
         if key in {"number", "commits"}:
@@ -92,8 +134,8 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
                 out[key] = value
         elif isinstance(value, str):
             limit = {"url": 1024, "delivery": 256}.get(key, 240)
-            out[key] = value[:500] if key == "body" else _excerpt(value, limit)
-    return out
+            out[key] = value[:500] if key.endswith("body") else _excerpt(value, limit)
+    return out, {key: author for key, author in authors.items() if key in out}
 
 
 class _Sink:
@@ -145,7 +187,8 @@ class _Sink:
 class GitHubBlock(Block):
     connect_kinds = ("github",)
     manifest = Manifest(id="github", title="GitHub", kind="source", level_in="webhook",
-                        speaks=("event",), secrets=(SECRET_ENV,))
+                        speaks=("event",), secrets=(SECRET_ENV, APP_ID_ENV, INSTALLATION_ID_ENV, PRIVATE_KEY_ENV, TOKEN_ENV),
+                        tools=tuple(f"github_{name}" for name in (*WRITES, "status")))
 
     def __init__(self, core: Switchboard, config: dict[str, Any]):
         super().__init__(core, config)
@@ -188,19 +231,101 @@ class GitHubBlock(Block):
             if not isinstance(repo, str) or not isinstance(names, list) or any(not isinstance(n, str) or n not in self.sinks for n in names):
                 raise ConfigError(f"{self.name}.routes must map repository names to lists of configured sinks")
             self.repo_routes.setdefault(repo.casefold(), set()).update(names)
+        self.space_config = config.get("spaces") or {}
+        self.repo_spaces: dict[str, tuple[str, str | None]] = {}
+        if not isinstance(self.space_config, dict):
+            raise ConfigError(f"{self.name}.spaces must map space labels to settings")
+        for label, settings in self.space_config.items():
+            if not isinstance(label, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", label) or not isinstance(settings, dict):
+                raise ConfigError(f"{self.name}.spaces must map space labels to settings")
+            channels = settings.get("channels") or {}
+            if not isinstance(channels, dict):
+                raise ConfigError(f"{self.name}.spaces.{label}.channels must map GitHub repositories to modes")
+            default_repo = settings.get("repo", label)
+            if "repo" in settings and repo_name(default_repo) is None:
+                raise ConfigError(f"{self.name}.spaces.{label}.repo must be an owner/repo name")
+            entries = {**({default_repo: {}} if repo_name(default_repo) else {}), **channels}
+            for repo, settings_for_repo in entries.items():
+                key = repo_name(repo)
+                if key is None or (key in self.repo_spaces and self.repo_spaces[key][0] != label):
+                    raise ConfigError(f"{self.name}.spaces.{label} must use unique owner/repo channel names")
+                project = _object(settings_for_repo).get("project", settings.get("project"))
+                if project is not None and not isinstance(project, str):
+                    raise ConfigError(f"{self.name}.spaces.{label}.project must be a project slug")
+                self.repo_spaces[key] = (label, project)
+        self.owner_ids = self._owners(config)
+        self.space_owners = {space: self._owners(settings) for space, settings in self.space_config.items() if "owner_ids" in settings}
+        for field in ("app_id", "installation_id"):
+            if config.get(field) is not None and provider_id(config[field]) is None:
+                raise ConfigError(f"{self.name}.{field} must be a numeric GitHub ID")
+        app_id_env = config.get("app_id_env", APP_ID_ENV)
+        private_key_env = config.get("private_key_env", PRIVATE_KEY_ENV)
+        token_env = config.get("token_env", TOKEN_ENV)
+        if any(not isinstance(name, str) or not SECRET_NAME_RE.fullmatch(name) for name in (app_id_env, private_key_env, token_env)):
+            raise ConfigError(f"{self.name}.app_id_env, private_key_env, and token_env must name environment variables")
+        if len({app_id_env, private_key_env, secret_env, token_env, INSTALLATION_ID_ENV}) < 5:
+            raise ConfigError(f"{self.name} needs distinct environment variables for its GitHub credentials")
+        self.api = GitHubAPI(core, provider_id(config.get("app_id")), provider_id(config.get("installation_id")), app_id_env, private_key_env, token_env)
+        self.installation: dict[str, str] = {}
+        self.installations: dict[str, dict[str, Any]] = {}
+        self.missing_installations: dict[str, str] = {}
+        self.pat_capabilities: dict[str, Any] | None = None
+        self.checked_at: float | None = None
+        self.installation_problem: str | None = None
+        self._last_check: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+        self._refresh_lock = asyncio.Lock()
+        self._senders: OrderedDict[str, list[float]] = OrderedDict()
         self.seen: OrderedDict[str, float] = OrderedDict()
         self.dropped = 0
+        self.refused = 0
         self.http: aiohttp.ClientSession | None = None
+
+    def _owners(self, config: dict[str, Any]) -> frozenset[str]:
+        values = config.get("owner_ids", [])
+        if not isinstance(values, list) or any(provider_id(value) is None for value in values):
+            raise ConfigError(f"{self.name}.owner_ids must list numeric GitHub user IDs")
+        return frozenset(str(value) for value in values)
+
+    def registered_repositories(self) -> set[str]:
+        return (set(self.repo_spaces) | {repo for repo in self.repo_routes if repo_name(repo)}
+                | {repo for p in self.core.projects.list() for raw in p.links.get("repos", ()) if (repo := repo_name(raw))})
+
+    def sink_names(self, repo: str) -> set[str]:
+        return self.repo_routes.get(repo, set()) | self.repo_routes.get(f"{repo.split('/', 1)[0]}/*", set())
+
+    def channel_resources(self, space: str, repo: str) -> list[str]:
+        return list(dict.fromkeys((f"channel:{space}/{repo}", self.channel_resource(repo))))
+
+    def channel_resource(self, repo: str) -> str:
+        return f"channel:{self.name}/{repo}"
+
+    def legacy_watch(self, repo: str) -> bool:
+        return bool(self.sink_names(repo.casefold()))
+
+    def space_for(self, repo: str) -> tuple[str, str | None] | None:
+        key = repo_name(repo)
+        if key is None:
+            return None
+        linked = [p.slug for p in self.core.projects.list() if key in p.links.get("repos", ())]
+        if key not in self.repo_spaces and key not in self.repo_routes and not self.legacy_watch(key) and not linked:
+            return None
+        space, project = self.repo_spaces.get(key, (key, None))
+        return space, project or (linked[0] if len(linked) == 1 else None)
 
     def bind(self) -> None:
         if sum(block.manifest.id == self.manifest.id for block in self.core.blocks.values()) > 1:
             raise ConfigError("only one github block can serve /github/webhook")
+        self.core.claims.register_name(self.api.app_id_env, validate_app_id)
+        self.core.claims.register_name(self.api.private_key_env, load_rsa_private_key)
 
     def routes(self) -> list[Route]:
         return [Route("/github/webhook", self.webhook, methods=["POST"])]
 
     async def start(self) -> None:
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+        self.api.http = httpx.AsyncClient(base_url=API_URL, timeout=10, transport=self.core.http_transport,
+                                          headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2026-03-10",
+                                                   "User-Agent": "Switchboard-GitHub"})
         for sink in self.sinks.values():
             if sink.url:
                 self.core.spawn(sink.run(self.http, self.core.clock))
@@ -208,19 +333,109 @@ class GitHubBlock(Block):
     async def aclose(self) -> None:
         if self.http is not None:
             await self.http.close()
+        if self.api.http is not None:
+            await self.api.http.aclose()
 
     @property
     def online(self) -> bool:
         return bool(self.secret)
 
     def problems(self) -> list[str]:
-        return [] if self.online else [f"{self.name}: webhook secret is missing"]
+        problems = [] if self.online else [f"{self.name}: webhook secret is missing"]
+        if step := self._credential_step():
+            problems.append(step)
+        return problems
+
+    def has_write_credential(self) -> bool:
+        return self.api.auth_type() is not None
+
+    def _repository_counts(self, modes: dict[str, Any]) -> dict[str, int]:
+        registered = self.registered_repositories()
+        bound = {row["channel"] for row in modes["spaces"] if row["target"] and row["channel"] in registered}
+        return {"repository_spaces": len(self.repo_spaces), "bound_repositories": len(bound),
+                "sink_routes": sum(bool(sinks) for sinks in self.repo_routes.values())}
 
     def status(self) -> dict[str, Any]:
-        return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes), "dropped": self.dropped,
-                "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()}}
+        credential = self.api.auth_type()
+        modes = self.core.modes.status(block=self.name)
+        online = self.online
+        return {"configured": True, "state": "connected" if online else "disconnected", "secret_present": online,
+                "routes": len(self.repo_routes),
+                **self._repository_counts(modes),
+                "dropped": self.dropped, "refused": self.refused,
+                "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()},
+                "credential": credential, "credential_problem": GITHUB_CREDENTIAL_PROBLEM if credential is None else None,
+                "installation": dict(self.installation), "checked_at": self.checked_at,
+                "installations": self.installations, "missing_installations": self.missing_installations,
+                "installation_problem": self.installation_problem, "token_scopes": self.pat_capabilities["scopes"] if self.pat_capabilities else None,
+                "modes": modes}
 
-    def drop(self, event: str, data: dict[str, Any], reason: str) -> None:
+    async def refresh_installation(self) -> None:
+        async with self._refresh_lock:
+            auth = self.api.auth_type()
+            credentials = self.api.credentials()
+            repos = tuple(sorted(self.registered_repositories())) if auth == "app" else ()
+            now = self.core.clock()
+            if self._last_check == (credentials, repos) and self.checked_at is not None and now - self.checked_at < PERMISSION_TTL_S:
+                return
+            installations, missing, problem, pat = {}, {}, None, None
+            attempted = auth == "pat" or (auth == "app" and bool(repos or credentials[1]))
+            if auth == "pat":
+                try:
+                    scopes = await self.api.verify_pat(credentials[3])
+                except BlockError as exc:
+                    pat = {"verified": False, "scopes": None, "scopes_exposed": None, "problem": str(exc)}
+                else:
+                    pat = {"verified": True, "scopes": scopes, "scopes_exposed": scopes is not None, "problem": None}
+            elif attempted:
+                try:
+                    token = self.api.app_jwt()
+                except BlockError as exc:
+                    problem = str(exc)
+                else:
+                    limit = asyncio.Semaphore(8)
+
+                    async def lookup(repo: str | None, installation_id: str | None = None) -> tuple[str, dict[str, str], str | None] | str:
+                        async with limit:
+                            try:
+                                return await self.api.installation(repo, token, installation_id=installation_id)
+                            except BlockError as exc:
+                                return str(exc)
+
+                    candidates = repos or (None,)
+                    for repo, result in zip(candidates, await asyncio.gather(*(lookup(repo) for repo in candidates))):
+                        if isinstance(result, str):
+                            if repo is None:
+                                problem = result
+                            else:
+                                missing[repo] = result
+                            continue
+                        ident, permissions, permissions_url = result
+                        found = installations.setdefault(ident, {"permissions": permissions, "repositories": []})
+                        if permissions_url:
+                            found["permissions_url"] = permissions_url
+                        if repo is not None:
+                            found["repositories"].append(repo)
+                    if repos:
+                        ids = tuple(installations)
+                        for ident, result in zip(ids, await asyncio.gather(*(lookup(None, ident) for ident in ids))):
+                            if isinstance(result, str):
+                                problem = result
+                                installations[ident]["permissions"] = {}
+                            else:
+                                installations[ident]["permissions"] = result[1]
+                                if result[2]:
+                                    installations[ident]["permissions_url"] = result[2]
+            permissions = [row["permissions"] for row in installations.values()]
+            self.installation = {key: "write" if all(p[key] == "write" for p in permissions) else "read"
+                                 for key in permissions[0] if all(key in p for p in permissions)} if permissions else {}
+            self.installations, self.missing_installations = installations, missing
+            self.installation_problem = problem or ("GitHub App installation access could not be verified for every repository." if missing else None)
+            self.pat_capabilities = pat
+            self.checked_at = now if attempted else None
+            self._last_check = credentials, repos
+
+    def drop(self, event: str, data: dict[str, Any], reason: str, ip: str, delivery: str | None) -> None:
         self.dropped += 1
         name = re.sub(r"[^\w.-]", "?", event[:64], flags=re.ASCII) or "-"
         action = data.get("action")
@@ -230,57 +445,282 @@ class GitHubBlock(Block):
         if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]{1,64}/[\w.-]{1,128}", repo, re.ASCII):
             repo = "-"
         log.info("github: dropped %s for %s: %s", name, repo, reason)
+        self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
+                               outcome="dropped", target=repo_name(repo), ref=delivery, detail=reason)
 
-    def next_step(self) -> str | None:
-        if not self.online:
-            if self.core.secret(self.secret_env):
-                return "Restart Switchboard to apply the saved GitHub webhook secret."
+    def config_step(self) -> str | None:
+        secret = self.core.secret(self.secret_env)
+        if not secret:
             return "Save the GitHub webhook secret."
-        if not any(self.repo_routes.values()):
-            return "Add a GitHub repository route in config/switchboard.yaml and restart Switchboard."
+        if not hmac.compare_digest(self.secret, secret.encode()):
+            return "Restart SwB to apply the saved GitHub webhook secret."
+        if not self.registered_repositories() and not any(self.repo_routes.values()):
+            return "Add a GitHub repository route or space in config/switchboard.yaml and restart SwB."
         return None
 
+    def _credential_step(self) -> str | None:
+        if self.installation_problem:
+            return "Check the GitHub App credentials and repository access."
+        if self.pat_capabilities and not self.pat_capabilities["verified"]:
+            return "Check the GitHub token and its repository access."
+        return None
+
+    def next_step(self) -> str | None:
+        return self.config_step() or self._credential_step()
+
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        choice = choose or {}
+        replacement = choice.get("replace")
+        if replacement is not None and replacement not in ("secret", "webhook_secret", "all"):
+            raise BlockError("Use secret, webhook_secret or all for choose.replace.")
         present = bool(self.core.secret(self.secret_env))
-        done = [f"GitHub webhook secret: {'present' if present else 'missing'}.",
-                f"GitHub repository routes: {sum(bool(sinks) for sinks in self.repo_routes.values())}."]
-        step = self.next_step()
+        done = ["GitHub webhook secret present."] if present else []
+        done.append(f"GitHub webhook endpoint {self.core.base_url}/github/webhook.")
+        credential = choice.get("credential")
+        steps = (self._replacement_steps(principal, replacement, credential) if replacement
+                 else await self._setup_steps(kind, principal, present, credential, done))
+        slugs = await self.core.modes.status_slugs(principal)
+        modes = self.core.modes.status(principal, self.name, slugs=slugs)
+        counts = self._repository_counts(modes)
+        for key, label in (("repository_spaces", "GitHub repository spaces"),
+                           ("bound_repositories", "GitHub repositories with a target"),
+                           ("sink_routes", "GitHub sink routes")):
+            if counts[key]:
+                done.append(f"{label} {counts[key]}.")
+        return {"done": done, "next": steps,
+                **counts,
+                "installations": self.installations, "missing_installations": self.missing_installations,
+                "pat_capabilities": self.pat_capabilities,
+                "modes": {**modes, **self.core.modes.summary(self.name, principal, slugs=slugs)}}
+
+    def _replacement_steps(self, principal: Principal, replacement: str, credential: Any) -> list[dict[str, str]]:
+        fields = [(self.secret_env, "webhook_secret", "Webhook secret",
+                   "Save the new GitHub webhook secret. Restart SwB after saving.")]
+        if replacement == "all":
+            auth = self.api.auth_type()
+            if auth != "app" and (credential == "pat" or (auth == "pat" and credential != "app")):
+                fields.append((self.api.token_env, "token", "",
+                               "Save a fine-grained GitHub token with Issues write access for the triage repositories."))
+            else:
+                fields.extend([
+                    (self.api.app_id_env, "id", "App ID", "Save the numeric App ID from your GitHub App settings."),
+                    (self.api.private_key_env, "pem", "Private key", "Save the .pem file from your GitHub App settings."),
+                ])
+        steps = []
+        for name, kind, label, instruction in fields:
+            if name == self.api.app_id_env and self.api.app_id:
+                steps.append({"by": "person", "do": f"Change blocks.{self.name}.app_id in config/switchboard.yaml and restart SwB."})
+            elif env_value(self.core.cfg.env, name):
+                steps.append({"by": "person", "do": f"Change {name} in .env and restart SwB."})
+            else:
+                steps.append(self.token_step(principal, name, instruction, kind=kind, label=label))
+        return steps
+
+    async def _setup_steps(self, kind: str, principal: Principal, present: bool, credential: Any,
+                           done: list[str]) -> list[dict[str, Any]]:
+        step = self.config_step()
+        steps = []
         if not present:
-            return {"done": done, "next": [self.token_step(principal, self.secret_env, step)]}
-        return {"done": done, "next": [{"by": "person", "do": step}] if step else []}
+            steps.append(self.token_step(principal, self.secret_env, step, kind="webhook_secret", label="Webhook secret"))
+        elif step:
+            steps.append({"by": "person", "do": step})
+        auth = self.api.auth_type()
+        app_id, _, key, _ = self.api.credentials()
+        valid_id = provider_id(app_id) is not None
+        valid_key = self.api.app_key(key) is not None
+        repair_app = (app_id and not valid_id) or (key and not valid_key)
+        if auth == "app":
+            await self.refresh_installation()
+            if self.installation_problem:
+                steps.append({"by": "person", "do": self.installation_problem})
+            elif self.checked_at is not None:
+                done.append("GitHub App credentials verified.")
+                if self.installation.get("issues") != "write":
+                    steps.append({"by": "person", "do": "Grant Issues: write to the GitHub App installation for the triage repositories."})
+        elif auth == "pat" and (credential == "pat" or (credential != "app" and not repair_app)):
+            await self.refresh_installation()
+            pat = self.pat_capabilities
+            if pat and pat["verified"]:
+                scope_info = (f"Reported scopes: {', '.join(pat['scopes']) or 'none'}." if pat["scopes_exposed"] else
+                              "GitHub does not expose scopes for this token.")
+                done.append(f"GitHub token verified. {scope_info} GitHub checks repository permissions on every write.")
+            elif pat:
+                steps.append({"by": "person", "do": pat["problem"]})
+        elif credential == "pat":
+            steps.append(self.token_step(principal, self.api.token_env, "Save a fine-grained GitHub token for the triage repositories with Issues: write."))
+        elif credential == "app" or repair_app or present or self.registered_repositories():
+            if not valid_id:
+                name = self.api.app_id_env
+                instruction = "Save the numeric App ID from your GitHub App settings."
+                if env_value(self.core.cfg.env, name):
+                    instruction += f" Clear {name} from the environment and restart SwB to use the saved App ID."
+                steps.append(self.token_step(principal, name, instruction, kind="id", label="App ID"))
+            if not valid_key:
+                name = self.api.private_key_env
+                instruction = "Save the .pem file from your GitHub App settings."
+                if env_value(self.core.cfg.env, name):
+                    instruction += f" Clear {name} from the environment and restart SwB to use the saved private key."
+                steps.append(self.token_step(principal, name, instruction, kind="pem", label="Private key"))
+            steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
+                          "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
+        return steps
+
+    def actions(self) -> list[Action]:
+        return [Action("status", "GitHub status", "Check the GitHub webhook, repository modes and installation permissions.", self.status_action, read_only=True),
+                Action("label", "Label an issue", "Add existing labels to an issue or pull request.", self.label, idempotent=True),
+                Action("comment", "Comment on an issue", "Comment on an issue or pull request.", self.comment),
+                Action("open_issue", "Open an issue", "Open a new issue on this project's GitHub repository.", self.open_issue),
+                Action("link_duplicate", "Resolve a duplicate", "Comment with the canonical issue, add the duplicate label, and close as not planned.",
+                       self.link_duplicate, destructive=True),
+                Action("notify_owner", "Notify the owner", "Send a triage note and its link to the agent that serves the owner.", self.notify_owner),
+                Action("reply", "Reply in a GitHub thread", "Post in the issue or pull request thread that woke this conversation.", self.reply)]
+
+    def mcp_tools(self, mcp: Any, kit: Any) -> None:
+        from .mcp_tools import register
+
+        register(self, mcp, kit)
+
+    async def status_action(self, call: Call) -> dict[str, Any]:
+        principal = call.principal
+        if principal.is_unrestricted_owner:
+            await self.refresh_installation()
+            return {**self.status(), "pat_capabilities": self.pat_capabilities}
+        slugs = await self.core.modes.status_slugs(principal)
+        return {"configured": True, "modes": self.core.modes.status(principal, self.name, slugs=slugs)}
+
+    def _check(self, call: Call, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
+        try:
+            meta = self.core.modes.check(call.principal, handle, action, repo=repo)
+        except PermissionError as exc:
+            raise BlockRefused(MODE_REQUIRED, str(exc)) from exc
+        except ValueError as exc:
+            raise BlockError(str(exc)) from exc
+        if meta is None and (handle or not call.principal.is_unrestricted_owner or (repo and self.space_for(repo) is None)):
+            raise BlockRefused(CONVERSATION_REQUIRED, "Use your assist or triage conversation handle; only the owner can write to a registered repository without a handle")
+        call.note(ref=meta.get("permalink") if meta else None, target=repo)
+        return meta
+
+    async def _write(self, call: Call, action: str, repo: str, path: str, data: dict[str, Any], handle: str | None,
+                     *, permissions: tuple[str, ...] = ("issues",), meta: dict[str, Any] | None = None,
+                     followups: tuple[tuple[str, str, dict[str, Any]], ...] = ()) -> dict[str, Any]:
+        repo = repo_name(repo)
+        if not repo:
+            raise BlockError("Pass a GitHub repository as owner/repo")
+        if meta is None:
+            meta = self._check(call, handle, action, repo)
+        try:
+            response = await self.api.write(repo, path, data, permissions)
+            for method, endpoint, payload in followups:
+                response = await self.api.write(repo, endpoint, payload, permissions, method=method)
+        except BlockError:
+            if meta:
+                self.core.modes.audit_action(call.principal, meta, action, "error")
+            raise
+        if meta:
+            self.core.modes.audit_action(call.principal, meta, action)
+        url = response.get("html_url")
+        return {"ok": True, "repo": repo, **{key: response[key] for key in ("id", "number") if type(response.get(key)) is int},
+                **({"url": url} if isinstance(url, str) and url.startswith("https://github.com/") else {})}
+
+    @staticmethod
+    def _number(number: int) -> int:
+        if type(number) is not int or not provider_id(number):
+            raise BlockError("Pass a positive GitHub issue or pull request number")
+        return number
+
+    @staticmethod
+    def _text(value: str, limit: int, field: str = "text") -> str:
+        if not isinstance(value, str) or not value.strip() or len(value) > limit:
+            raise BlockError(f"{field} must contain between 1 and {limit} characters")
+        return value.strip()
+
+    def _labels(self, labels: list[str]) -> list[str]:
+        if not isinstance(labels, list) or not 1 <= len(labels) <= 20:
+            raise BlockError("Pass between 1 and 20 existing label names")
+        return [self._text(name, 50, "label") for name in labels]
+
+    async def label(self, call: Call, *, repo: str, number: int, labels: list[str], handle: str | None = None) -> dict[str, Any]:
+        return await self._write(call, "label", repo, f"/issues/{self._number(number)}/labels", {"labels": self._labels(labels)}, handle)
+
+    async def comment(self, call: Call, *, repo: str, number: int, body: str, handle: str | None = None) -> dict[str, Any]:
+        return await self._write(call, "comment", repo, f"/issues/{self._number(number)}/comments", {"body": self._text(body, 65536, "body")}, handle)
+
+    async def open_issue(self, call: Call, *, repo: str, title: str, body: str = "", labels: list[str] | None = None,
+                         handle: str | None = None) -> dict[str, Any]:
+        data = {"title": self._text(title, 256, "title"), **({"body": self._text(body, 65536, "body")} if body else {})}
+        if labels:
+            data["labels"] = self._labels(labels)
+        return await self._write(call, "open_issue", repo, "/issues", data, handle)
+
+    async def link_duplicate(self, call: Call, *, repo: str, number: int, duplicate_of: int, handle: str | None = None) -> dict[str, Any]:
+        number, duplicate_of = self._number(number), self._number(duplicate_of)
+        if number == duplicate_of:
+            raise BlockError("An issue cannot duplicate itself")
+        path = f"/issues/{number}"
+        return await self._write(call, "link_duplicate", repo, f"{path}/comments", {"body": f"Duplicate of #{duplicate_of}"}, handle,
+                                 followups=(("POST", f"{path}/labels", {"labels": ["duplicate"]}),
+                                            ("PATCH", path, {"state": "closed", "state_reason": "not_planned"})))
+
+    async def notify_owner(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
+        return await self.core.notify_mode_owner(call.principal, handle, text)
+
+    async def reply(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
+        meta = self._check(call, handle, "reply")
+        if not meta or meta["block"] != self.name or not meta.get("number"):
+            raise BlockError("This conversation did not come from a GitHub issue or pull request thread")
+        number, repo = self._number(meta["number"]), meta["repo"]
+        limit = self.core.modes.assist_max_chars if meta["mode"] == "assist" else 65536
+        if review_comment := meta.get("review_comment"):
+            path, permissions = f"/pulls/{number}/comments/{self._number(review_comment)}/replies", ("pull_requests",)
+        else:
+            path = f"/issues/{number}/comments"
+            permissions = ("issues", "pull_requests") if meta["pull_request"] else ("issues",)
+        return await self._write(call, "reply", repo, path, {"body": self._text(text, limit)}, handle, permissions=permissions, meta=meta)
 
     async def webhook(self, request: Request) -> Response:
+        ip = audit_client_ip(request.scope)
+
+        def refuse(error: str, status: int, *, detail: str | None = None) -> JSONResponse:
+            self.refused += 1
+            self.core.audit.record_refusal(origin=self.name, client=ip, destination=self.name, action="webhook",
+                                           detail=detail or error)
+            return JSONResponse({"error": error}, status)
+
         if not self.secret:
-            return JSONResponse({"error": "webhook secret unavailable"}, 503)
+            return refuse("webhook secret unavailable", 503)
         signature = request.headers.get("x-hub-signature-256")
         if not signature:
-            return JSONResponse({"error": "invalid signature"}, 401)
+            return refuse("invalid signature", 401, detail="missing signature")
         body = await request.body()
         expected = b"sha256=" + hmac.digest(self.secret, body, "sha256").hex().encode()
         if not hmac.compare_digest(signature.encode("latin-1"), expected):
-            return JSONResponse({"error": "invalid signature"}, 401)
+            return refuse("invalid signature", 401)
         event = request.headers.get("x-github-event", "")
+        delivery = request.headers.get("x-github-delivery", "")
+        if not re.fullmatch(r"[!-~]{1,128}", delivery):
+            delivery = None
         unsupported = event not in EVENTS and event != "ping"
         try:
             data = json.loads(body)
         except (ValueError, RecursionError):
             if not unsupported:
-                return JSONResponse({"error": "invalid JSON"}, 400)
+                return refuse("invalid JSON", 400)
             data = {}
         if unsupported:
-            self.drop(event, _object(data), "unhandled event")
+            self.drop(event, _object(data), "unhandled event", ip, delivery)
             return JSONResponse({"ok": True})
         if not isinstance(data, dict):
-            return JSONResponse({"error": "expected a JSON object"}, 400)
+            return refuse("expected a JSON object", 400)
         if event == "ping":
             zen = data.get("zen")
             return Response(_json({"ok": True, "zen": zen[:500] if isinstance(zen, str) else None}), media_type="application/json")
-        delivery = request.headers.get("x-github-delivery", "")
-        if not re.fullmatch(r"[!-~]{1,128}", delivery):
-            return JSONResponse({"error": "invalid delivery id"}, 400)
-        return JSONResponse({"ok": True}, background=BackgroundTask(self.dispatch, event, delivery, data, client_ip(request.scope)))
+        if delivery is None:
+            return refuse("invalid delivery id", 400)
+        return JSONResponse({"ok": True}, background=BackgroundTask(self.dispatch, event, delivery, data, ip))
 
     async def dispatch(self, event: str, delivery: str, data: dict[str, Any], ip: str) -> None:
+        from ...core import CoreError
+
         now = self.core.clock()
         while self.seen and next(iter(self.seen.values())) <= now - DELIVERY_TTL_S:
             self.seen.popitem(last=False)
@@ -289,23 +729,147 @@ class GitHubBlock(Block):
         if len(self.seen) >= MAX_DELIVERIES:
             self.seen.popitem(last=False)
         self.seen[delivery] = now
-        payload = trim(event, delivery, data)
-        if payload is None:
-            self.drop(event, data, "not completed")
+        trimmed = trim(event, delivery, data)
+        if trimmed is None:
+            self.drop(event, data, "not completed", ip, delivery)
             return
-        repo = _object(data.get("repository")).get("full_name")
-        sinks = set()
-        if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
-            key = repo.casefold()
-            owner = key.split("/", 1)[0]
-            sinks = self.repo_routes.get(key, set()) | self.repo_routes.get(f"{owner}/*", set())
-        else:
-            repo = None
-        if not sinks:
-            self.drop(event, data, "unrouted repository")
+        payload, authors = trimmed
+        repo = repo_name(payload.get("repo"))
+        location = self.space_for(repo) if repo else None
+        if location is None:
+            self.drop(event, data, "unrouted repository", ip, delivery)
+            return
+        space, project = location
+        config_channel = next((key for key in self.space_config.get(space, {}).get("channels", {}) if repo_name(key) == repo), repo)
+        mode, _, actions, to, project = self.core.modes.policy(self.name, space, repo, project, parent=config_channel, include_route=False)
+        route = self.core.modes.project_route(self.name, project) if not to else None
+        target = to or (str(route) if route else None)
+        sender = _object(data.get("sender"))
+        user_id = provider_id(sender.get("id"))
+        owners = self.space_owners.get(space, self.owner_ids)
+        actor_is_owner = user_id in owners and not payload.get("is_bot")
+        sender_id = f"github:{user_id}" if user_id else None
+        where = f"in GitHub {repo}"
+        parts: dict[str, AuthoredText] = {}
+        for key, author in authors.items():
+            text = payload.pop(key)
+            if not text:
+                continue
+            author_id = provider_id(author.get("id"))
+            parts[key] = {"text": text,
+                          "author_id": f"github:{author_id}" if author_id else None,
+                          "owner": author_id in owners and author.get("type") != "Bot"}
+        mixed_authors = any(part["owner"] != actor_is_owner for part in parts.values())
+        trust = "owner" if actor_is_owner and not mixed_authors else "external"
+        generated = {"event": event, "repo": repo, "delivery": neutralize(delivery)}
+        if "number" in payload:
+            generated["number"] = payload["number"]
+        for key, allowed in (("action", SUMMARY_ACTIONS), ("conclusion", SUMMARY_CONCLUSIONS)):
+            if payload.get(key) in allowed:
+                generated[key] = payload[key]
+        if metadata := {key: value for key, value in payload.items() if key not in generated}:
+            parts = {"metadata": {"text": json.dumps(metadata, ensure_ascii=False), "author_id": sender_id or repo, "owner": False}, **parts}
+        rendered = frame_parts(parts, where)
+        details = join_parts(rendered)
+        title_sender = "Mixed authors" if mixed_authors else f"User {user_id}" if user_id else "Unknown sender"
+        event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
+        summary = " ".join(filter(None, (event_name, generated.get("action"), generated.get("conclusion"))))
+        number = provider_id(generated.get("number"))
+        event_title = f"{summary} #{number}" if number else summary
+        title = subject(title_sender, "GitHub", repo, event_title, verb="", trust="owner" if mixed_authors else trust)
+        display_title = display_subject(parts.get("title", {}).get("text"), parts.get("body", {}).get("text"), event_title)
+        delivery_note = f'GitHub delivery {generated["delivery"]}.'
+        if mode == "watch":
+            if sinks := self.sink_names(repo):
+                text = wake_text(title, details, None, delivery_note)
+                body = _json({**generated, **rendered, "subject": title, "text": text, "trust": trust})
+                for sink in sinks:
+                    self.sinks[sink].put(delivery, body)
+            primary = parts.get("body") or parts.get("title")
+            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else None) or sender_id or "",
+                                  None, event_title, None, target, project=project, parts=parts)
+            return
+        if mode == "off":
+            self.drop(event, data, "channel mode off", ip, delivery)
+            return
+        if mode == "work" and not actor_is_owner:
+            self.drop(event, data, "work mode requires an owner event", ip, delivery)
+            return
+        if not user_id or payload.get("is_bot") or (mode != "work" and user_id == self.api.pat_actor):
+            self.drop(event, data, "sender ignored", ip, delivery)
+            return
+        who = Who(owner=actor_is_owner, id=sender_id, workspace=space)
+        if not self.core.visibility.allows(who, *self.channel_resources(space, repo)):
+            self.drop(event, data, "channel access restricted", ip, delivery)
+            return
+        if not actor_is_owner:
+            recent = [seen for seen in self._senders.pop(user_id, []) if now - seen < 600]
+            self._senders[user_id] = recent
+            if len(recent) >= 5:
+                self.drop(event, data, "sender rate limit", ip, delivery)
+                return
+            recent.append(now)
+            if len(self._senders) > MAX_DELIVERIES:
+                self._senders.popitem(last=False)
+        text = FramedText(details) if trust == "external" else details
+
+        async def note_context(address=None):
+            item = {**generated, "subject": title, "text": wake_text(title, text, None, delivery_note),
+                    "from": {"block": self.name, "space": space, "trust": trust}, "trust": trust,
+                    "target": target, "note": CONTEXT_NOTE}
+            agents = self.core.target_agents(address) if address else set()
+            for agent in sorted(agents or {"owner"}):
+                row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
+                                          (agent, self.name, repo, project))
+                handle = row["handle"] if row else self.core.inbox.open_handle(
+                    owner=agent, destination=self.name, ref=repo, project=project, title=display_title, meta={}, status="following")
+                await self.core.inbox.add(handle, "context", item)
+            self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
+                                   action="context_noted", outcome="ok", ref=delivery, target=target)
+
+        if not target:
+            self.drop(event, data, f"{mode} target is missing", ip, delivery)
+            await note_context()
+            return
+        try:
+            addr = await self.core.resolve_to(to) if to else route
+        except (BlockError, CoreError, ValueError):
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            await note_context()
+            return
+        if addr is None or (addr.block == "agent" and addr.id not in self.core.known_agents()):
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            await note_context()
+            return
+        try:
+            slugs = self.core.slug_map(await self.core.targets()) if not actor_is_owner and addr.block != "agent" else {}
+            resources = self.core.target_visibility_resources(target, addr, slugs=slugs)
+            if not resources or not self.core.visibility.allows(who, *resources):
+                await note_context(addr)
+                return
+            principal = Principal(self.name, ip, "github", origin=self.name, trust=trust, visibility_who=who)
+            self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
+            link = neutralize(payload.get("url")) or None
+            meta = self.core.modes.meta(self.name, space, repo, mode, actions, project, link, target)
+            meta.update(repo=repo, number=int(number) if number else None, event=event,
+                        pull_request=event.startswith("pull_request") or bool(_object(data.get("issue")).get("pull_request")))
+            if event in {"pull_request_review_comment", "pull_request_review_thread"}:
+                comment = _object(data.get("comment"))
+                if event == "pull_request_review_thread":
+                    comments = _object(data.get("thread")).get("comments")
+                    comment = _object(comments[0]) if isinstance(comments, list) and comments else {}
+                reply_to = provider_id(comment.get("in_reply_to_id") or comment.get("id"))
+                if reply_to:
+                    meta["review_comment"] = int(reply_to)
+            tail = delivery_note
+            if mode in {"assist", "triage"}:
+                tail += f"\n\n{self.core.modes.wake_note(meta, owner=trust == 'owner')} Use github_reply for the originating GitHub thread."
+            await self.core.send(principal, to=to, task=wake_text(title, text, None, tail),
+                                 project=project, title=title,
+                                 handle_meta={"display_subject": display_title, **({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
+                                              **({"boundary": project} if project and mode != "work" else {})})
+        except (BlockError, CoreError, ValueError) as exc:
+            await note_context(addr)
+            log.warning("GitHub wake for %s failed: %s", repo, type(exc).__name__)
             self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
-                                   outcome="dropped", target=repo[:240] if repo else None, ref=delivery, detail="unrouted repository")
-            return
-        body = _json(payload)
-        for sink in sinks:
-            self.sinks[sink].put(delivery, body)
+                                   outcome="error", target=repo, ref=delivery, detail=type(exc).__name__)

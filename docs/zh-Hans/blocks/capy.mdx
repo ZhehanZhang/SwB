@@ -1,0 +1,57 @@
+---
+title: Capy
+description: 把任务发给 Capy Captain 和线程，并接收回复。
+---
+
+## 启用模块
+
+按 [Capy Captain 设置](/zh-Hans/docs/setup/capy-captain)操作。SwB 用 Capy 账号密钥查找 Capy Captain，并跟踪它们的线程。
+
+## 把 Capy 作为智能体接入
+
+在 Capy 中把 SwB 添加为自定义 MCP 服务器。用 OAuth 以 `capy` 的身份登录 SwB。
+
+## 发送给 Capy Captain
+
+让任意一个智能体把任务发给 Capy Captain。
+
+> 把这个发给我的 Capy Captain。
+
+将 `to` 留空可使用项目路由。只有在 SwB 恰好找到一位 Captain 时，才可使用保留名称 `captain`。其他情况请使用某位 Captain 的别名或完整地址，例如 `capy:captain:jam_...`。用 `targets` 查找地址。
+
+SwB 跟踪 Capy 线程的更新，并把更新发到发送方的邮箱。重启后，SwB 从上次保存的位置继续跟踪近期的任务。
+
+| 路由模式 | 发送时的行为 |
+| - | - |
+| `captain_thread` | 向 Capy Captain 发送一条消息 |
+| `new_thread` | 在 Captain 的团队中新建一个线程 |
+
+## MCP Tasks
+
+Capy 模块为 MCP 2026-07-28 客户端启用 [MCP Tasks](/zh-Hans/docs/how-it-works#对话)。客户端用 `server/discover` 发现这项功能，并在每次向 Capy 调用 `send` 时选择启用。其余的 `send` 调用使用常规对话。
+
+## 发送密钥
+
+Capy 会显示发送密钥所属的账号。SwB 先尝试智能体的密钥，再尝试服务密钥。在 `personal` 模式下，Capy 账号密钥是最后的备选。以所有者身份登录后，可在 `/healthz` 查看每个智能体的首选密钥和密钥检查结果。
+
+## 项目自动关联
+
+智能体创建 SwB 项目时，Capy 模块会查找匹配的 Capy 项目。仓库匹配优先于名称匹配。只找到一个匹配项目时，SwB 会关联这两个项目。如果关联的项目只有一个活跃的 Capy Captain，SwB 就用这个 Captain 建立自动路由。
+
+## 配置
+
+| 键 | 用途 |
+| - | - |
+| `blocks.capy` | Capy 发送和线程跟踪的设置 |
+| `blocks.capy.use` | 模块类型。填 `capy` |
+| `blocks.capy.enabled` | 设为 `false` 可跳过这个模块 |
+| `blocks.capy.api_base` | Capy API 的基础地址。默认为 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | 填 `service` 使用智能体密钥和服务密钥。填 `personal` 则还允许把 Capy 账号密钥作为最后的备选 |
+| `blocks.capy.send_key_env` | 保存服务发送密钥的变量名 |
+| `blocks.capy.default_route` | 一次性设定初始的全局 Capy 路由。填一个 Capy 目标，例如 `captain:<id>` |
+| `blocks.capy.captain_delivery` | Capy Captain 或线程忙碌时，Capy 投递消息的方式。可选值为 `queue`、`steer` 和 `interrupt`。默认为 `queue` |
+| `blocks.capy.daily_cap` | Capy 委派的每日上限。填 `null` 则取消上限 |
+| `blocks.capy.duplicate_window_s` | 发送方、目标、标题和任务都相同时，复用对话标识的时长，单位为秒。默认为 `600` |
+| `blocks.capy.max_file_bytes` | 每次发送的附件总大小上限，单位为字节。默认为 `10485760` |
+| `blocks.capy.handle_ttl_days` | 启动时恢复线程跟踪的期限，单位为天。同时决定 MCP 任务的存活时间。默认为 `7` |
+| `blocks.capy.avatars` | 允许 SwB 获取 Capy Captain 的头像。设为 `false` 则改用姓名首字母 |

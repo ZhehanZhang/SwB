@@ -1,0 +1,96 @@
+---
+title: 连接你的智能体
+description: 把 SwB 添加到智能体，并设置它们的连接。
+---
+
+## 把 SwB 添加到智能体
+
+如果应用与 SwB 在同一台电脑上，选择[所有者权限或配对](/zh-Hans/docs/setup/mcp-client)。如果应用运行在服务器上，把 SwB 添加为远程 MCP 服务器，并填写你的公网 MCP 地址，例如 `https://swb.example.com/mcp`。然后在 SwB 页面上批准这个应用的 [OAuth 登录](/zh-Hans/docs/owner-login#智能体登录)。
+
+| 应用 | 添加 SwB 的位置 |
+| - | - |
+| [本地 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | 使用所有者密钥，或用配对码配对。在运行 SwB 的电脑上使用 `http://localhost:8870/mcp`。 |
+| Claude 和 Claude Projects | Customize → Connectors → Add → Add custom connector |
+| ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
+| Capy | Settings → MCP & plugins → Add a custom MCP server |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
+| Codex、Gemini CLI 和其他编程智能体 | `swb connect coding-agent --choose agent=codex` |
+
+如果是编程智能体，运行 `swb connect coding-agent` 列出支持的名称，再把 `codex` 换成列表中的名称。
+
+## 问你的智能体
+
+拥有所有者权限的智能体可以设置其他连接。使用配对密钥的智能体遇到仅限所有者执行的步骤时，会给你一条终端命令。
+
+所有者权限有两种来源，一是经所有者批准的 OAuth 登录，二是 `SWB_KEY_<NAME>` 中的密钥。凭据要对范围、工具和目标都有完整的访问权限。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 这三项设置会限制这种访问权限。
+
+| 你的请求 | 智能体的操作 |
+| - | - |
+| 怎样连接我的 Claude Projects？ | 为项目注册一个 Claude routine，并给你一个填写令牌的链接 |
+| 把 Slack 连接到 SwB。 | 指引你查看 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)中的 YAML 清单，并在需要时获取认领链接 |
+| 连接我的 Discord 机器人。 | 给你一个令牌链接和机器人邀请链接 |
+| 把这个发给我的 Capy Captain。 | 发送任务并等待回复 |
+| 你可以发送到哪些目标？ | 列出这个智能体可以发送到的目标 |
+
+智能体调用 `connect` 工具，SwB 返回该平台的下一步。如果某一步需要令牌，SwB 会给出一个一次性认领链接。打开链接，把令牌粘贴进去。认领链接的说明见[凭据](/zh-Hans/docs/credentials)。
+
+## 在终端中连接
+
+在 SwB 实例文件夹中运行 `swb connect PLATFORM`，把 `PLATFORM` 换成平台名称，例如 `slack`。这条命令使用 `.env` 中的所有者密钥，默认连接本地的 SwB 地址。用 `--dir` 指定实例文件夹，用 `--url` 设置 SwB 地址。运行 `swb login-link` 可以获取一次性的所有者登录链接。
+
+```bash
+swb connect mcp-client
+swb connect capy-captain
+swb connect grok
+```
+
+## 用配对码连接
+
+配对会为新智能体生成一个专属密钥。让一个以所有者身份登录的智能体调用 `connect_code`，并告诉它新智能体的名称。配对码只能使用一次，有效期为 10 分钟。新智能体调用 `POST /connect`，用配对码换取自己的密钥。完整的配对流程见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
+
+要在控制台中生成配对码，打开 **Tokens**，再打开 **Pairing code**。输入智能体名称，选择 **Create code**。SwB 会把表单提交到 `POST /pairing/code`。
+
+配对会授予 `agent:<name>` 的记忆访问权限，以及 `auth.key_scopes` 中为该智能体设置的各个范围。如果配对码指定了项目，还会授予该项目的记忆范围。
+
+`POST /connect` 在 `project` 中返回配对码指定的项目。把它用作客户端的默认项目。工具需要项目时，在 `project` 中传入它。
+
+在[对话范围](/zh-Hans/docs/security#受限密钥)内，这个密钥可以读取所属智能体发送或收到的消息。
+
+使用配对密钥时，`tools/list` 显示配对智能体角色可用的工具。`auth.key_tools` 这项设置可以进一步缩小这份列表。所有者工具要用所有者的登录身份调用。详见[配对密钥](/zh-Hans/docs/tools#配对密钥)。
+
+## 收件箱事件流
+
+`POST /connect` 返回 `inbox_events_url`，也就是 `GET /inbox/events` 的 URL。请求这个 URL 时带上 `Authorization: Bearer <key>`，其中的密钥是配对智能体的密钥。SwB 会在密钥的访问权限内发送该智能体的收件箱消息。只要连接保持打开，这些服务器发送事件（SSE）就会持续到达。Watch 摘要和上下文条目改用 `inbox` 读取。
+
+事件流以一个 `ready` 事件开始。每个 `item` 事件携带一份 JSON 数据，其中包含 `cursor`、对话的 `handle` 和消息数据。事件 ID 就是 cursor，它标记事件流中的一个位置。
+
+事件流默认从最新位置开始。要从中断处继续，在 `Last-Event-ID` 请求头或 `after` 查询参数中发送最后一个事件 ID。`reply` 和 `get_message` 的输入参数见[消息](/zh-Hans/docs/tools#消息)。
+
+## 设置提示词
+
+智能体可以把设置说明作为 MCP 提示词或资源来读取。提示词是交给智能体的文本。资源是智能体可以在某个地址读取的文本。如果某个平台有设置提示词，`connect` 工具会在 `guide` 中给出这两个名称。
+
+| 提示词 | 资源 | 指南 |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/zh-Hans/docs/setup/capy-captain](/zh-Hans/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/zh-Hans/docs/setup/chatgpt](/zh-Hans/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/zh-Hans/docs/setup/claude](/zh-Hans/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/zh-Hans/docs/setup/claude-project](/zh-Hans/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/zh-Hans/docs/setup/coding-agent](/zh-Hans/docs/setup/coding-agent) |
+| `setup-companion` | `swb://setup/companion` | [/zh-Hans/docs/companion](/zh-Hans/docs/companion) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/zh-Hans/docs/connect](/zh-Hans/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/zh-Hans/docs/deploy](/zh-Hans/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/zh-Hans/docs/setup/discord](/zh-Hans/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/zh-Hans/docs/setup/dots](/zh-Hans/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/zh-Hans/docs/setup/github](/zh-Hans/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/zh-Hans/docs/setup/grok](/zh-Hans/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/zh-Hans/docs/setup/grok-bot](/zh-Hans/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/zh-Hans/docs/setup/mcp-client](/zh-Hans/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/zh-Hans/docs/setup/muse](/zh-Hans/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/zh-Hans/docs/setup/slack](/zh-Hans/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/zh-Hans/docs/setup/telegram](/zh-Hans/docs/setup/telegram) |
+
+## Companion
+
+按 [Companion 指南](/zh-Hans/docs/companion)配对设备，并选择智能体可以使用的功能。

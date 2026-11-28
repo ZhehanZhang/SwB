@@ -8,15 +8,21 @@ import time
 import traceback
 from collections import defaultdict
 from contextlib import contextmanager
+from email.parser import BytesParser
+from email.policy import default
+from functools import partial
+from io import BytesIO
 
 import httpx
 import pytest
 import yaml
+from PIL import Image
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
+from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload, use_capy
 from switchboard.app import create_app
 from switchboard.blocks import BlockError
+from switchboard.bot_identity import BotIdentity
 from switchboard.chat import Persona
 from switchboard.core import Switchboard
 from test_project_routines import Anthropic, TOKEN as ROUTINE_TOKEN
@@ -24,7 +30,7 @@ from test_project_routines import Anthropic, TOKEN as ROUTINE_TOKEN
 BOT, OWNER_ID, STRANGER = 111111, 222222, 333333
 TOKEN = f"{BOT}:" + "fake_" * 8
 REJECTED = f"{BOT}:" + "invalid_" * 5
-GROUP, UNKNOWN = -100111222, -100333444
+GROUP, UNKNOWN = -1001111111111, -1002222222222
 BOT_NAME, ROUTINE_NAME = "ExampleSwbBot", 'Ops & <Build> "Desk"'
 
 
@@ -45,9 +51,18 @@ class FakeBotAPI:
         self.privacy = False
         self.hidden = set()
         self.bot_id = BOT
+        self.avatar_error = None
 
     async def handler(self, request):
         token, method = request.url.path.removeprefix("/bot").split("/")
+        if method == "setMyProfilePhoto":
+            content_type = request.headers["Content-Type"]
+            assert content_type.startswith("multipart/form-data; boundary=")
+            body = BytesParser(policy=default).parsebytes(f"Content-Type: {content_type}\r\n\r\n".encode() + request.content)
+            self.calls[method].append({part.get_param("name", header="Content-Disposition"): part for part in body.iter_parts()})
+            if self.avatar_error:
+                return httpx.Response(self.avatar_error, json={"ok": False, "description": f"Failed request {request.url}"})
+            return httpx.Response(200, json={"ok": True, "result": True})
         args = json.loads(request.content)
         self.calls[method].append(args)
         if method == "getMe":
@@ -75,7 +90,7 @@ class FakeBotAPI:
                                                    "parameters": {"retry_after": delay}})
             result = {"message_id": self.last_message_id}
         else:
-            assert method == "setMessageReaction"
+            assert method in ("setMessageReaction", "setMyName")
             result = True
         return httpx.Response(200, json={"ok": True, "result": result})
 
@@ -107,7 +122,7 @@ def run(tmp_path):
     path = tmp_path / "switchboard.yaml"
 
     @contextmanager
-    def start(*, bot=None, token=TOKEN, connect=True, **config):
+    def start(*, bot=None, token=TOKEN, connect=True, slack=None, capy=None, **config):
         bot = FakeBotAPI() if bot is None else bot
         anthropic = Anthropic()
         telegram = {"use": "telegram", "dm_space": "dm", "agents": {"claude": "*"}, "spaces": {
@@ -120,26 +135,90 @@ def run(tmp_path):
                    "claude-routine": {"use": "claude-routine", "routines": {
                        "example-runner": {"routine_id": "trig_000EXAMPLE", "token_env": "ROUTINE_TOKEN", "name": ROUTINE_NAME}}}},
                "visibility": {"resources": {f"channel:group/{GROUP}": "shared"}}}
-        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        if slack is not None:
+            cfg["blocks"]["slack"] = {"use": "slack", **slack}
         env = {"ROUTINE_TOKEN": ROUTINE_TOKEN, "SWITCHBOARD_KEY_CLAUDE": STATIC_KEY}
         if token:
             env[config.get("token_env", "TELEGRAM_BOT_TOKEN")] = token
+        options = {"telegram": {"transport": httpx.MockTransport(bot.handler), "connect": connect},
+                   "claude-routine": {"transport": httpx.MockTransport(anthropic.handler)}}
+        use_capy(capy, cfg, env, options)
+        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         core = Switchboard(path, tmp_path / "data", env=env, clock=Clock(), access_verifier=access_verifier,
-                           destination_options={"telegram": {"transport": httpx.MockTransport(bot.handler), "connect": connect},
-                                                "claude-routine": {"transport": httpx.MockTransport(anthropic.handler)}})
+                           destination_options=options)
         with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
             yield core, client, core.blocks["telegram"], bot, anthropic
 
     return start
 
 
+def test_avatar_upload_uses_jpeg_multipart_and_skips_unchanged_file(run, tmp_path):
+    name = "swb.png"
+    source = tmp_path / name
+    for color, uploads in (("blue", 1), ("blue", 0), ("red", 1)):
+        Image.new("RGBA", (32, 32), color).save(source)
+        with run(avatar=name, slack={"avatar_dirs": [str(tmp_path)]}) as (_, client, _, bot, _):
+            client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+            status = payload(call(client, STATIC_KEY, "telegram_status"))
+            assert status["connected"] and status["avatar"] == {"file": name, "applied": True, "error": None}
+            assert len(bot.calls["setMyProfilePhoto"]) == uploads
+            if uploads:
+                [fields] = bot.calls["setMyProfilePhoto"]
+                assert set(fields) == {"photo", "p"}
+                assert json.loads(fields["photo"].get_payload(decode=True)) == {"type": "static", "photo": "attach://p"}
+                assert fields["p"].get_content_type() == "image/jpeg"
+                with Image.open(BytesIO(fields["p"].get_payload(decode=True))) as image:
+                    assert image.format == "JPEG" and image.mode == "RGB"
+                    assert image.getpixel((0, 0))[0 if color == "red" else 2] > 240
+
+
+def test_avatar_error_is_non_fatal_and_does_not_expose_the_token(run, caplog):
+    bot = FakeBotAPI()
+    bot.avatar_error = 400
+    with run(bot=bot, avatar="swb.png") as (_, client, _, _, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        status = payload(call(client, STATIC_KEY, "telegram_status"))
+        error = "Telegram setMyProfilePhoto: API error 400"
+        assert status["connected"] and status["avatar"] == {"file": "swb.png", "applied": False, "error": error}
+        assert len(bot.calls["setMyProfilePhoto"]) == 1 and caplog.text.count(error) == 1
+        assert TOKEN not in caplog.text and TOKEN not in json.dumps(status)
+
+
+def test_telegram_updates_only_the_requested_global_profile_fields(run):
+    with run() as (core, client, block, bot, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        icon = core.find_avatar("swb.png").read_bytes()
+        client.portal.call(block.update_bot_identity, "Release Bot", None)
+        assert block.setup()["bot"]["name"] == "Release Bot"
+        assert bot.calls["setMyName"] == [{"name": "Release Bot"}]
+        assert not bot.calls["setMyProfilePhoto"]
+        client.portal.call(block.update_bot_identity, None, icon)
+        client.portal.call(partial(block.update_bot_identity, "SwB", icon, reset=True))
+        with pytest.raises(BlockError, match="applies to every chat"):
+            client.portal.call(partial(block.update_bot_identity, "Group Name", icon, space="group"))
+        assert bot.calls["setMyName"] == [{"name": "Release Bot"}, {"name": "SwB"}]
+        assert len(bot.calls["setMyProfilePhoto"]) == 2
+        for fields in bot.calls["setMyProfilePhoto"]:
+            assert json.loads(fields["photo"].get_payload(decode=True)) == {"type": "static", "photo": "attach://p"}
+            assert fields["p"].get_content_type() == "image/jpeg"
+
+
+def test_telegram_saved_icon_prevents_startup_yaml_from_replacing_it(run):
+    with run(connect=False) as (core, client, _, _, _):
+        client.portal.call(core.bot_identities.set, "telegram", "", BotIdentity("Release Bot", "bot-" + "a" * 48 + ".png"))
+    with run(avatar="swb.png") as (_, client, _, bot, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        assert not bot.calls["setMyProfilePhoto"]
+
+
 def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
     with run() as (core, c, block, bot, anthropic):
         c.portal.call(bot.deliver, update(11, mention=True, text="example-runner can you check?", topic=42))
         assert "can you check?" in anthropic.fired[0][1] and f"@{BOT_NAME.lower()}" not in anthropic.fired[0][1]
-        assert "https://t.me/c/111222/11" in anthropic.fired[0][1]
+        assert f"https://t.me/c/{str(GROUP)[4:]}/11" in anthropic.fired[0][1]
         assert bot.calls["setMessageReaction"] == [{"chat_id": GROUP, "message_id": 11, "reaction": [{"type": "emoji", "emoji": "👀"}]}]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+        assert core.inbox.handle(handle)["title"] == "can you check?"
         answer = 'Result: <ok> & "ready"'
         result = payload(call(c, STATIC_KEY, "reply", {"conversation": handle, "text": answer}))
         assert result["delivered"]
@@ -154,7 +233,9 @@ def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
 
 
 def test_stranger_cannot_wake_or_receive_a_reply_from_a_private_target(run):
-    with run() as (core, c, _, bot, anthropic):
+    spaces = {"group": {"owner_ids": [OWNER_ID], "chats": [GROUP], "mode": "assist", "default_target": "example-runner"},
+              "dm": {"owner_ids": [OWNER_ID]}}
+    with run(spaces=spaces) as (core, c, _, bot, anthropic):
         c.portal.call(bot.deliver, update(11, user=STRANGER, text="/swb example-runner please run"))
         context = json.loads(core.store.one("SELECT data FROM inbox WHERE kind = 'context'")["data"])
         assert context["trust"] == "external" and context["target"] == "example-runner" and "<<<swb-untrusted" in context["text"]
@@ -335,6 +416,7 @@ def test_claim_saves_token_and_reconnects_and_status_orders_remaining_setup(run)
     ({"persona_prefix": "false"}, "persona_prefix"),
     ({"ack_reaction": False}, "ack_reaction"),
     ({"token_env": 42}, "token_env"),
+    ({"avatar": "https://example.test/icon.png"}, "avatar"),
 ])
 def test_invalid_config_reports_precise_path(run, config, path):
     with pytest.raises(BlockError, match=rf"blocks\.telegram\.{path}"):

@@ -1,0 +1,32 @@
+{
+  "title": "문서",
+  "pages": [
+    "get-started",
+    "---SwB 실행---",
+    "install",
+    "deploy",
+    "cloudflare",
+    "first-run",
+    "owner-login",
+    "operate",
+    "---에이전트 연결---",
+    "connect",
+    "setup",
+    "companion",
+    "---블록---",
+    "...blocks",
+    "---기본 개념---",
+    "index",
+    "how-it-works",
+    "memory",
+    "channel-modes",
+    "---참조---",
+    "tools",
+    "config",
+    "credentials",
+    "security",
+    "---",
+    "faq",
+    "about"
+  ]
+}

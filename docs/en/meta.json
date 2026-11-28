@@ -1,0 +1,32 @@
+{
+  "title": "Docs",
+  "pages": [
+    "get-started",
+    "---Run SwB---",
+    "install",
+    "deploy",
+    "cloudflare",
+    "first-run",
+    "owner-login",
+    "operate",
+    "---Connect agents---",
+    "connect",
+    "setup",
+    "companion",
+    "---Blocks---",
+    "...blocks",
+    "---Concepts---",
+    "index",
+    "how-it-works",
+    "memory",
+    "channel-modes",
+    "---Reference---",
+    "tools",
+    "config",
+    "credentials",
+    "security",
+    "---",
+    "faq",
+    "about"
+  ]
+}

@@ -12,7 +12,8 @@ class PersonaError(ValueError):
 
 
 def resolve_persona(cfg: Config, ws: WorkspaceConfig, identity: str, key: Grant, requested: str | None,
-                    personas: Mapping[str, Persona] | None = None, thread_persona: str | None = None) -> Persona | None:
+                    personas: Mapping[str, Persona] | None = None, thread_persona: str | None = None,
+                    *, workspace_default: bool = True) -> Persona | None:
     """Call argument (if the agent may override) > the agent's persona for this workspace > its bound persona >
     the persona named like the agent (claude, chatgpt, ...) > the workspace default. Mirrors the send-key chain.
     thread_persona comes first: the caller passes it only when the agent is the one behind the thread's target (a block
@@ -31,7 +32,8 @@ def resolve_persona(cfg: Config, ws: WorkspaceConfig, identity: str, key: Grant,
         if persona is None:
             raise PersonaError(f"unknown persona {requested!r}")
         return persona
-    chain = (thread_persona, key.persona_by_workspace.get(ws.label), key.persona, key.id, ws.default_persona)
+    chain = (thread_persona, key.persona_by_workspace.get(ws.label), key.persona, key.id,
+             ws.default_persona if workspace_default else None)
     for pid in chain:
         if pid and pid in personas:
             return personas[pid]

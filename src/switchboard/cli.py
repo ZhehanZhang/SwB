@@ -20,9 +20,17 @@ import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
-CONFIG = Path("config/switchboard.yaml")
-LOOPBACK = ("localhost", "127.0.0.1", "::1")
+from . import USER_AGENT, __version__
+from .__main__ import SERVER_COMMANDS, add_server_commands
+from .companion import commands as companion_commands
+from .companion.state import CompanionError
+from .config import DEFAULT_PORT, INSTANCE_CONFIG, MCP_OFF, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
+from .deployment import OWNER_KEY, volume_owner_key
+from .env import env_value
+from .store import ensure_private_data_dir
+
+CONFIG = INSTANCE_CONFIG
+CLAIM_ERRORS = {400: "claim_input", 403: "claim_owner_key", 410: "claim_unavailable"}
 
 
 class CliError(ValueError):
@@ -30,7 +38,7 @@ class CliError(ValueError):
 
 
 def _url(value: str, *, public: bool = False) -> str:
-    message = ("--public-url must be an HTTPS base URL or use http://localhost"
+    message = ("--public-url must be an HTTPS base URL or use a loopback address for HTTP"
                if public else "--url must be HTTPS or use a loopback address for HTTP")
     try:
         url = urlsplit(value)
@@ -40,8 +48,7 @@ def _url(value: str, *, public: bool = False) -> str:
         raise CliError(message) from None
     if not host or port == 0 or url.username is not None or re.search(r"[\s?#]", value):
         raise CliError(message)
-    local = ("localhost",) if public else LOOPBACK
-    if url.scheme != "https" and not (url.scheme == "http" and host in local):
+    if url.scheme != "https" and not (url.scheme == "http" and host in LOOPBACK_HOSTS):
         raise CliError(message)
     path = url.path.rstrip("/")
     if not public and not path:
@@ -64,19 +71,36 @@ def _write_file(path: Path, text: str, *, force: bool, mode: int) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _init(base: Path, public_url: str | None, force: bool) -> None:
-    config = {"version": 2, "blocks": {"mcp": {"use": "mcp"}}}
+def _instance_config(base: Path, public_url: str | None, *, force: bool) -> None:
+    config = {"version": 2}
     if public_url is not None:
-        config["public_url"] = _url(public_url, public=True)
+        config["public_url"] = public_url
+    config_path = base / CONFIG
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
+
+
+def _port(value: str) -> int:
+    if not value.isascii() or not value.isdecimal() or len(value) > 5 or not 1 <= (port := int(value)) <= 65535:
+        raise CliError("PORT must be a number from 1 to 65535.")
+    return port
+
+
+def _init(base: Path, public_url: str | None, force: bool) -> None:
+    if public_url is not None:
+        public_url = _url(public_url, public=True)
+    port = str(_port(os.environ.get("PORT") or env_value(os.environ, "SWB_PORT") or DEFAULT_PORT))
     config_path, env_path = base / CONFIG, base / ".env"
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
             raise CliError(f"{path} already exists; use --force to replace it.")
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
-    _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
+    if not os.path.lexists(config_path):
+        ensure_private_data_dir(base / "data")
+    _instance_config(base, public_url, force=force)
+    port_line = f"SWB_PORT={port}\n" if port != DEFAULT_PORT else ""
+    _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n{port_line}", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
-    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}")
+    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -108,16 +132,6 @@ def _read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _up(base: Path, env: dict[str, str]) -> None:
-    from .__main__ import main as server
-
-    for name, value in env.items():
-        os.environ.setdefault(name, value)
-    os.environ["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
-    os.environ["SWITCHBOARD_DATA"] = str(base / "data")
-    server(["serve"])
-
-
 def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
     choices: dict[str, str | bool] = {}
     for group in groups:
@@ -142,7 +156,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     if re.fullmatch(r"[A-Za-z0-9_-]+", link):
         path = f"/claim/{link}"
     else:
-        invalid = CliError("Provide a Switchboard claim link or code.")
+        invalid = CliError("Provide a SwB claim link or code.")
         try:
             parsed = urlsplit(link)
         except ValueError:
@@ -157,39 +171,89 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     return target._replace(path=prefix + path).geturl(), path.startswith("/routines/")
 
 
+def _rate_limit(response: httpx2.Response) -> CliError:
+    delay = response.headers.get("Retry-After", "").strip()
+    if re.fullmatch(r"[0-9]{1,9}", delay):
+        seconds = int(delay)
+        return CliError(f"Slow down. Try again in {seconds} {'second' if seconds == 1 else 'seconds'}.")
+    return CliError("Slow down. Try again shortly.")
+
+
 def _claim(url: str, key: str, *, routine: bool) -> None:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", getpass.GetPassWarning)
-            token = getpass.getpass("Token: ")
-    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
-        raise CliError("Use a terminal with hidden input to enter the token.") from None
+    token = _hidden_input("Token: ")
     if not token.strip():
         raise CliError("No token entered.")
     try:
-        with httpx2.Client(headers={"Authorization": f"Bearer {key}"}, timeout=30,
+        with httpx2.Client(headers={"Authorization": f"Bearer {key}", "Accept": "application/json", "User-Agent": USER_AGENT}, timeout=30,
                            follow_redirects=False, trust_env=False) as client:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
-        raise CliError("Couldn't submit the claim. Check that Switchboard is running and verify --url.") from None
+        raise CliError("Check that SwB is running and verify --url.") from None
+    if response.status_code == 429:
+        raise _rate_limit(response)
     if not response.is_success:
-        raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
+        status = response.status_code
+        if status in CLAIM_ERRORS and response.headers.get("content-type", "").partition(";")[0] == "application/json":
+            try:
+                error = response.json() if len(response.content) <= 4096 else None
+            except ValueError:
+                error = None
+            if isinstance(error, dict) and error.get("error") == CLAIM_ERRORS[status]:
+                message = error.get("message")
+                if (isinstance(message, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .()'/+-]{0,159}", message)
+                        and not any(secret in message for secret in (token.strip(), key, url.rsplit("/", 1)[-1]))):
+                    raise CliError(message)
+        raise CliError(f"Check the claim link and owner key (HTTP {status}).")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
 
 
-async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def _hidden_input(prompt: str) -> str:
     try:
-        async with (
-            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False) as client,
-            streamable_http_client(url, http_client=client) as streams,
-            ClientSession(*streams, read_timeout_seconds=30) as session,
-        ):
-            await session.initialize()
-            result = await session.call_tool(tool, arguments)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            return getpass.getpass(prompt)
+    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
+        raise CliError("Use a terminal with hidden input to enter the token.") from None
+
+
+async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    rate_limit = None
+    mcp_missing = False
+
+    async def inspect_response(response: httpx2.Response) -> None:
+        nonlocal rate_limit, mcp_missing
+        if response.request.method == "POST":
+            if response.status_code == 429:
+                rate_limit = _rate_limit(response)
+            elif response.status_code == 404:
+                mcp_missing = True
+
+    try:
+        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}", "User-Agent": USER_AGENT}, timeout=30, trust_env=False,
+                                      event_hooks={"response": [inspect_response]}) as client:
+            try:
+                async with (
+                    streamable_http_client(url, http_client=client) as streams,
+                    ClientSession(*streams, read_timeout_seconds=30) as session,
+                ):
+                    await session.initialize()
+                    result = await session.call_tool(tool, arguments)
+            except Exception:
+                parts = urlsplit(url)
+                if tool == "switchboard_status" and mcp_missing and parts.path.endswith("/mcp"):
+                    response = await client.get(parts._replace(path=f"{parts.path[:-4]}/healthz").geturl())
+                    if response.is_success and isinstance(health := response.json(), dict) and health.get("mcp_enabled") is False:
+                        return health
+                raise
     except Exception:
-        raise CliError("Couldn't reach or authenticate to Switchboard. Check that it's running and verify --url and the owner key.") from None
+        if rate_limit is not None:
+            raise rate_limit from None
+        if tool == "login_link":
+            raise CliError(f"Check that SwB is running at {url.replace(key, '[redacted]')}. Verify the owner key.") from None
+        raise CliError("Check that SwB is running. Verify --url and the owner key.") from None
     if result.is_error:
-        raise CliError(f"Switchboard refused the {tool} tool call.")
+        reason = "\n".join(item.text for item in result.content if item.type == "text" and item.text.strip())
+        raise CliError(reason.replace(key, "[redacted]") or f"SwB refused the {tool} tool call.")
     payload = result.structured_content
     if payload is None and len(result.content) == 1 and result.content[0].type == "text":
         try:
@@ -197,27 +261,41 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
         except ValueError:
             pass
     if not isinstance(payload, dict):
-        raise CliError("Switchboard returned an unexpected MCP result.")
+        raise CliError("SwB returned an unexpected MCP result.")
     return payload
 
 
 def _display(tool: str, payload: dict[str, Any]) -> str:
+    if tool == "login_link":
+        url = payload.get("url")
+        if not isinstance(url, str) or not url:
+            raise CliError("Ask SwB for a new sign-in link.")
+        return url
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
-        return "\n".join([f"Status: {payload.get('status', 'unknown')}", "Next steps:",
-                          *([f"  - {step}" for step in steps] or ["  None."])])
+        lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if payload.get("mcp_enabled") is False:
+            lines.append(MCP_OFF)
+        if blocks := payload.get("block_setup"):
+            lines.append("Blocks:")
+            for name, block in blocks.items():
+                state = "on" if block["enabled"] else "off"
+                missing = ", ".join(block["missing_env"])
+                lines.append(f"  - {name}: {state}" + (f" (missing env: {missing})" if missing else ""))
+        return "\n".join([*lines, "Next steps:", *([f"  - {step}" for step in steps] or ["  None."])])
+    if payload.get("what") == "unknown" and (kinds := payload.get("kinds")):
+        return "Supported kinds: " + ", ".join(kinds)
     lines = [str(payload.get("what", "Connect"))]
     if payload.get("state"):
         lines[0] += f": {payload['state']}"
     if payload.get("error"):
         lines.append(str(payload["error"]))
-    if payload.get("kinds"):
-        lines.append("Supported kinds: " + ", ".join(payload["kinds"]))
+    steps = payload.get("next") or []
     if payload.get("done"):
-        lines.extend(["Done:", *(f"  - {line}" for line in payload["done"])])
-    if payload.get("next"):
+        lines.extend(["Progress" if steps else "Done", *payload["done"]])
+    if steps:
         lines.append("Next steps:")
-        for step in payload["next"]:
+        for step in steps:
             lines.append(f"  - {step['by']}: {step['do']}")
             if step.get("call"):
                 lines.append(f"    Call: {json.dumps(step['call'], ensure_ascii=False)}")
@@ -228,57 +306,95 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> None:
+def build_parser() -> argparse.ArgumentParser:
+    from .companion.hook import EVENT_STATES
+
     parser = argparse.ArgumentParser(prog="swb")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
-    up = commands.add_parser("up", help="run the Switchboard server")
+    up = commands.add_parser("up", help="run the SwB server")
+    up.add_argument("--host", help="bind address from SWB_HOST. The default is 127.0.0.1.")
+    up.add_argument("--public-url", help="public base URL for this server")
+    up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
     connect.add_argument("--choose", action="append", nargs="+", default=[], metavar="KEY=VALUE")
     status = commands.add_parser("status", help="show server status and next steps")
+    login_link = commands.add_parser("login-link", help="mint a one-time owner sign-in link")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
-    for command in (init, up, connect, status, claim):
-        command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
-    for command in (connect, status, claim):
-        command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
+    up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
+    for command in (init, connect, status, claim, login_link):
+        command.add_argument("--dir", type=Path, help="instance directory. The default is the current directory.")
+    for command in (connect, status, claim, login_link):
+        command.add_argument("--url", help="SwB address. The local default uses SWB_PORT or PORT. The default port is 8870.")
+    companion_commands.add_commands(commands)
+    hook = commands.add_parser("hook", help="forward a local agent event")
+    hook.add_argument("harness", choices=tuple(EVENT_STATES))
+    add_server_commands(commands)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    if argv and argv[0] == "hook":
+        from .companion.hook import run
+
+        run(argv[1:])
+        return
+    parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command in SERVER_COMMANDS:
+        from .__main__ import main as server
+
+        server(argv)
+        return
     try:
-        base = args.dir.resolve()
+        if args.command == "companion":
+            companion_commands.run(args, _hidden_input)
+            return
+        base = (args.dir or Path.cwd()).resolve()
+        env = {} if args.command == "init" else _read_env(base / ".env")
+        logging.basicConfig(level=os.environ.get("LOG_LEVEL", env.get("LOG_LEVEL", "INFO")),
+                            format="%(asctime)s %(levelname)s %(name)s %(message)s")
         if args.command == "init":
             _init(base, args.public_url, args.force)
             return
-        env = _read_env(base / ".env")
         if args.command == "up":
-            _up(base, env)
+            from .cli_up import run
+
+            run(base, env, args.tunnel, host=args.host, instance=args.dir is not None, public_url=args.public_url)
             return
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
             if choose := _choices(args.choose):
                 arguments["choose"] = choose
-        key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
+        env = {**env, **os.environ}
+        local_url = client_endpoint(env)
+        url = _url(args.url or local_url)
+        key = env_value(env, OWNER_KEY)
+        if not key and url == local_url:
+            key = volume_owner_key(env, instance=Instance(base, explicit=args.dir is not None))
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
-        port = os.environ.get("PORT", env.get("PORT", "8000"))
-        url = _url(args.url or f"http://127.0.0.1:{port}/mcp")
-        request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
-        level = request_log.level
+        request_logs = {logger: logger.level for logger in map(logging.getLogger, ("httpx2", "mcp"))}
         try:
-            request_log.setLevel(logging.CRITICAL + 1)
+            for logger in request_logs:
+                logger.setLevel(logging.CRITICAL + 1)
             if args.command == "claim":
                 claim_url, routine = _claim_url(url, args.link)
                 _claim(claim_url, key, routine=routine)
                 return
-            tool = "connect" if args.command == "connect" else "switchboard_status"
+            tool = {"connect": "connect", "login-link": "login_link", "status": "switchboard_status"}[args.command]
             payload = asyncio.run(_call(url, key, tool, arguments))
         finally:
-            request_log.setLevel(level)
+            for logger, level in request_logs.items():
+                logger.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
-    except CliError as error:
-        parser.exit(1, f"swb: {error}\n")
+    except (CliError, CompanionError, ConfigError) as error:
+        parser.exit(2 if args.command == "up" and isinstance(error, ConfigError) else 1, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(1, f"swb: couldn't read or write the instance files ({type(error).__name__}).\n")

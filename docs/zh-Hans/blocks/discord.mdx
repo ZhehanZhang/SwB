@@ -1,0 +1,84 @@
+---
+title: Discord
+description: 把 Discord 消息路由给智能体，并在子区中回复。
+---
+
+## 创建机器人
+
+按 [Discord 设置](/zh-Hans/docs/setup/discord)创建机器人。要读取文本和后续消息，启用 Message Content Intent。
+
+让智能体连接 Discord。智能体调用 `discord_provision`，并给你一个认领链接。打开链接，粘贴 Bot 令牌。
+
+## 把机器人添加到服务器
+
+机器人连接后，调用 `discord_status`。打开 `setup.invite_url` 中的链接，把机器人添加到你的服务器。这个链接会申请已启用功能所需的权限。
+
+在 `discord_status` 的 `discovered.guilds` 中找到服务器 ID，把它添加到配置中的一个空间。一个空间保存一个 Discord 服务器的设置。
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: claude
+    agents: {claude: [home]}
+```
+
+要设置所有者，给机器人发一条私信。在 `discord_status` 的 `discovered.dm_users` 中找到你的用户 ID，把它填入 `owner_ids`。
+
+## 从 Discord 发送
+
+提及机器人，并写上目标的简称，例如 `@swb claude check the build`。启用子区后，SwB 可以从你的消息创建子区，并把你加进去。SwB 在子区中发布回复。后续消息可以沿用子区的目标。启用形象（persona）后，符合条件的回复使用智能体的名称和头像。
+
+## 与其他人共享
+
+频道和目标默认私有。要让其他人访问，同时共享频道和目标。使用 `channel:<space>/<channel id>` 和 `target:<slug>`。要向特定用户授予访问权限，把 `discord:<user id>` 加入访问列表。
+
+## 模块设置
+
+在设置中打开 Discord，修改机器人的名称和头像。每个服务器可以使用自己的名称和头像。给机器人授予更改昵称权限，即可设置服务器昵称。
+
+开启 **Post every agent as this bot** 后，服务器中的智能体回复会显示该空间的机器人名称和头像。审计记录保留回复的智能体。
+
+| 键 | 用途 |
+| - | - |
+| `blocks.discord` | Discord 机器人及其空间的设置 |
+| `blocks.discord.use` | 加载 `discord` 模块 |
+| `blocks.discord.enabled` | 设为 `true` 加载模块，设为 `false` 关闭模块 |
+| `blocks.discord.token_env` | Bot 令牌的环境变量名 |
+| `blocks.discord.application_id` | 邀请链接所用的 Discord 应用 ID。SwB 也可以从 Discord 读取这个 ID |
+| `blocks.discord.connect` | 设为 `true` 接收 Discord 的实时事件。设为 `false` 可单独测试 API 调用 |
+| `blocks.discord.message_content` | 设为 `true` 读取消息内容，包括子区中的后续消息。在 Developer Portal 中开启 Message Content Intent |
+| `blocks.discord.threads` | 设为 `true` 时，在服务器文字频道中为回复创建公开子区 |
+| `blocks.discord.personas` | 设为 `true` 时，通过 Webhook 发到服务器的消息使用智能体的名称和头像。向机器人授予 Manage Webhooks 权限 |
+| `blocks.discord.avatar` | 机器人个人资料的头像文件名 |
+| `blocks.discord.ack_reaction` | 机器人收到发给它的消息后，用来确认收到的表情符号。设为 `null` 可关闭这项回应 |
+| `blocks.discord.dm_space` | 为私信提供路由和所有者设置的空间。默认为第一个已配置的空间 |
+| `blocks.discord.dm_mode` | 其他人所发私信的模式。填 `watch` 收集摘要，填 `off` 忽略这些私信 |
+| `blocks.discord.daily_cap` | 经工具发布或回复时，每种操作的每日上限。设为 `null` 可取消上限 |
+| `blocks.discord.refresh_minutes` | 目标列表的更新间隔，单位为分钟。默认为 `30` |
+| `blocks.discord.target_aliases` | 把额外的目标名称映射到已有的目标 |
+| `blocks.discord.agents` | 每个智能体可以发布消息和接收事件的空间。填 `*` 表示所有空间 |
+
+要通过项目路由唤醒智能体，使用[频道模式](/zh-Hans/docs/channel-modes)。
+
+## 空间和频道
+
+| 键 | 用途 |
+| - | - |
+| `blocks.discord.spaces` | 把 SwB 中使用的名称映射到 Discord 服务器的设置 |
+| `blocks.discord.spaces.*.guild_id` | Discord 服务器 ID。可以在一个空间中省略它，由 SwB 自动匹配。自动匹配要求空间所有者名下只有一个可用的服务器 |
+| `blocks.discord.spaces.*.owner_ids` | 视为所有者的 Discord 用户 ID。默认为 Discord 应用的所有者 |
+| `blocks.discord.spaces.*.known` | 把已知的 Discord 用户 ID 映射到显示名称 |
+| `blocks.discord.spaces.*.default_target` | 发给 SwB 的新消息省略目标名称时使用的目标 |
+| `blocks.discord.spaces.*.project` | 这个空间的默认 SwB 项目 |
+| `blocks.discord.spaces.*.channel_projects` | 按频道 ID 或以 `#` 开头的名称设定 SwB 项目 |
+| `blocks.discord.spaces.*.mode` | 空间的模式。频道或子区的模式可以覆盖它 |
+| `blocks.discord.spaces.*.channels` | 按频道或子区 ID 设定模式或更详细的设置 |
+| `blocks.discord.spaces.*.channels.*.mode` | 单个频道或子区的模式 |
+| `blocks.discord.spaces.*.channels.*.actions` | `triage` 模式下允许的操作，例如 `reply` 和 `notify_owner` |
+| `blocks.discord.spaces.*.listen` | 旧版设置，列出使用 `assist` 模式的频道或子区 ID |
+| `blocks.discord.spaces.*.bot_posts_per_hour` | 机器人一小时内在每个子区中最多发布的消息数。默认为 `20` |

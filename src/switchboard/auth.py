@@ -1,9 +1,8 @@
 """Single-owner OAuth 2.1 authorization server plus bearer verification for /mcp.
 
 Clients identify themselves by Dynamic Client Registration (RFC 7591) or by a Client ID Metadata
-Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in: /authorize sits
-behind Cloudflare Access with the SSO identity provider, and the server verifies the Access JWT itself
-(signature, audience, issuer, owner email). There is no password form.
+Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in,
+using an owner session or a verified Cloudflare Access assertion. There is no password form.
 """
 
 from __future__ import annotations
@@ -12,15 +11,14 @@ import asyncio
 import base64
 import hashlib
 import hmac
-import html
 import json
 import logging
 import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
-from urllib.parse import urlencode, urlparse
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from urllib.parse import unquote_plus, urlencode, urlparse
 
 import httpx
 from starlette.requests import Request
@@ -29,18 +27,24 @@ from starlette.routing import Route
 
 from . import pages
 from .agents import PRESETS, Agents, host_allowed
-from .config import Config
+from .config import Config, LOOPBACK_HOSTS
+from .guard import audit_client_ip
+from .refusals import CSRF_AUDIT_PATHS
+from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
+
+if TYPE_CHECKING:
+    from .visibility import Who
 
 log = logging.getLogger("switchboard.auth")
 
 SCOPE = "switchboard"
+COMPANION_KEY_PREFIX = "swbd_"
 CODE_TTL = 300
 FORM_TTL = 900
 REFRESH_REUSE_GRACE = 60
 MAX_CLIENTS = 500
 CIMD_MAX_BYTES = 64 * 1024
-LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 
 
 def sha(s: str) -> str:
@@ -73,9 +77,33 @@ class Principal:
         return (self.kind in ("key", "oauth") and self.trust == "owner"
                 and self.scopes is None and self.tools is None and self.targets is None)
     credential: str | None = field(default=None, repr=False, compare=False)
+    memory_grants: tuple[str, ...] = field(default=(), repr=False)
+    visibility_who: Who | None = field(default=None, repr=False)
+
+    @property
+    def is_memory_owner(self) -> bool:
+        return self.kind == "owner_session" or self.is_unrestricted_owner
+
+    @property
+    def memory_writer(self) -> str | None:
+        if self.is_memory_owner:
+            return None
+        if self.kind == "connect" or (self.kind in ("key", "oauth", "companion") and self.credential is not None):
+            return sha(dumps([self.kind, self.client_id, self.credential]))
+        return None
 
     def allows(self, scope: str) -> bool:
-        """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
+        """Whether this caller has a grant for the memory scope."""
+        if self.kind == "connect":
+            return scope in self.memory_grants
+        return self.allows_routing_scope(scope)
+
+    def allows_private_memory(self, scope: str) -> bool:
+        grants = self.memory_grants if self.kind == "connect" else self.scopes
+        return self.is_memory_owner or scope in (grants or ())
+
+    def allows_routing_scope(self, scope: str) -> bool:
+        """The configured conversation, route and provider scope limit."""
         return self.scopes is None or "*" in self.scopes or scope in self.scopes
 
 
@@ -107,7 +135,7 @@ def redirect_allowed(uri: str, patterns: tuple[str, ...]) -> bool:
         return False
     if u.fragment or not u.scheme or not u.netloc:
         return False
-    loopback = u.scheme == "http" and u.hostname in ("localhost", "127.0.0.1", "::1")
+    loopback = u.scheme == "http" and u.hostname in LOOPBACK_HOSTS
     if u.scheme != "https" and not loopback:
         return False
     for p in patterns:
@@ -127,7 +155,7 @@ def redirect_matches(requested: str, registered: list[str]) -> bool:
     if requested in registered:
         return True
     rq = urlparse(requested)
-    if rq.scheme != "http" or rq.hostname not in ("localhost", "127.0.0.1", "::1"):
+    if rq.scheme != "http" or rq.hostname not in LOOPBACK_HOSTS:
         return False
     for r in registered:
         ru = urlparse(r)
@@ -148,7 +176,7 @@ def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents:
     if matched:
         return matched
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
-    return slug or "local"
+    return slug or f"oauth-{sha(client.client_id)[:12]}"
 
 
 class Auth:
@@ -170,6 +198,7 @@ class Auth:
         self.cimd_hosts = cfg.cimd_hosts or self.agents.cimd_hosts()
         self.http = http or httpx.AsyncClient(timeout=5.0, follow_redirects=False)
         self.secret = secret or secrets.token_bytes(32)
+        self.sessions = Sessions(store)
         self._access_verifier = access_verifier
         self._jwks: Any = None
         self._cimd_cache: dict[str, tuple[float, Client]] = {}
@@ -193,7 +222,7 @@ class Auth:
         return hmac.digest(self.secret, key.encode(), "sha256").hex()
 
     def verify_bearer(self, token: str | None) -> Principal | None:
-        if not token:
+        if not token or token.startswith(COMPANION_KEY_PREFIX):
             return None
         for key in self.cfg.static_keys:
             if hmac.compare_digest(sha(token), sha(key.secret)):
@@ -202,13 +231,14 @@ class Auth:
                 return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", **self._limits(key.name), credential=self._key_grant(key.secret))
         row = self.connections.verify(token) if self.connections is not None else None
         if row is not None:
-            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", **self._limits(row["agent"]))
+            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect",
+                             memory_grants=self.connections.memory_scopes(row["id"]), **self._limits(row["agent"]))
         if not self.cfg.resource:
             return None
         row = self.store.one(
             "SELECT * FROM oauth_tokens WHERE token_hash = ? AND kind = 'access' AND revoked_at IS NULL", (sha(token),)
         )
-        if row is None or row["expires_at"] < self.store.clock() or row["resource"] != self.cfg.resource:
+        if row is None or row["expires_at"] < self.store.clock() or row["resource"] not in self.cfg.resources:
             return None
         return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", **self._limits(row["source"]), credential=row["family"])
 
@@ -229,15 +259,16 @@ class Auth:
                 return False
         elif self.store.one("SELECT 1 FROM oauth_clients WHERE client_id = ?", (client_id,)) is None:
             return False
-        return self.store.one(
-            "SELECT 1 FROM oauth_tokens WHERE family = ? AND client_id = ? AND source = ? AND resource = ? AND expires_at >= ? AND revoked_at IS NULL",
-            (credential, client_id, source, self.cfg.resource, self.store.clock()),
-        ) is not None
+        rows = self.store.q(
+            "SELECT resource FROM oauth_tokens WHERE family = ? AND client_id = ? AND source = ? AND expires_at >= ? AND revoked_at IS NULL",
+            (credential, client_id, source, self.store.clock()),
+        )
+        return any(row["resource"] in self.cfg.resources for row in rows)
 
     def challenge_header(self, error: str | None = None) -> str:
         parts = []
-        if self.cfg.public_url:
-            parts.append(f'resource_metadata="{self.cfg.public_url}/.well-known/oauth-protected-resource"')
+        if self.cfg.issuer:
+            parts.append(f'resource_metadata="{self.cfg.issuer}/.well-known/oauth-protected-resource"')
             parts.append(f'scope="{SCOPE}"')
         if error:
             parts.append(f'error="{error}"')
@@ -251,7 +282,7 @@ class Auth:
             "authorization_servers": [self.cfg.issuer],
             "scopes_supported": [SCOPE],
             "bearer_methods_supported": ["header"],
-            "resource_name": "Switchboard",
+            "resource_name": "SwB",
         }
 
     def server_metadata(self) -> dict[str, Any]:
@@ -380,8 +411,9 @@ class Auth:
         if not resource:
             return self.cfg.resource or ""
         r = resource.rstrip("/")
-        if r in (self.cfg.resource, self.cfg.public_url):
-            return self.cfg.resource or ""
+        for base in self.cfg.public_urls:
+            if r in (base, f"{base}/mcp"):
+                return f"{base}/mcp"
         raise OAuthError("invalid_target", "unknown resource")
 
     def sign(self, params: dict[str, str]) -> str:
@@ -403,14 +435,17 @@ class Auth:
         return data
 
     async def access_email(self, request: Request) -> str | None:
-        assertion = request.headers.get("cf-access-jwt-assertion")
-        if not assertion or not self.cfg.access_team_domain:
+        assertion = request.headers.get("cf-access-jwt-assertion") or request.cookies.get("CF_Authorization")
+        if not assertion or not self.cfg.access_configured:
             return None
         if self._access_verifier:
             email = await self._access_verifier(assertion)
         else:
             email = await asyncio.to_thread(self._verify_access_jwt, assertion)
-        return email.lower() if email else None
+        if isinstance(email, str) and email:
+            return email.lower()
+        self._audit_access_refusal(request)
+        return None
 
     def _verify_access_jwt(self, assertion: str) -> str | None:
         import jwt
@@ -420,16 +455,67 @@ class Auth:
             self._jwks = jwt.PyJWKClient(f"https://{team}/cdn-cgi/access/certs", cache_keys=True, lifespan=3600)
         try:
             key = self._jwks.get_signing_key_from_jwt(assertion)
-            claims = jwt.decode(assertion, key.key, algorithms=["RS256"], audience=self.cfg.access_aud, issuer=f"https://{team}")
-        except Exception as e:
-            log.warning("cloudflare access assertion rejected: %s", type(e).__name__)
+            claims = jwt.decode(assertion, key.key, algorithms=["RS256"], audience=self.cfg.access_aud, issuer=f"https://{team}",
+                                options={"require": ["exp"]})
+        except Exception:
             return None
         return claims.get("email")
 
-    async def owner(self, request: Request) -> str | None:
-        """The owner's email when the request carries a valid Access JWT for an owner, else None."""
+    def _audit_access_refusal(self, request: Request) -> None:
+        if self.audit is not None:
+            self.audit.record_refusal(origin="http", client=audit_client_ip(request.scope), destination="core",
+                                      action="auth_failure", detail="access_assertion_rejected")
+
+    async def owner(self, request: Request) -> Owner | None:
         email = await self.access_email(request)
-        return email if email and email in self.cfg.owner_emails else None
+        if email:
+            if any(hmac.compare_digest(email.encode(), e.encode()) for e in self.cfg.owner_emails):
+                return Owner(email, "access")
+            self._audit_access_refusal(request)
+        return self.sessions.owner(request.cookies.get(SESSION_COOKIE))
+
+    def origin_ok(self, request: Request) -> bool:
+        origins = request.headers.getlist("origin")
+        if not origins:
+            return True
+        origin = self.cfg.public_origin
+        return origin is not None and all(hmac.compare_digest(value.encode(), origin.encode()) for value in origins)
+
+    def csrf(self, key: str) -> str:
+        return hmac.digest(self.secret, f"switchboard-csrf:{key}".encode(), "sha256").hex()
+
+    async def valid_csrf(self, request: Request, key: str) -> bool:
+        if not self.origin_ok(request):
+            return False
+        expected = self.csrf(key).encode()
+        header = request.headers.get("x-csrf-token")
+        if header is not None and hmac.compare_digest(header.encode(), expected):
+            return True
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() in (
+            "application/x-www-form-urlencoded", "multipart/form-data",
+        ):
+            token = (await request.form()).get("csrf")
+            return isinstance(token, str) and hmac.compare_digest(token.encode(), expected)
+        return False
+
+    def csrf_refused(self, request: Request, *, target: str | None = None) -> JSONResponse:
+        if target is None and request.url.path in CSRF_AUDIT_PATHS:
+            target = request.url.path
+        if self.audit is not None:
+            self.audit.record_refusal(origin="http", client=audit_client_ip(request.scope), destination="core",
+                                      action="auth_failure", target=target, detail="csrf")
+        return JSONResponse({"error": "csrf"}, status_code=403)
+
+    async def protect_owner(self, request: Request) -> tuple[Owner | None, JSONResponse | None]:
+        write = request.method not in ("GET", "HEAD")
+        if write and not self.origin_ok(request):
+            return None, self.csrf_refused(request)
+        owner = await self.owner(request)
+        if owner is None:
+            return None, JSONResponse({"error": "signed_out"}, status_code=401)
+        if write and not await self.valid_csrf(request, owner.csrf_key):
+            return None, self.csrf_refused(request)
+        return owner, None
 
     async def validate_authorize(self, p: dict[str, str]) -> tuple[Client, dict[str, str]]:
         """Checks that must pass before anything may be redirected to the client."""
@@ -453,7 +539,7 @@ class Auth:
 
     def error_redirect(self, redirect_uri: str, state: str | None, e: OAuthError) -> RedirectResponse:
         q = {"error": e.error, "error_description": e.description, "iss": self.cfg.issuer or ""}
-        if state:
+        if state is not None:
             q["state"] = state
         return RedirectResponse(_append(redirect_uri, q), status_code=302)
 
@@ -534,7 +620,7 @@ class Auth:
             Route("/.well-known/oauth-authorization-server", self.h_asm, methods=["GET"]),
             Route("/.well-known/openid-configuration", self.h_asm, methods=["GET"]),
             Route("/register", self.h_register, methods=["POST"]),
-            Route("/authorize", self.h_authorize, methods=["GET", "POST"]),
+            pages.PageRoute("/authorize", self.h_authorize, pages.AUTHORIZE_TITLE, methods=["GET", "POST"]),
             Route("/token", self.h_token, methods=["POST"]),
             Route("/revoke", self.h_revoke, methods=["POST"]),
         ]
@@ -570,34 +656,37 @@ class Auth:
     async def h_authorize(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:
             return d
-        if request.method == "GET":
-            params = dict(request.query_params)
-        else:
+        owner = None
+        if request.method == "POST":
+            owner, refused = await self.protect_owner(request)
+            if refused is not None:
+                return refused
             form = await request.form()
             try:
                 params = self.unsign(str(form.get("req") or ""))
             except OAuthError as e:
                 self.failed(request, "/authorize", e)
-                return pages.message_page("Sign-in failed", e.description, 400)
+                return pages.page("Start the connection again", status=400)
+        else:
+            params = dict(request.query_params)
         try:
             c, params = await self.validate_authorize(params)
         except OAuthError as e:
             self.failed(request, "/authorize", e, params.get("client_id"))
-            return pages.message_page("Sign-in failed", e.description, e.status if e.status != 401 else 400)
+            status = e.status if e.status != 401 else 400
+            if e.error == "invalid_request":
+                return pages.message_page("Check the redirect address", params.get("redirect_uri", ""), status)
+            return pages.page("Check the client registration", status=status)
         state = params.get("state")
         try:
             self.check_request(params)
         except OAuthError as e:
             return self.error_redirect(params["redirect_uri"], state, e)
 
-        if not self.cfg.access_team_domain:
-            return pages.message_page("Sign-in disabled", "Sign-in needs Cloudflare Access in front of /authorize (auth.cloudflare_access).", 503)
-        email = await self.owner(request)
-        if email is None:
-            return pages.message_page("Not allowed", "This sign-in needs the owner's SSO through Cloudflare Access.", 403)
+        if owner is None and (owner := await self.owner(request)) is None:
+            return login_redirect(request)
 
         if request.method == "POST":
-            form = await request.form()
             if form.get("decision") == "deny":
                 return self.error_redirect(params["redirect_uri"], state, OAuthError("access_denied", "the owner denied the request"))
             if form.get("decision") == "approve":
@@ -609,18 +698,16 @@ class Auth:
                 return RedirectResponse(_append(params["redirect_uri"], q), status_code=302)
 
         source = source_for(params["redirect_uri"], c, self.cfg.source_names, self.agents)
-        who = html.escape((self.agents.label(source, "") if source in self.agents else "") or c.name or c.client_id)
-        dest = html.escape(urlparse(params["redirect_uri"]).netloc)
-        line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
-        signed = f'<p class="item-line">Signed in with SSO as {html.escape(email)}</p>'
-        body = pages.hero("Connect to Switchboard", line) + f"""
-<form method="post" class="fade-in">
-<input type="hidden" name="req" value="{html.escape(self.sign(params))}">
-<div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span><span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
-<div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
-<button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>
-</form>"""
-        return pages.page("Connect", body, 200)
+        name = (c.name or "").strip() or self.agents.label(source, "") or "OAuth client"
+        host = urlparse(params["redirect_uri"]).hostname or ""
+        agent = self.agents.match(host, c.client_id if c.kind == "cimd" else "") or ""
+        owner_name = owner.label if owner.via == "access" else (
+            self.cfg.owner_emails[0] if len(self.cfg.owner_emails) == 1 else "owner"
+        )
+        scopes = tuple(dict.fromkeys(params.get("scope", SCOPE).split()))
+        return pages.authorize_page(name, host, owner_name, agent, self.sign(params), self.csrf(owner.csrf_key),
+                                    scopes if scopes != (SCOPE,) else (),
+                                    f"agent:{source}" if source not in self.agents else "")
 
     async def h_token(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:
@@ -671,4 +758,6 @@ def _basic(request: Request) -> tuple[str, str] | None:
 
 
 def _append(uri: str, q: dict[str, str]) -> str:
-    return uri + ("&" if urlparse(uri).query else "?") + urlencode(q)
+    parts = urlparse(uri)
+    query = [part for part in parts.query.split("&") if part and unquote_plus(part.partition("=")[0]) not in q]
+    return parts._replace(query="&".join([*query, urlencode(q)])).geturl()

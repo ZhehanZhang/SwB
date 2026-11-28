@@ -104,7 +104,8 @@ def register(mcp: MCPServer, core: "Switchboard", who: Callable[[Context], "Prin
                                                    "addressed_to_us marks mentions, DMs and replies in our threads. Each call returns only what you have not seen."), annotations=WAIT)
     async def slack_wait(ctx: Context, timeout_s: Annotated[float | None, Field(ge=0)] = None, project: str | None = None) -> dict[str, Any]:
         p = who(ctx)
-        got = await core.inbox.wait(owner=p.source, destination="slack", timeout=wait_caps.clamp(p.source, timeout_s), project=project)
+        got = await core.inbox.wait(owner=p.source, destination="slack", timeout=wait_caps.clamp(p.source, timeout_s),
+                                     project=project, scopes=p.scopes)
         if got["timed_out"]:
             got["next"] = "Nothing new in Slack yet; call slack_wait again or check later."
         return got

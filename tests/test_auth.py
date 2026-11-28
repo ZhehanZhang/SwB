@@ -1,9 +1,16 @@
-from urllib.parse import parse_qs, urlparse
+import time
+from urllib.parse import parse_qs, urlparse, urlsplit
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
+from starlette.testclient import TestClient
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, error_text, new_core, payload, pkce, register, rpc, sign_in, Clock
 from switchboard.agents import Agents
+from switchboard.app import create_app
+from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
 from switchboard.config import ConfigError
 
 
@@ -27,6 +34,38 @@ def test_mcp_without_token_is_401_with_discovery_challenge(make):
     assert f'resource_metadata="{PUBLIC}/.well-known/oauth-protected-resource"' in r.headers["www-authenticate"]
     bad = rpc(c, "not-a-token", "tools/list")
     assert bad.status_code == 401 and 'error="invalid_token"' in bad.headers["www-authenticate"]
+
+
+def test_companion_keys_are_refused_outside_the_companion_api(make):
+    core, client = make(env={"SWITCHBOARD_KEY_OWNER": STATIC_KEY})
+    code = payload(call(client, STATIC_KEY, "companion_code"))["code"]
+    hello = {"name": "Test device", "platform": "linux", "capabilities": []}
+    paired = client.post("/companion/pair", json={"code": code, **hello})
+    assert paired.status_code == 200
+    device = paired.json()
+    key = device["device_key"]
+    auth = {"Authorization": f"Bearer {key}"}
+    assert client.post("/companion/hello", headers=auth, json={**hello, "version": "1.0.0"}).status_code == 200
+
+    claim = urlsplit(core.claims.mint("EXAMPLE_TOKEN", PUBLIC)).path
+    form = {"token": "example-credential"}
+    assert client.post(claim, data=form).status_code == 401
+    assert client.get("/healthz").status_code == 200
+    for method, path in (("POST", claim), ("POST", "/mcp"), ("GET", "/inbox/poll"), ("GET", "/healthz")):
+        refused = client.request(method, path, headers=auth, data=form if path == claim else None)
+        assert refused.status_code == 401 and refused.json()["error"] == "invalid_token"
+        assert 'error="invalid_token"' in refused.headers["www-authenticate"]
+        assert key not in refused.text
+    assert client.post(claim, headers={"Authorization": key}, data=form).status_code == 401
+    assert client.post(claim, headers={"Authorization": "Bearer swbd_unknown"}, data=form).status_code == 401
+    assert core.claims.secret("EXAMPLE_TOKEN") is None
+    assert client.post(claim, headers={"Authorization": f"Bearer {STATIC_KEY}"}, data=form).status_code == 200
+
+    rows = core.audit.recent(action="companion_refused", outcome="refused")
+    assert {(row["target"], row["ref"]) for row in rows} == {(device["companion_id"], "/claim"), ("/claim", None)}
+    assert {row["detail"] for row in rows} == {"companion key outside the companion API"}
+    assert {row["target"] for row in core.audit.recent(action="auth_failure")} == {"/mcp", "/inbox"}
+    assert key not in str(rows) and claim not in str(rows)
 
 
 def test_full_flow_issues_token_tagged_with_the_assistant(make):
@@ -106,30 +145,36 @@ def test_invalid_cimd_pattern_fails_at_config_load():
     assert repr(pattern) in str(error.value)
 
 
-def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):
+def test_approving_needs_the_owners_access_jwt_and_csrf_on_the_post_too(make):
     _, c = make()
     cid = register(c)["client_id"]
-    _, req = consent(c, cid)
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}).status_code == 403
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "other"}).status_code == 403
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER).status_code == 302
+    page, req = consent(c, cid)
+    form = {"req": req, "decision": "approve", "csrf": consent_csrf(page)}
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        r = c.post("/authorize", data=form, headers=headers)
+        assert r.status_code == 401 and r.json() == {"error": "signed_out"}
+    r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER)
+    assert r.status_code == 403 and r.json() == {"error": "csrf"}
+    assert c.post("/authorize", data=form, headers=OWNER).status_code == 302
 
 
-def test_without_access_sign_in_is_off_and_there_is_no_password_form(make):
+def test_without_access_sign_in_uses_the_login_page_and_there_is_no_password_form(make):
     cfg = base_config()
     cfg["auth"] = {"owner_emails": ["owner@example.test"]}
-    _, c = make(config=cfg)
+    core, c = make(config=cfg)
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
-    assert page.status_code == 503 and req is None and 'type="password"' not in page.text
-    assert any("cloudflare_access" in p for p in c.get("/healthz").json()["problems"])
+    assert page.status_code == 303 and req is None
+    login = c.get(page.headers["location"])
+    assert login.status_code == 200 and 'type="password"' not in login.text
+    assert core.health()["oauth"] is True
 
 
 def test_deny_redirects_with_access_denied_and_iss(make):
     _, c = make()
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req, "decision": "deny"}, headers=OWNER)
+    r = c.post("/authorize", data={"req": req, "decision": "deny", "csrf": consent_csrf(page)}, headers=OWNER)
     q = parse_qs(urlparse(r.headers["location"]).query)
     assert q["error"] == ["access_denied"] and q["iss"] == [PUBLIC]
 
@@ -137,8 +182,8 @@ def test_deny_redirects_with_access_denied_and_iss(make):
 def test_tampered_form_token_is_rejected(make):
     _, c = make()
     cid = register(c)["client_id"]
-    _, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "decision": "approve"}, headers=OWNER)
+    page, req = consent(c, cid)
+    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
     assert r.status_code == 400
 
 
@@ -159,6 +204,19 @@ def test_authorize_rejects_unregistered_redirect_and_missing_pkce(make):
     r = c.get("/authorize", params={"response_type": "code", "client_id": cid, "redirect_uri": CLAUDE_CB, "state": "s"})
     q = parse_qs(urlparse(r.headers["location"]).query)
     assert r.status_code == 302 and q["error"] == ["invalid_request"]
+
+
+@pytest.mark.parametrize("redirect", [CLAUDE_CB, "http://localhost:3456/callback?state=&client=fixture"])
+def test_unsupported_response_type_echoes_authorization_state(make, redirect):
+    _, client = make()
+    cid = register(client, redirect=redirect)["client_id"]
+    response = client.get("/authorize", params={"response_type": "token", "client_id": cid,
+                                               "redirect_uri": redirect, "state": "st1"})
+    query = parse_qs(urlparse(response.headers["location"]).query, keep_blank_values=True)
+    assert response.status_code == 302 and query["error"] == ["unsupported_response_type"]
+    assert query["state"] == ["st1"]
+    if "client=fixture" in redirect:
+        assert query["client"] == ["fixture"]
 
 
 def test_pkce_mismatch_and_code_reuse_fail(make):
@@ -255,13 +313,63 @@ def test_static_key_for_capy(make):
 def test_cloudflare_access_gate(make):
     _, c = make()
     cid = register(c)["client_id"]
-    assert consent(c, cid, headers={})[0].status_code == 403
-    assert consent(c, cid, headers={"cf-access-jwt-assertion": "other"})[0].status_code == 403
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        refused, _ = consent(c, cid, headers=headers)
+        assert refused.status_code == 303
+        assert parse_qs(urlparse(refused.headers["location"]).query)["next"][0].startswith("/authorize?")
     page, req = consent(c, cid, headers={"cf-access-jwt-assertion": "good"})
-    assert page.status_code == 200 and 'type="password"' not in page.text and "SSO as owner@example.test" in page.text
-    r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "good"})
+    assert page.status_code == 200 and 'type="password"' not in page.text and "Signed in as owner@example.test" in page.text
+    r = c.post("/authorize", data={"req": req, "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
+
+def test_access_assertions_require_an_unexpired_exp_claim(make, monkeypatch):
+    core, c = make(access=None)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = RSAAlgorithm.to_jwk(key.public_key(), as_dict=True)
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", lambda _: {"keys": [{**jwk, "kid": "test-key"}]})
+    claims = {"email": "owner@example.test", "aud": core.cfg.access_aud, "iss": f"https://{core.cfg.access_team_domain}"}
+    now = int(time.time())
+    for extra, expected in (({}, False), ({"exp": now - 60}, False), ({"exp": now + 60}, True)):
+        assertion = jwt.encode({**claims, **extra}, key, algorithm="RS256", headers={"kid": "test-key"})
+        session = c.get("/auth/session", headers={"cf-access-jwt-assertion": assertion}).json()
+        assert session["signed_in"] is expected
+    [row] = core.audit.recent(action="auth_failure")
+    assert row["detail"] == "access_assertion_rejected"
+
+
+def test_access_refusal_audit_is_fixed_detail_and_deduplicated_per_client(tmp_path, capy):
+    clock = Clock()
+    cfg = base_config(trusted_proxies=["192.0.2.0/24"])
+    core = new_core(tmp_path, capy, config=cfg, clock=clock)
+    with TestClient(create_app(core), base_url=PUBLIC, client=("192.0.2.1", 10000)) as c:
+        assert c.get("/api/audit").status_code == 401
+        assert core.audit.recent(action="auth_failure") == []
+        for attempt, client in enumerate(("198.51.100.1", "198.51.100.2", "198.51.100.1", "198.51.100.2")):
+            invalid = f"fixture-private-assertion-{attempt}"
+            assertion = {"cf-access-jwt-assertion": invalid} if attempt % 2 == 0 else {"Cookie": f"CF_Authorization={invalid}"}
+            response = c.get("/api/audit", params={"fixture": "fixture-private-query"},
+                             headers={**assertion, "X-Forwarded-For": client})
+            assert response.status_code == 401
+        rows = core.audit.recent(action="auth_failure")
+        assert [row["client"] for row in rows] == ["198.51.100.2", "198.51.100.1"]
+        assert {(row["target"], row["detail"], row["outcome"]) for row in rows} == {(None, "access_assertion_rejected", "refused")}
+        assert "fixture-private" not in str(rows)
+        clock.t += REFUSAL_AUDIT_INTERVAL_S
+        repeated = {"cf-access-jwt-assertion": "other", "X-Forwarded-For": "198.51.100.1"}
+        assert c.get("/api/audit", headers=repeated).status_code == 401
+        assert c.get("/api/audit", headers=OWNER).status_code == 200
+        assert [row["client"] for row in core.audit.recent(action="auth_failure")] == ["198.51.100.1", "198.51.100.2", "198.51.100.1"]
+
+
+def test_access_cookie_signs_the_owner_in_on_paths_access_bypasses(make):
+    _, c = make()
+    assert c.get("/auth/session").json()["signed_in"] is False
+    c.cookies.set("CF_Authorization", "other")
+    assert c.get("/auth/session").json()["signed_in"] is False
+    c.cookies.set("CF_Authorization", "good")
+    session = c.get("/auth/session").json()
+    assert session["signed_in"] is True and session["via"] == "access"
 
 def test_no_public_url_disables_oauth_but_keeps_keys(make):
     cfg = base_config()
@@ -277,19 +385,60 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
     cb = "https://capy.ai/web/callbacks/mcp"
     cid = register(c, redirect=cb, client_name="Capy MCP client")["client_id"]
     page, _ = consent(c, cid, redirect=cb)
-    assert page.status_code == 200 and "<b>Capy</b> wants to connect as" in page.text and ">capy</span>" in page.text
+    assert page.status_code == 200 and "<h1>Connect Capy MCP client to SwB</h1>" in page.text
+    assert "/avatars/capy.png" in page.text and "Returns to <code>capy.ai</code>" in page.text
     tok = sign_in(c, redirect=cb)
     me = payload(call(c, tok["access_token"], "switchboard_status"))["you"]
     assert me["agent"] == "capy" and me["auth"] == "oauth"
     assert payload(call(c, STATIC_KEY, "switchboard_status"))["you"]["agent"] == "capy"
 
 
+def test_unmapped_oauth_agent_is_addressable_after_token_exchange(make):
+    core, c = make()
+    redirect = "http://localhost:8765/callback"
+    cid = register(c, redirect=redirect, client_name="R3C OAuth <test>")["client_id"]
+    page, _ = consent(c, cid, redirect=redirect)
+    assert page.status_code == 200 and "<h1>Connect R3C OAuth &lt;test&gt; to SwB</h1>" in page.text
+    assert "R3C OAuth <test>" not in page.text
+    slug = "r3c-oauth-test"
+    assert "/assets/claim-connectors.svg#agent" in page.text and f">agent:{slug}</code>" in page.text
+    task = {"task": "review this", "to": f"agent:{slug}"}
+    assert "no agent" in error_text(call(c, STATIC_KEY, "send", task))
+
+    tokens = sign_in(c, redirect=redirect, client_id=cid)
+    access = tokens["access_token"]
+    assert payload(call(c, access, "switchboard_status"))["you"]["agent"] == slug
+    delivery = payload(call(c, STATIC_KEY, "send", task))
+    assert delivery["delivered"] and delivery["to"] == task["to"]
+    items = payload(call(c, access, "inbox"))["items"]
+    assert [item["text"] for item in items] == ["review this"]
+
+    other_grant = sign_in(c, redirect=redirect, client_id=cid)
+    assert payload(call(c, other_grant["access_token"], "switchboard_status"))["you"]["agent"] == slug
+    for grant in (tokens, other_grant):
+        assert c.post("/revoke", data={"client_id": cid, "token": grant["access_token"]}).status_code == 200
+    assert slug not in core.known_agents()
+
+
+def test_unnamed_oauth_clients_get_distinct_stable_slugs(make):
+    _, c = make()
+    redirect = "http://localhost:8765/callback"
+    first, other = (register(c, redirect=redirect, client_name="")["client_id"] for _ in range(2))
+
+    def slug(client_id):
+        access = sign_in(c, redirect=redirect, client_id=client_id)["access_token"]
+        return payload(call(c, access, "switchboard_status"))["you"]["agent"]
+
+    first_slug = slug(first)
+    assert first_slug.startswith("oauth-") and first_slug == slug(first) and first_slug != slug(other)
+
+
 def test_key_scopes_apply_to_an_oauth_agent_too(make):
     cfg = base_config()
-    cfg["auth"]["key_scopes"] = {"capy": ["project:acme"]}
+    cfg["auth"]["key_scopes"] = {"capy": ["project:orbit"]}
     core, c = make(config=cfg)
     tok = sign_in(c, redirect="https://capy.ai/web/callbacks/mcp")
-    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:acme"]
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:orbit"]
 
 
 def test_capy_metadata_document_client_is_allowed_by_default(make, cimd):

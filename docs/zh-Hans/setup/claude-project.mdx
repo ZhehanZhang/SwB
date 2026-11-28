@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: 让 SwB 启动一个 Claude Code routine，在你的 Claude Project 中工作。
+---
+
+routine 是一项已保存的 Claude Code 任务，可以自行运行。其他智能体向它发送任务时，SwB 会在你的 Claude Project 中启动这个 routine。routine 在同一个 SwB 对话中回复。
+
+## 开始之前
+
+需要 Claude Pro、Max 或 Ultra 套餐，并且可以使用 Claude Code Projects。打开 [Claude Code](https://claude.ai/code)，选择 **Projects**。如需开通，[加入候补名单](https://claude.com/form/projects)。
+
+把 SwB 添加到同一个 Claude 账号，步骤见 [Claude](/zh-Hans/docs/setup/claude)。在 `config/switchboard.yaml` 中启用 `claude-routine` 模块。
+
+## 复制设置提示词
+
+<SetupPrompt name="claude-project" lang="zh-Hans" />
+
+在 [Claude Code](https://claude.ai/code) 中打开你的项目。把提示词粘贴到左侧的协调者聊天中。协调者会在项目中创建一个名为 `swb <project>` 的 routine。
+
+## 打开 routine
+
+打开协调者给出的 routine 链接，或按下面任一路径打开。
+
+### 从 Routines 页面打开
+
+打开 [Routines 页面](https://claude.ai/code/routines)。点击顶部的横幅，显示隐藏的项目 routine。打开 `swb <project>`。
+
+### 从项目中打开
+
+在右侧面板顶部的标签栏中点击 **+**。选择 **Routines**。打开 `swb <project>`。点击 **View full page**。
+
+## 打开 API 触发器
+
+打开 routine 名称旁边的菜单，选择 **Edit**。在编辑表单中依次选择 **Trigger**、**+** 和 **API**。
+
+复制 **Fire URL**，把这个 URL 交给协调者。
+
+## 生成并保存令牌
+
+令牌由所有者在 Claude 中生成。选择 **Generate token**。趁 **Token generated** 对话框还开着，复制令牌。
+
+打开协调者给出的认领链接。在 **Claude routine token** 页面核对项目和 routine ID。把令牌粘贴到 **Token** 中，选择 **Save token**。
+
+SwB 会显示 **Routine saved** 或 **Routine and project saved**。令牌保存后，告知协调者。
+
+## 智能体会做什么
+
+协调者从一个拥有完整所有者权限的 SwB 客户端调用 `connect(what="claude-project")`。SwB 检查 `claude-routine` 模块，并列出其中的 routine。协调者可以调用 `project_list` 查找你的 SwB 项目。
+
+协调者添加一个 API 触发器，并把下面这条指令写入 routine 的提示词，其中填入 Claude Project 的准确名称。
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+协调者再次调用 `connect`，在 `choose` 中传入 `fire_url`、`claude_project` 和 `project`。SwB 返回一个认领链接。认领链接是 SwB 上用来提交凭据的私密页面。这个链接只能使用一次，30 分钟后过期。
+
+如果 SwB 找到多个相似的项目，智能体会让你选择其中一个。要新建项目，智能体调用 `connect` 时传入新的短名称（slug），并把 `create_new` 设为 `true`。
+
+## 凭据
+
+| 项 | Claude 中的显示位置 | 格式 | 去向 |
+| - | - | - | - |
+| routine 令牌 | API 面板中的 **Token generated**，只显示一次 | 以 `sk-ant-oat01-` 开头 | SwB 认领链接页面上的 **Token** 字段 |
+| Fire URL | API 面板中的 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 协调者聊天中的智能体。这个 URL 只用来标识 routine。 |
+
+## 检查连接
+
+协调者调用 `routine_list`，核对项目并确认状态为 `untested`。然后它用 `send` 发送一条测试消息。启动成功时返回 `fired: true`，状态变为 `tested`。如果 Claude 返回了会话链接，打开它，确认会话运行在你的项目中。
+
+## 排查问题
+
+如果认领链接已过期，让智能体再次调用 `connect` 获取新链接。在 API 面板中点击 **Regenerate** 后，旧令牌立即失效。这时让智能体重新注册 routine，并在新的认领链接页面保存新令牌。
+
+如果带文本的请求收到 Claude 返回的 **this project is paused**，SwB 会改用空请求重试。routine 随后用 `routine_pickup` 取回消息。如果你的项目处于暂停状态，在 Claude 中恢复它。

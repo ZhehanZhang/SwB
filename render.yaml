@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: swb
+    runtime: docker
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: "off"
+    healthCheckPath: /healthz
+    disk:
+      name: switchboard-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SWB_DATA_DIR
+        value: /data
+      - key: SWB_DEPLOY_PLATFORM
+        value: render
+      - key: SWB_KEY_OWNER
+        generateValue: true
+      - key: SWB_SETUP_CODE
+        generateValue: true

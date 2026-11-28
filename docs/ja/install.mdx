@@ -1,0 +1,93 @@
+---
+title: インストール
+description: uvx、pipx、Docker のいずれかで SwB をインストールします。
+---
+
+{/* prepublication */}
+
+SwB は Linux、macOS、Windows で動きます。ソースから SwB をビルドするときは [Docker Compose](/ja/docs/deploy#docker-compose) の手順に従ってください。以下の方法は、パッケージとイメージの公開後に使えます。
+
+## インストールして起動する
+
+SwB のファイル用に空のフォルダーを用意してください。`swb` コマンドは、オーナーキーを使ってオーナーとしてサインインします。
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    [uv をインストール](https://docs.astral.sh/uv/getting-started/installation/)してください。SwB には Python 3.12 以降が必要です。
+
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx が SwB をダウンロードして起動します。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。ほかの例では、先頭の `swb` を `uvx swb-one` に置き換えてください。
+  </Tab>
+  <Tab value="pipx">
+    [pipx をインストール](https://pipx.pypa.io/stable/how-to/install-pipx.html)してください。SwB には Python 3.12 以降が必要です。
+
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx は、現在のユーザーアカウントに `swb` コマンドをインストールします。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。
+
+    pipx が古い Python を使う場合は、`pipx install --python 3.12 swb-one` を使ってください。
+  </Tab>
+  <Tab value="Docker">
+    [Docker をインストール](https://docs.docker.com/get-started/get-docker/)してください。
+
+    ```bash
+    (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
+    docker run -d --name swb --env-file .env \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    これらのコマンドは、非公開の `.env` ファイルを作成してコンテナーを起動します。イメージはデータを `/data` に保存します。サインインリンクは `docker exec swb swb login-link` で取得できます。コンテナー内でほかの SwB コマンドを実行するときは、`docker exec -it swb swb` に続けて入力してください。
+  </Tab>
+</Tabs>
+
+初めてローカルで起動すると、`swb up` がインスタンスフォルダーに `.env`、`config/switchboard.yaml`、`data/` を作成します。あとで新しいリンクを取得するときは `swb login-link` を実行してください。
+
+サーバーを起動する前にファイルを作成するときは、`swb init` を実行します。次に `swb up` を実行します。同じフォルダーで別のターミナルを開き、`swb login-link` を実行してください。
+
+`swb up` は、既定で `127.0.0.1` のポート `8870` で待ち受けます。ローカル MCP アドレスの既定値は `http://localhost:8870/mcp` です。別のポートを使うときは、シェルか `.env` で `SWB_PORT` を設定してください。
+
+インスタンスフォルダーを選ぶときは `swb up --dir ./my-swb` を使います。`swb init`、`swb status`、`swb login-link`、`swb connect`、`swb claim` にも同じ `--dir` を付けてください。バインドアドレス、設定ファイル、データフォルダーについては[設定](/ja/docs/config)をご覧ください。
+
+## サーバーを確認する
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+このリクエストはサインイン前でも使えて、`status` と `version` を返します。`swb status` を実行するか、オーナーキーを付けて `/healthz` を呼び出すと、ブロックとその状態、不足している変数を一覧できます。
+
+## サーバーコマンド
+
+コマンドのグループは `swb --help` で確認できます。各コマンドのオプションは、そのコマンドに `--help` を付けて確認してください。
+
+| コマンド | 用途 |
+| - | - |
+| `swb init` | 非公開のオーナーキーと最小限の設定を書き込みます。 |
+| `swb up` | このパソコンで SwB を起動します。 |
+| `swb connect PLATFORM` | プラットフォームの接続手順を表示します。 |
+| `swb companion` | コンパニオンのペアリング、実行、接続解除を行います。 |
+| `swb hook HARNESS` | ローカルのエージェントイベントをコンパニオンに転送します。 |
+| `swb status` | 状態と次の手順を表示します。 |
+| `swb login-link` | オーナー用のワンタイムのサインインリンクを作成します。 |
+| `swb claim` | 受け取りリンクまたはコードから認証情報を保存します。 |
+| `swb serve` | 設定済みのホストとポートでサーバーを実行します。 |
+| `swb export DIR` | 保存済みのメモリを、出力フォルダー `DIR` に Markdown ファイルとして書き出します。 |
+| `swb log [--limit N]` | 最近の監査ログを表示します。件数の既定値は `50` です。 |
+| `swb config migrate` | バージョン 1 の設定をバージョン 2 の形式で表示します。 |
+| `swb blocks list` | 設定済みのブロックを一覧表示します。 |
+| `swb blocks show BLOCK` | ブロックの設定を表示します。 |
+| `swb blocks check` | ブロックの設定を確認します。 |
+| `swb targets` | `send` の送信先を一覧表示します。 |
+
+## バージョン
+
+{/* prepublication */}
+
+公開後は、PyPI が `swb-one` パッケージを配布します。GitHub Container Registry が `ghcr.io/zhehanzhang/swb` イメージを配布します。特定のリリースを選ぶときは、`1.0.0` のようにバージョンを指定してください。イメージタグ `latest` は最新の安定版リリースを指します。

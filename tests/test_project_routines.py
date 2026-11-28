@@ -7,7 +7,7 @@ import httpx
 import yaml
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, FakeCapy, STATIC_KEY, CIMDHost, Clock, access_verifier, base_config, call, default_env, error_text, payload, sign_in, infra
+from conftest import OWNER, PUBLIC, FakeCapy, STATIC_KEY, CIMDHost, Clock, access_verifier, base_config, call, default_env, error_text, payload, sign_in, beacon
 from switchboard.app import create_app
 from switchboard.config import translate_v1
 from switchboard.core import Switchboard
@@ -30,11 +30,11 @@ def build(tmp_path, routines, name="c"):
     cfg["blocks"]["claude-routine"] = {"use": "claude-routine", "routines": routines}
     path = tmp_path / f"{name}.yaml"
     path.write_text(yaml.safe_dump(cfg))
-    core = Switchboard(path, tmp_path / f"data-{name}", env={**default_env(), "GENERAL_TOKEN": TOKEN, "INFRA_TOKEN": TOKEN}, clock=Clock(),
+    core = Switchboard(path, tmp_path / f"data-{name}", env={**default_env(), "GENERAL_TOKEN": TOKEN, "BEACON_TOKEN": TOKEN}, clock=Clock(),
                        oauth_http=httpx.AsyncClient(transport=httpx.MockTransport(CIMDHost().handler)), access_verifier=access_verifier,
                        destination_options={"claude-routine": {"transport": httpx.MockTransport(anthropic.handler)},
                                             "capy": {"transport": httpx.MockTransport(FakeCapy().handler)}})
-    infra(core)
+    beacon(core)
     core.projects.create(slug="other", name="Other")
     client = TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False)
     client.__enter__()
@@ -42,36 +42,36 @@ def build(tmp_path, routines, name="c"):
 
 
 BOTH = {"claude": {"routine_id": "trig_01GENERAL", "token_env": "GENERAL_TOKEN"},
-        "claude-infra": {"routine_id": "trig_01INFRA", "token_env": "INFRA_TOKEN", "project": "infra"}}
+        "claude-beacon": {"routine_id": "trig_BEACON", "token_env": "BEACON_TOKEN", "project": "beacon"}}
 
 
 def test_project_first_then_general(tmp_path):
     core, c, anthropic = build(tmp_path, BOTH)
     try:
-        assert payload(call(c, STATIC_KEY, "send", {"task": "deploy status?", "to": "claude", "project": "infra"}))["routine"] == "claude-infra"
+        assert payload(call(c, STATIC_KEY, "send", {"task": "deploy status?", "to": "claude", "project": "beacon"}))["routine"] == "claude-beacon"
         assert payload(call(c, STATIC_KEY, "send", {"task": "anything", "to": "claude", "project": "other"}))["routine"] == "claude"
         assert payload(call(c, STATIC_KEY, "send", {"task": "anything", "to": "claude"}))["routine"] == "claude"
-        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude:infra"}))["routine"] == "claude-infra"
-        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-infra"}))["routine"] == "claude-infra"
+        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude:beacon"}))["routine"] == "claude-beacon"
+        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-beacon"}))["routine"] == "claude-beacon"
         ids = [rid for rid, _ in anthropic.fired]
-        assert ids == ["trig_01INFRA", "trig_01GENERAL", "trig_01GENERAL", "trig_01INFRA", "trig_01INFRA"]
+        assert ids == ["trig_BEACON", "trig_01GENERAL", "trig_01GENERAL", "trig_BEACON", "trig_BEACON"]
         note = anthropic.fired[0][1]
-        assert 'context_pack(project="infra")' in note and "coordinator" in note and "final=false" in note and "final=true" in note
+        assert 'context_pack(project="beacon")' in note and "coordinator" in note and "final=false" in note and "final=true" in note
         assert "context_pack" not in anthropic.fired[1][1]
         routine = {t["id"]: t for t in payload(call(c, STATIC_KEY, "targets", {"block": "claude-routine"}))["targets"]}
-        assert routine["claude-infra"]["project"] == "infra" and "claude-infra" in routine["claude-infra"]["slugs"]
-        assert core.visibility.rule("target:claude-infra") == "private"
+        assert routine["claude-beacon"]["project"] == "beacon" and "claude-beacon" in routine["claude-beacon"]["slugs"]
+        assert core.visibility.rule("target:claude-beacon") == "private"
     finally:
         c.__exit__(None, None, None)
 
 
 def test_only_a_project_routine_and_the_mailbox_fallback(tmp_path):
-    core, c, anthropic = build(tmp_path, {"claude-infra": BOTH["claude-infra"]})
+    core, c, anthropic = build(tmp_path, {"claude-beacon": BOTH["claude-beacon"]})
     try:
-        assert payload(call(c, STATIC_KEY, "send", {"task": "for infra", "to": "claude", "project": "infra"}))["routine"] == "claude-infra"
+        assert payload(call(c, STATIC_KEY, "send", {"task": "for beacon", "to": "claude", "project": "beacon"}))["routine"] == "claude-beacon"
         plain = payload(call(c, STATIC_KEY, "send", {"task": "no routine for this", "to": "claude", "project": "other"}))
         assert plain["mailbox"] and "routine" not in plain
-        assert payload(call(c, STATIC_KEY, "send", {"task": "mailbox only", "to": "agent:claude", "project": "infra"}))["mailbox"]
+        assert payload(call(c, STATIC_KEY, "send", {"task": "mailbox only", "to": "agent:claude", "project": "beacon"}))["mailbox"]
         assert len(anthropic.fired) == 1
     finally:
         c.__exit__(None, None, None)
@@ -80,14 +80,14 @@ def test_only_a_project_routine_and_the_mailbox_fallback(tmp_path):
 def test_interim_and_final_replies_on_one_conversation(tmp_path):
     core, c, anthropic = build(tmp_path, BOTH)
     try:
-        h = payload(call(c, STATIC_KEY, "send", {"task": "build the thing", "to": "claude", "project": "infra"}))["conversation"]
+        h = payload(call(c, STATIC_KEY, "send", {"task": "build the thing", "to": "claude", "project": "beacon"}))["conversation"]
         tok = sign_in(c)["access_token"]
-        assert payload(call(c, tok, "reply", {"conversation": h, "text": "handed to the infra coordinator", "final": False}))["final"] is False
-        assert core.inbox.handle(h)["status"] == "delivered"
+        assert payload(call(c, tok, "reply", {"conversation": h, "text": "handed to the beacon coordinator", "final": False}))["final"] is False
+        assert core.inbox.handle(h)["status"] == "working"
         assert payload(call(c, tok, "reply", {"conversation": h, "text": "built and deployed"}))["final"] is True
         assert core.inbox.handle(h)["status"] == "answered"
         got = payload(call(c, STATIC_KEY, "inbox", {"since_cursor": 0}))["items"]
-        assert [(i["text"], i["final"], i["in_reply_to"]) for i in got] == [("handed to the infra coordinator", False, h), ("built and deployed", True, h)]
+        assert [(i["text"], i["final"], i["in_reply_to"]) for i in got] == [("handed to the beacon coordinator", False, h), ("built and deployed", True, h)]
         res = payload(call(c, STATIC_KEY, "result", {"conversation": h}))
         assert res["final"]["text"] == "built and deployed" and [r["final"] for r in res["replies"]] == [False, True]
         assert "replies to it come from the other side" in error_text(call(c, STATIC_KEY, "reply", {"conversation": h, "text": "x"}))
@@ -99,9 +99,9 @@ def test_routes_pick_the_routine_for_a_project(tmp_path):
     core, c, anthropic = build(tmp_path, BOTH)
     try:
         assert payload(call(c, STATIC_KEY, "send", {"task": "global goes to capy"}))["block"] == "capy"
-        assert payload(call(c, STATIC_KEY, "routes_set", {"target": "claude-routine:routine:claude-infra", "project": "infra"}))["level"] == "project"
-        out = payload(call(c, STATIC_KEY, "send", {"task": "routed by project", "project": "infra"}))
-        assert out["block"] == "claude-routine" and out["routine"] == "claude-infra"
+        assert payload(call(c, STATIC_KEY, "routes_set", {"target": "claude-routine:routine:claude-beacon", "project": "beacon"}))["level"] == "project"
+        out = payload(call(c, STATIC_KEY, "send", {"task": "routed by project", "project": "beacon"}))
+        assert out["block"] == "claude-routine" and out["routine"] == "claude-beacon"
         assert payload(call(c, STATIC_KEY, "send", {"task": "other project", "project": "other"}))["block"] == "capy"
     finally:
         c.__exit__(None, None, None)
@@ -111,19 +111,19 @@ def test_routine_tools_register_list_and_remove_without_showing_tokens(tmp_path)
     core, c, anthropic = build(tmp_path, {"claude": BOTH["claude"]})
     try:
         url = "https://api.anthropic.com/v1/claude_code/routines/trig_01NEWPROJ/fire"
-        added = payload(call(c, STATIC_KEY, "routine_add", {"fire_url": url, "token": TOKEN, "project": "infra"}))
-        assert added["name"] == "claude-infra" and added["status"] == "untested" and added["routine_id"] == "trig_01NEWPROJ"
+        added = payload(call(c, STATIC_KEY, "routine_add", {"fire_url": url, "token": TOKEN, "project": "beacon"}))
+        assert added["name"] == "claude-beacon" and added["status"] == "untested" and added["routine_id"] == "trig_01NEWPROJ"
         assert TOKEN not in json.dumps(payload(call(c, STATIC_KEY, "routine_list")))
         assert not core.store.q("SELECT * FROM routines WHERE token LIKE ?", (f"%{TOKEN}%",))
-        assert payload(call(c, STATIC_KEY, "send", {"task": "hi", "to": "claude", "project": "infra"}))["fired"]
+        assert payload(call(c, STATIC_KEY, "send", {"task": "hi", "to": "claude", "project": "beacon"}))["fired"]
         assert anthropic.fired[-1][0] == "trig_01NEWPROJ"
         rows = {r["name"]: r for r in payload(call(c, STATIC_KEY, "routine_list"))["routines"]}
-        assert rows["claude-infra"]["status"] == "tested" and rows["claude"]["status"] == "untested"
+        assert rows["claude-beacon"]["status"] == "tested" and rows["claude"]["status"] == "untested"
         assert "config file" in error_text(call(c, STATIC_KEY, "routine_remove", {"name": "claude"}))
         assert "routine token" in error_text(call(c, STATIC_KEY, "routine_add", {"fire_url": url, "token": "nope"}))
         assert "no project" in error_text(call(c, STATIC_KEY, "routine_add", {"fire_url": url, "token": TOKEN, "project": "nope"}))
-        assert payload(call(c, STATIC_KEY, "routine_remove", {"name": "claude-infra"}))["removed"]
-        assert "claude-infra" not in {r["name"] for r in payload(call(c, STATIC_KEY, "routine_list"))["routines"]}
+        assert payload(call(c, STATIC_KEY, "routine_remove", {"name": "claude-beacon"}))["removed"]
+        assert "claude-beacon" not in {r["name"] for r in payload(call(c, STATIC_KEY, "routine_list"))["routines"]}
         code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex"}))["code"]
         key = c.post("/connect", json={"code": code}).json()["key"]
         assert "connected agent" in error_text(call(c, key, "routine_add", {"fire_url": url, "token": TOKEN}))
@@ -131,39 +131,36 @@ def test_routine_tools_register_list_and_remove_without_showing_tokens(tmp_path)
         c.__exit__(None, None, None)
 
 
-def test_root_page_adds_a_routine_and_shows_projects_across_systems(tmp_path):
+def test_owner_adds_a_routine_and_console_shows_projects_across_systems(tmp_path):
     core, c, anthropic = build(tmp_path, {"claude": BOTH["claude"]})
     try:
-        page = c.get("/", headers=OWNER)
-        assert "Claude routines" in page.text and 'type="password"' in page.text and "Projects across systems" in page.text
-        csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
-        form = {"fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01PAGE/fire", "token": TOKEN, "project": "infra", "csrf": csrf}
-        assert c.post("/routines", data={**form, "csrf": "bad"}, headers=OWNER).status_code == 403
-        assert c.post("/routines", data=form, headers=OWNER).status_code == 303
-        page = c.get("/", headers=OWNER).text
-        assert "claude-infra" in page and "trig_01PAGE" in page and TOKEN not in page and "untested" in page
-        systems = {s["slug"]: s["systems"] for s in core.project_systems(client_targets(c))}
-        assert systems["infra"]["claude-routine routine"] == "Claude: infra" and "capy" in systems["infra"]
-        assert c.post("/routines/claude-infra/remove", data={"csrf": csrf}, headers=OWNER).status_code == 303
-        assert "claude-infra" not in {r["name"] for r in core.blocks["claude-routine"].rows()}
+        csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
+        routine = {"fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01PAGE/fire", "token": TOKEN, "project": "beacon"}
+        assert payload(call(c, STATIC_KEY, "routine_add", routine))["name"] == "claude-beacon"
+        agents = c.get("/api/agents", headers=OWNER)
+        assert agents.status_code == 200 and TOKEN not in agents.text
+        row = next(r for r in agents.json()["routines"] if r["name"] == "claude-beacon")
+        assert row["routine_id"] == "trig_01PAGE" and row["status"] == "untested"
+        systems = {s["slug"]: s["systems"] for s in c.get("/api/projects", headers=OWNER).json()["systems"]}
+        assert systems["beacon"]["claude-routine routine"] == "Claude: beacon" and "capy" in systems["beacon"]
+        path = "/api/routines/claude-beacon/remove"
+        assert c.post(path, headers={**OWNER, "X-CSRF-Token": "bad"}).status_code == 403
+        assert c.post(path, headers={**OWNER, "X-CSRF-Token": csrf}).status_code == 200
+        assert "claude-beacon" not in {r["name"] for r in core.blocks["claude-routine"].rows()}
     finally:
         c.__exit__(None, None, None)
-
-
-def client_targets(c):
-    return payload(call(c, STATIC_KEY, "targets", {"refresh": True}))["targets"]
 
 
 def test_a_target_limited_key_is_checked_after_the_project_picks_a_routine(tmp_path):
     core, c, anthropic = build(tmp_path, BOTH)
     try:
         core.cfg.key_targets["capy"] = ("claude",)
-        assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "infra"}))
+        assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "beacon"}))
         assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "other"}))["routine"] == "claude"
-        core.cfg.key_targets["capy"] = ("claude-infra",)
-        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-infra", "project": "infra"}))["routine"] == "claude-infra"
+        core.cfg.key_targets["capy"] = ("claude-beacon",)
+        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-beacon", "project": "beacon"}))["routine"] == "claude-beacon"
         assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "other"}))
-        assert "not a whole block" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-routine", "project": "infra"}))
-        assert [rid for rid, _ in anthropic.fired] == ["trig_01GENERAL", "trig_01INFRA"]
+        assert "not a whole block" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-routine", "project": "beacon"}))
+        assert [rid for rid, _ in anthropic.fired] == ["trig_01GENERAL", "trig_BEACON"]
     finally:
         c.__exit__(None, None, None)

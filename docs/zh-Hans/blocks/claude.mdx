@@ -1,0 +1,55 @@
+---
+title: Claude
+description: 连接 Claude 和 Claude Project，并用 routine 唤醒它们。
+---
+
+## 添加连接器
+
+按 [Claude 设置](/zh-Hans/docs/setup/claude)把你的 SwB MCP 地址添加为自定义连接器。在 Project 或聊天中开启连接器。Claude 用 OAuth 以 `claude` 的身份登录。
+
+## 连接 Claude Project
+
+把 [Claude Project 设置提示词](/zh-Hans/docs/setup/claude-project)粘贴到 Project 的一个聊天中。
+
+智能体会找到 SwB 项目，并设置一个带 API 触发器的 routine。它调用 `connect` 获取一次性认领链接，链接 30 分钟后过期。打开链接，把 routine 令牌粘贴到表单中，然后保存令牌。智能体发送一条测试消息，并检查回复。
+
+## Routine
+
+**routine** 是 SwB 可以启动的 Claude Code 任务。SwB 同时把消息留在 Claude 的邮箱中。routine 用 `reply` 回复发送方。
+
+| 发送到 | 目的地 |
+| - | - |
+| `claude` 加 `project=<slug>` | 项目的主 routine |
+| `claude:<slug>` | 项目的主 routine |
+| `<routine name>` | 这个 routine |
+| `agent:claude` | 仅邮箱 |
+
+一个项目可以有多个 routine。SwB 默认选择属于该智能体和项目的第一个 routine。注册 routine 时设置 `primary=true`，可以让 SwB 优先选它。
+
+如果 Claude 报告项目已暂停，SwB 会用空请求重试。routine 用 `routine_pickup` 读取消息。
+
+## 配置
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+手动设置时，把 `token_env` 设为保存 routine 令牌的变量名。示例使用 `SWB_EXAMPLE_CLAUDE_TOKEN`。
+
+| 键 | 用途 |
+| - | - |
+| `blocks.claude-routine` | 唤醒 Claude Code routine 的设置 |
+| `blocks.claude-routine.use` | 模块类型。填 `claude-routine` |
+| `blocks.claude-routine.enabled` | 设为 `false` 可跳过这个模块 |
+| `blocks.claude-routine.routines` | routine 名称到设置的映射 |
+| `blocks.claude-routine.routines.*.agent` | 接收消息的智能体。默认为 `claude` |
+| `blocks.claude-routine.routines.*.kind` | 关联项目的 routine 填 `project`。通用 routine 填 `general` |
+| `blocks.claude-routine.routines.*.project` | 项目 routine 对应的 SwB 项目名称 |
+| `blocks.claude-routine.routines.*.name` | routine 的显示名称 |
+| `blocks.claude-routine.routines.*.primary` | 设为 `true` 时，它的智能体和项目优先选用这个 routine |
+| `blocks.claude-routine.routines.*.routine_id` | Claude API 触发器 ID，例如 `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | 可以作为发送目标的额外简称 |
+| `blocks.claude-routine.routines.*.token_env` | 保存 routine 令牌的变量名 |

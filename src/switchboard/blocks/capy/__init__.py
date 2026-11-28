@@ -13,12 +13,19 @@ import hashlib
 import logging
 import re
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import httpx
 
 from ...audit import iso
-from .. import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
+from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
+from ...block_env import CAPY_KEY, CAPY_SEND_KEY
+from ...claims import ClaimInputError
+from ...refusals import CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED
+from ...subject import display_subject, lead_with_subject, subject
+from ...targets import CAPTAIN_SLUG, CaptainTargetError, captain_selection_error
+from .. import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
 
@@ -31,6 +38,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("switchboard.capy")
 
+CAPY_KEY_RE = re.compile(r"capy_[A-Za-z0-9_-]{43}")
 MSG_LIMIT = 1500
 RESULT_LIMIT = 20_000
 DIGEST_LIMIT = 2500
@@ -38,19 +46,29 @@ DELIVERIES = ("queue", "steer", "interrupt")
 MODES = ("captain_thread", "new_thread")
 TARGET_KINDS = ("captain", "project", "thread")
 DEFAULT_KEYS = {"model", "repos", "mode", "delivery"}
-AS_PREFIX = "CAPY_API_KEY_AS_"
 
-INSTRUCTIONS = """Capy is a coding agent with cloud machines, git and PRs, organised under Captains. Send it work that needs a
-real machine, a repo, a PR, or more than a few minutes: send(task) goes where the owner's route for you and the project
-points (usually his Captain), or send(task, to='capy:captain:<name>') when your route allows choosing. Then wait() for
-the reply. capy_captain_digest, capy_captains and capy_list read Captains and their crews."""
+INSTRUCTIONS = """Capy is a coding agent with cloud machines and Captains. Send it work that needs a machine, repository, or pull request.
+Use send(task=...) to follow the owner's route, usually to their Captain. Set to='capy:captain:<name>' if the route lets you choose.
+Call wait for the reply. Use capy_captain_digest, capy_captains and capy_list to read about Captains and their crews."""
 
 
-def parse_target(text: str) -> dict[str, str]:
+def _api_timestamp(value: Any) -> str | None:
+    if isinstance(value, str):
+        try:
+            if datetime.fromisoformat(value).tzinfo is not None:
+                return value
+        except ValueError:
+            pass
+    return None
+
+
+def parse_target(text: str) -> dict[str, Any]:
     """'captain:<id|name>', 'project:<id|code|name>', 'thread:<jam_id>', or a bare jam_/project_ id or Captain name."""
     text = (text or "").strip()
     kind, sep, value = text.partition(":")
     if sep and kind.lower() in TARGET_KINDS and value.strip():
+        if kind.casefold() == CAPTAIN_SLUG and value.strip().casefold() == CAPTAIN_SLUG:
+            return {CAPTAIN_SLUG: value.strip(), "explicit_name": True}
         return {kind.lower(): value.strip()}
     if text.startswith("jam_"):
         return {"thread": text}
@@ -73,6 +91,11 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:40]
 
 
+def validate_api_key(value: str) -> None:
+    if not CAPY_KEY_RE.fullmatch(value):
+        raise ClaimInputError("Enter capy_ followed by 43 characters")
+
+
 class CapyBlock(Block):
     connect_kinds = ("capy-captain",)
 
@@ -90,30 +113,30 @@ class CapyBlock(Block):
                           link_key="capy_project"),),
         personas="dynamic",
         link_keys=("capy_project",),
-        secrets=("CAPY_API_KEY", "CAPY_API_KEY_SERVICE", "CAPY_API_KEY_AS_*"),
+        secrets=(CAPY_KEY, CAPY_SEND_KEY, f"{AS_PREFIX}*"),
         network=("api.capy.ai",),
         identities=({"id": "service", "policy": "free"}, {"id": "personal", "policy": "free", "optional": True}),
         config_schema={"type": "object", "properties": {
             "api_base": {"type": "string"}, "identity": {"enum": ["service", "personal"]}, "send_key_env": {"type": "string"},
-            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "burst": {}, "captain_delivery": {"enum": list(DELIVERIES)},
+            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "captain_delivery": {"enum": list(DELIVERIES)},
             "avatars": {"type": "boolean"}, "handle_ttl_days": {"type": "number"}, "duplicate_window_s": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
-        key = core.secret("CAPY_API_KEY")
+        key = core.secret(CAPY_KEY)
         base = str(config.get("api_base", "https://api.capy.ai/api/v1"))
         transport = config.get("transport")
         self.api: CapyAPI | None = CapyAPI(base, key, transport=transport) if key else None
-        self.send_key_env = str(config.get("send_key_env") or "CAPY_API_KEY_SERVICE")
+        self.send_key_env = str(config.get("send_key_env") or CAPY_SEND_KEY)
         self.identity = str(config.get("identity", "service"))
         if self.identity not in ("service", "personal"):
             raise ValueError("destinations.capy.identity must be service or personal")
         self.keys: dict[str, CapyAPI] = {}
         if self.api is not None:
-            self.keys["CAPY_API_KEY"] = self.api
-            if self.send_key_env != "CAPY_API_KEY" and (send_key := core.secret(self.send_key_env)):
+            self.keys[CAPY_KEY] = self.api
+            if self.send_key_env != CAPY_KEY and (send_key := core.secret(self.send_key_env)):
                 self.keys[self.send_key_env] = CapyAPI(base, send_key, transport=transport)
             for env, value in sorted(core.cfg.env.items()):
                 if value and env not in self.keys and env.startswith(AS_PREFIX) and len(env) > len(AS_PREFIX):
@@ -131,6 +154,10 @@ class CapyBlock(Block):
         self.followers: dict[str, ThreadStream] = {}
         self._follow_tasks: dict[str, asyncio.Task[Any]] = {}
         self._seed_route(config.get("default_route"))
+
+    def bind(self) -> None:
+        self.core.claims.register_name(CAPY_KEY, validate_api_key)
+        self.core.claims.register_name(self.send_key_env, validate_api_key)
 
     # Lifecycle and health ----------------------------------------------------------------
 
@@ -168,7 +195,7 @@ class CapyBlock(Block):
         """Keys a send tries, in order: the agent's own CAPY_API_KEY_AS_<AGENT>, then the service user's send_key_env.
         CAPY_API_KEY (often the owner's own key) sends only with identity: personal, so relayed messages never appear as
         the owner unless that was chosen."""
-        envs = [self.as_env(agent) if agent else "", self.send_key_env, "CAPY_API_KEY" if self.identity == "personal" else ""]
+        envs = [self.as_env(agent) if agent else "", self.send_key_env, CAPY_KEY if self.identity == "personal" else ""]
         return list(dict.fromkeys(e for e in envs if e in self.keys))
 
     def agents(self) -> list[str]:
@@ -263,14 +290,17 @@ class CapyBlock(Block):
         return {"identity": self.identity, "sends_as": (self.chain(None) or [None])[0], "sends_as_agents": {a: (self.chain(a) or [None])[0] for a in self.agents()},
                 "send_keys": {env: self.key_checks.get(env, {"status": "unchecked"}) for env in self.keys}, "following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
 
-    def next_step(self) -> str | None:
+    def status_for(self, principal: "Principal") -> dict[str, Any]:
+        if principal.is_unrestricted_owner:
+            return self.status()
+        handles = self.core.inbox.handles(owner=principal.source, destination=self.name, open_only=True, scopes=principal.scopes, limit=500)
+        return {"open_handles": len(handles)}
+
+    def config_step(self) -> str | None:
         if self.api is None:
-            if self.core.secret("CAPY_API_KEY"):
+            if self.core.secret(CAPY_KEY):
                 return "Restart Switchboard to load the saved Capy API key."
             return "Create a key in Capy Settings → API and enter it through the private link from connect(what='capy-captain')."
-        status = self.key_checks.get("CAPY_API_KEY", {}).get("status")
-        if status == "rejected":
-            return "Replace the rejected Capy API key and restart Switchboard."
         if not self._routed()[0]:
             return "Call connect(what='capy-captain') to route a Capy Captain."
         if self.identity == "service" and self.send_key_env not in self.keys and not any(env.startswith(AS_PREFIX) for env in self.keys):
@@ -279,18 +309,23 @@ class CapyBlock(Block):
             return "Call connect(what='capy-captain') to save a Capy service user's key."
         return None
 
+    def next_step(self) -> str | None:
+        if self.api is not None and self.key_checks.get(CAPY_KEY, {}).get("status") == "rejected":
+            return "Replace the rejected Capy API key and restart Switchboard."
+        return self.config_step()
+
     async def connect_steps(self, kind: str, principal: Principal, project: str | None,
                             choose: dict[str, Any] | None) -> dict[str, Any] | None:
         if kind not in self.connect_kinds:
             return None
         if not principal.is_unrestricted_owner:
             return {"done": [], "next": [{"by": "person", "do": "Ask the owner to connect a Capy Captain from an unrestricted Switchboard client."}]}
-        has_key = bool(self.core.secret("CAPY_API_KEY"))
+        has_key = bool(self.core.secret(CAPY_KEY))
         done = [f"Capy API key: {'present' if has_key else 'absent'}."]
         if self.api is None:
             if has_key:
                 return {"done": done, "next": [{"by": "person", "do": self.next_step()}]}
-            step = self.token_step(principal, "CAPY_API_KEY", self.next_step())
+            step = self.token_step(principal, CAPY_KEY, self.next_step())
             return {"done": done, "next": [step]}
         choose = choose or {}
         if set(choose) - {"captain", "project"}:
@@ -317,10 +352,10 @@ class CapyBlock(Block):
         except CapyError as e:
             if e.status in (401, 403):
                 instruction = "Create a Capy API key that can see your Captains."
-                if self.core.cfg.env.get("CAPY_API_KEY"):
+                if self.core.cfg.env.get(CAPY_KEY):
                     step = {"by": "person", "do": f"{instruction} Replace CAPY_API_KEY on the server and restart Switchboard."}
                 else:
-                    step = self.token_step(principal, "CAPY_API_KEY", f"{instruction} Enter it through this private link.")
+                    step = self.token_step(principal, CAPY_KEY, f"{instruction} Enter it through this private link.")
                 return {"done": done, "next": [step]}
             raise BlockError("Capy could not list Captains. Try again.") from e
         done.extend(f"Available Captain: {c.get('name') or c.get('title') or c['id']} ({c['id']})." for c in captains)
@@ -374,14 +409,14 @@ class CapyBlock(Block):
 
     def need_api(self) -> CapyAPI:
         if self.api is None:
-            raise DestinationError("Capy is not configured on this server (CAPY_API_KEY missing). Memory, project and route tools still work.")
+            raise DestinationError("Capy is unreachable. Run swb connect capy-captain to add an API key.")
         return self.api
 
     # Actions ---------------------------------------------------------------------------
 
     def actions(self) -> list[Action]:
         return [
-            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True),
+            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True, previewable=True),
             Action("status", "Capy thread status", "Status and latest messages of a Capy thread.", self.thread_status, read_only=True),
             Action("list", "List Capy work", "Delegations, a Captain's crew, or a project's threads.", self.list_work, read_only=True),
             Action("reply", "Reply to a Capy thread", "Send a follow-up into a thread.", self.reply),
@@ -425,30 +460,33 @@ class CapyBlock(Block):
 
     def plan(self, principal: "Principal", project: "Project | None", target: str | None) -> tuple[dict[str, Any], dict[str, Any], str]:
         """Which target this caller's delegation goes to: (target, defaults, how it was chosen). Explicit targets need a route that allows it."""
-        route, tried = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
+        route, _ = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
         if target:
             if route is not None and not route.allow_override:
-                raise DestinationError(f"the {route.level} route sends this to {describe(route.target)} and does not allow overriding; "
-                                       "leave target out, or have the owner set allow_override on that route")
+                raise BlockRefused(TARGET_REQUIRED, f"the {route.level} route sends this to {describe(route.target)} and does not allow overriding; "
+                                   "leave target out, or have the owner set allow_override on that route")
             return parse_target(target), dict(route.defaults) if route else {}, "explicit"
         if route is None:
-            raise DestinationError(f"no Capy route for agent {principal.source!r}{f' and project {project.slug!r}' if project else ''} "
-                                   f"(checked {', '.join(tried)}); set one with routes_set or pass target")
+            raise DestinationError("No route is set for Capy. Set a route or pass a target.")
         return dict(route.target), dict(route.defaults), route.level
 
     async def delegate(self, call: Call, *, task: str, title: str | None = None, project: str | None = None, target: str | None = None,
                        repos: list[str] | None = None, files: list[dict[str, Any]] | None = None, model: str | None = None,
                        new_thread: bool | None = None) -> dict[str, Any]:
-        api = self.need_api()
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
+        display_title = (call.handle_meta.get("display_subject") if "display_subject" in call.handle_meta
+                         else display_subject(title, task, "")) or None
+        if title:
+            title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
+        api = self.need_api()
         tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
-            tgt, extra = await self.validate_route_target(tgt, {})
+            tgt, extra = await self.validate_route_target(tgt, {}, reveal=call.principal.is_memory_owner)
             defaults = {**defaults, **extra}
-        call.note(target=describe(tgt), title=title, excerpt=task)
+        call.note(target=describe(tgt), title=display_title, excerpt=task)
         repos = sorted({r.strip().lower() for r in [*(repos or []), *(defaults.get("repos") or [])] if r.strip()})
         allowed = self._allowed_repos(p, defaults)
         bad = [r for r in repos if r not in allowed]
@@ -459,15 +497,23 @@ class CapyBlock(Block):
         if new_thread is not None and "captain" in tgt:
             mode = "new_thread" if new_thread else "captain_thread"
 
-        handle = call.handle or call.core.inbox.new_handle()
+        project_id = tgt.get("project") or tgt.get("captain_project")
+        in_thread = "thread" in tgt or ("captain" in tgt and mode == "captain_thread")
+        if not in_thread and not project_id:
+            raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
         send = self.sending(call)
-        body = [task]
+        if call.dry_run:
+            address = self.route_address(tgt)
+            return {"to": str(address) if address else None, "project": p.slug if p else None, "route": level, "mode": mode}
+
+        handle = call.handle or call.core.inbox.new_handle()
+        body = [lead_with_subject(title, task) if title and in_thread else task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):
             body += [f"Capy project: {p.links['capy_project']}"]
         forward = f"|forward:{call.handle_meta['forward_of']}" if "forward_of" in call.handle_meta else ""
-        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}{forward}".encode()).hexdigest()
+        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{title or ''}|{task}{forward}".encode()).hexdigest()
         window = float(self.config.get("duplicate_window_s", 600))
         for h in call.core.inbox.handles(owner=call.principal.source, destination=self.name, limit=20):
             if h["meta"].get("same") == same and h["created_at"] >= call.core.clock() - window:
@@ -477,9 +523,9 @@ class CapyBlock(Block):
                         "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
                                 f"Call wait(conversation='{h['handle']}'); use reply to add to it."}
         uploaded = await send(lambda a: self._files(a, files)) if files else []
-        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
+        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{title or ''}|{task}{forward}".encode()).hexdigest()
         try:
-            if "thread" in tgt or ("captain" in tgt and mode == "captain_thread"):
+            if in_thread:
                 thread_id = tgt.get("thread") or tgt["captain"]
                 cursor = await api.latest_cursor(thread_id)
                 receipt = await send(lambda a: a.send_message(thread_id, "\n".join(body), files=uploaded or None, model=model,
@@ -487,9 +533,6 @@ class CapyBlock(Block):
                 meta: dict[str, Any] = {"mode": "message", "message_id": receipt.get("id"), "client_key": digest[:64], "deduped": bool(receipt.get("deduped"))}
                 status = "sent"
             else:
-                project_id = tgt.get("project") or tgt.get("captain_project")
-                if not project_id:
-                    raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
                 t = await send(lambda a: a.create_thread(request_id=str(uuid.UUID(digest[:32])), project_id=project_id, title=title, model=model,
                                                          message="\n".join(body) + ("\n\n(Attachments follow in the next message.)" if uploaded else ""),
                                                          captain_id=tgt.get("captain")))
@@ -501,9 +544,10 @@ class CapyBlock(Block):
         except CapyError as e:
             raise DestinationError(f"Capy API refused the delegation: {e}") from e
         meta |= {"target": tgt, "route": level, "task": task[:300], "same": same, **call.handle_meta}
+        meta.pop("display_subject", None)
         kind = next((k for k in TARGET_KINDS if tgt.get(k)), "thread")
         call.core.inbox.open_handle(handle=handle, owner=call.principal.source, destination=self.name, ref=thread_id,
-                                    project=p.slug if p else None, title=title, meta=meta, status=status, stream_cursor=cursor,
+                                    project=p.slug if p else None, title=display_title, meta=meta, status=status, stream_cursor=cursor,
                                     target=str(Address(self.name, kind, str(tgt[kind]) if tgt.get(kind) else thread_id)))
         call.note(ref=thread_id)
         self.follow(thread_id)
@@ -672,13 +716,13 @@ class CapyBlock(Block):
         delegated = self.core.store.one("SELECT 1 FROM handles WHERE destination = ? AND ref = ?", (self.name, thread_id)) is not None
         if delegated or thread_id in captains | threads or (t.get("captain") or {}).get("jamId") in captains or t.get("projectId") in projects:
             return t
-        raise DestinationError("that thread is outside the Captains, projects and threads routed here")
+        raise BlockRefused(CONVERSATION_REQUIRED, "that thread is outside the Captains, projects and threads routed here")
 
-    def _thread_ref(self, ref: str, call: Call) -> str:
+    def _thread_ref(self, ref: str, call: Call, *, read: bool = False) -> str:
         if ref.startswith("h_"):
             h = self.core.inbox.handle(ref)
-            if h is None or h["owner"] != call.principal.source:
-                raise DestinationError(f"no handle {ref!r}")
+            if h is None or not (h["owner"] == call.principal.source or (read and call.principal.is_unrestricted_owner)):
+                raise BlockRefused(CONVERSATION_REQUIRED, f"no handle {ref!r}")
             return h["ref"]
         return ref
 
@@ -692,7 +736,7 @@ class CapyBlock(Block):
 
     async def thread_status(self, call: Call, *, thread_id: str, messages: int = 5, include_tools: bool = False) -> dict[str, Any]:
         api = self.need_api()
-        thread_id = self._thread_ref(thread_id, call)
+        thread_id = self._thread_ref(thread_id, call, read=True)
         t = await self.check_thread_allowed(thread_id)
         tail = await api.tail_messages(thread_id, limit=50)
         shown = [m for m in tail if include_tools or m.get("source") != "tool"][-max(1, min(messages, 20)):]
@@ -700,7 +744,7 @@ class CapyBlock(Block):
 
     async def result(self, call: Call, *, thread_id: str, tail: int = 0) -> dict[str, Any]:
         api = self.need_api()
-        thread_id = self._thread_ref(thread_id, call)
+        thread_id = self._thread_ref(thread_id, call, read=True)
         t = await self.check_thread_allowed(thread_id)
         msgs = await api.tail_messages(thread_id, limit=60)
         final = next((m for m in reversed(msgs) if m.get("source") == "assistant"), None)
@@ -750,8 +794,10 @@ class CapyBlock(Block):
     async def list_work(self, call: Call, *, scope: str = "delegated", project: str | None = None, captain: str | None = None, limit: int = 10) -> dict[str, Any]:
         api = self.need_api()
         limit = max(1, min(limit, 30))
+        p = call.principal
+        owner = None if p.is_unrestricted_owner else p.source
         if scope == "delegated":
-            hs = self.core.inbox.handles(destination=self.name, project=project, limit=limit)
+            hs = self.core.inbox.handles(owner=owner, destination=self.name, project=project, scopes=p.scopes, limit=limit)
 
             async def one(h: dict[str, Any]) -> dict[str, Any]:
                 base = {"handle": h["handle"], "thread_id": h["ref"], "by": h["owner"], "project": h["project"], "following": h["open"],
@@ -762,20 +808,31 @@ class CapyBlock(Block):
                     return {**base, "error": str(e)}
 
             return {"scope": scope, "items": list(await asyncio.gather(*(one(h) for h in hs)))}
+        visible = self.core.inbox.provider_refs(self.name, owner=owner, scopes=p.scopes) if owner is not None else None
         if scope == "captain":
-            cid = (await self.resolve_captain(captain))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
+            cid = (await self.resolve_captain(captain, reveal=call.principal.is_memory_owner))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
             if not cid:
                 raise DestinationError("no Captain is routed; pass captain")
-            crew = await api.captain_crew(cid)
+            crew = [t for t in await api.captain_crew(cid) if visible is None or t["id"] in visible]
             crew.sort(key=lambda t: t.get("lastActivityAt") or t.get("updatedAt") or "", reverse=True)
             return {"scope": scope, "captain": cid, "items": [thread_summary(t) for t in crew[:limit]]}
         if scope == "project":
-            p = call.core.project(project)
-            pid = p.links.get("capy_project") if p else None
+            entry = call.core.project(project)
+            pid = entry.links.get("capy_project") if entry else None
             if not pid:
                 raise DestinationError("project must be a switchboard project linked to a Capy project (links.capy_project)")
-            page = await api.list_threads(pid, limit=limit)
-            return {"scope": scope, "project": p.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
+            if visible is None:
+                page = await api.list_threads(pid, limit=limit)
+                return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
+            if not p.allows_routing_scope(entry.scope):
+                raise BlockRefused(SCOPE_REQUIRED)
+            refs = list(dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
+                                                                                scopes=p.scopes, limit=500)))[:limit]
+            threads = await asyncio.gather(*(api.get_thread(ref) for ref in refs), return_exceptions=True)
+            for t in threads:
+                if isinstance(t, BaseException) and not isinstance(t, CapyError):
+                    raise t
+            return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in threads if not isinstance(t, BaseException)]}
         raise DestinationError("scope must be delegated, captain or project")
 
     async def autolink(self, principal: Principal, project: Project, *, force: bool = False) -> dict[str, Any]:
@@ -820,16 +877,31 @@ class CapyBlock(Block):
         target, defaults = await self.validate_route_target({"captain": captains[0]["id"]}, defaults)
         r = core.routes.set(destination=self.name, agent=None, project=project.slug, target=target, defaults=defaults,
                             allow_override=False, note="set automatically from the linked Capy project", by="auto")
-        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", str(r.target))
+        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", r.audit_excerpt())
         out["changed"].append({"route": r.as_dict()})
         return out
 
-    async def resolve_captain(self, hint: str) -> dict[str, Any]:
+    async def resolve_captain(self, hint: str, *, reveal: bool = True, explicit_name: bool = False) -> dict[str, Any]:
         hint = hint.strip()
-        captains = await self.need_api().list_captains()
+        captains = [c for c in await self.need_api().list_captains() if not c.get("archived")]
         exact = next((c for c in captains if (c.get("id") or "").lower() == hint.lower()), None)
         if exact is not None:
             return exact
+        candidates = [{"kind": CAPTAIN_SLUG, "block": self.name, "id": c["id"],
+                       "address": str(Address(self.name, CAPTAIN_SLUG, c["id"])),
+                       "name": c.get("name") or c.get("title"),
+                       "slugs": [_slug(c.get("name") or c.get("title") or ""), str(c.get("code") or "").lower()]}
+                      for c in captains]
+        slugs = self.core.slug_map(candidates)
+        if explicit_name and hint.casefold() == CAPTAIN_SLUG:
+            matches = [c for c in captains if hint.casefold() in {(c.get(k) or "").casefold() for k in ("code", "name", "title")}]
+            if len(matches) == 1:
+                return matches[0]
+            raise CaptainTargetError(captain_selection_error(candidates, slugs, reveal=reveal))
+        if target := slugs.get(hint.casefold()):
+            return next(c for c in captains if c["id"] == target["id"])
+        if hint.casefold() == CAPTAIN_SLUG:
+            raise CaptainTargetError(captain_selection_error(candidates, slugs, reveal=reveal))
         for c in captains:
             names = {(c.get(k) or "").lower() for k in ("code", "name", "title")}
             if hint.lower() in names:
@@ -845,7 +917,7 @@ class CapyBlock(Block):
 
     async def captain_digest(self, call: Call, *, captain: str | None = None, project: str | None = None) -> dict[str, Any]:
         api = self.need_api()
-        cid = (await self.resolve_captain(captain))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
+        cid = (await self.resolve_captain(captain, reveal=call.principal.is_memory_owner))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
         if not cid:
             raise DestinationError("no Captain is routed; pass captain")
         d, crew = await asyncio.gather(api.captain_digest(cid), api.captain_crew(cid))
@@ -856,7 +928,7 @@ class CapyBlock(Block):
 
     # Routes and context ------------------------------------------------------------
 
-    async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any], *, reveal: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
         kinds = [k for k in TARGET_KINDS if target.get(k)]
         if len(kinds) != 1:
             raise DestinationError("a Capy route target names exactly one of captain, project or thread")
@@ -880,7 +952,7 @@ class CapyBlock(Block):
         kind, value = kinds[0], str(target[kinds[0]]).strip()
         try:
             if kind == "captain":
-                c = await self.resolve_captain(value)
+                c = await self.resolve_captain(value, reveal=reveal, explicit_name=target.get("explicit_name") is True)
                 return {"captain": c["id"], "name": c.get("name") or c.get("title"), "captain_project": c.get("projectId")}, clean
             if kind == "project":
                 if value.startswith("project_"):
@@ -901,12 +973,14 @@ class CapyBlock(Block):
         out = ["## Capy"]
         route, _ = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
         out.append(f"send goes to {describe(route.target)} ({route.level} route)." if route else "No route applies to you here; send needs to=<target>.")
-        open_handles = [h for h in self.core.inbox.handles(destination=self.name, open_only=True, project=project.slug if project else None, limit=10)]
+        owner = None if principal.is_unrestricted_owner else principal.source
+        open_handles = self.core.inbox.handles(owner=owner, destination=self.name, open_only=True,
+                                               project=project.slug if project else None, scopes=principal.scopes, limit=10)
         if open_handles:
             out.append("\n### Delegations in progress")
             out += [f"- {h['title'] or h['meta'].get('task', '')[:80]} [{h['status']}] handle {h['handle']}, thread {h['ref']}" for h in open_handles]
         cid = route.target.get("captain") if route else None
-        if cid:
+        if cid and principal.is_unrestricted_owner:
             try:
                 d, crew = await asyncio.gather(self.api.captain_digest(cid), self.api.captain_crew(cid))
             except CapyError as e:
@@ -931,19 +1005,42 @@ class CapyBlock(Block):
         if self.api is None:
             return []
         out = []
-        for c in await self.api.list_captains():
-            if c.get("archived"):
-                continue
+        captains = [c for c in await self.api.list_captains() if not c.get("archived")]
+        authors = {c["authorId"] for c in captains if isinstance(c.get("authorId"), str)}
+        registrants = {}
+        if authors:
+            try:
+                async with asyncio.timeout(4):
+                    registrants = {
+                        user["id"]: " ".join(
+                            user[key].strip() for key in ("firstName", "lastName")
+                            if isinstance(user.get(key), str) and user[key].strip()
+                        )
+                        for user in await self.api.list_users() if user.get("id") in authors
+                    }
+            except (CapyError, TimeoutError, httpx.HTTPError):
+                pass
+        persona_ids = set(self.core.known_agents())
+        for c in captains:
             name = c.get("name") or c.get("title") or c["id"]
-            pid = _slug(name)
-            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [pid, str(c.get("code") or "").lower()],
+            slug = _slug(name)
+            code = str(c.get("code") or "").lower()
+            pid = slug or code or c["id"]
+            if pid in persona_ids:
+                pid = f"{pid[:29]}-{hashlib.sha256(c['id'].encode()).hexdigest()[:10]}"
+            persona_ids.add(pid)
+            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [slug, code],
+                        "created_by": registrants.get(c["authorId"]) or None if isinstance(c.get("authorId"), str) else None,
+                        "created_at": _api_timestamp(c.get("createdAt")),
+                        "last_seen_at": _api_timestamp(c.get("lastActivityAt")) or _api_timestamp(c.get("updatedAt")),
                         "persona": {"id": pid, "name": name, "avatar": c.get("avatar")}})
         return out
 
-    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = False) -> str | None:
+    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = True) -> str | None:
         from .avatars import render_captain
 
-        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"), remote or bool(self.config.get("avatars")))
+        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"),
+                                    remote and bool(self.config.get("avatars", True)), captain_id=persona.get("target_id"))
 
     def parse_route_target(self, text: str) -> dict[str, Any]:
         return parse_target(text)

@@ -1,0 +1,92 @@
+---
+title: Sicherheit
+description: So entscheidet SwB, wer was tun darf.
+---
+
+## Ein Inhaber
+
+SwB hat einen Inhaber. Der Inhaber gibt Anmeldungen von Agenten frei. In der Konsole von SwB verwaltet er Zugriffe und speichert Tokens.
+
+## Anmeldung für Agenten
+
+Mit OAuth kann sich eine App nach Freigabe durch den Inhaber anmelden. SwB nutzt PKCE mit S256. So stellt SwB sicher, dass dieselbe App die Anmeldung beginnt und abschließt. SwB bindet jedes OAuth-Token an eine Adresse für `/mcp`. Standardmäßig gelten Access-Tokens eine Stunde und Refresh-Tokens 30 Tage. SwB ersetzt jedes Refresh-Token nach der Verwendung. SwB speichert SHA-256-Hashes der OAuth-Tokens. Diese Fingerabdrücke nutzt SwB, um die Tokens zu prüfen. Agenten können auch einen konfigurierten Schlüssel verwenden oder einen Kopplungscode gegen einen Schlüssel einlösen.
+
+## Vertrauensstufe
+
+SwB prüft die Absender-IDs der Plattform, um die Vertrauensstufe einer Nachricht festzulegen.
+
+| Vertrauensstufe | Wer |
+| - | - |
+| `owner` | Sie und Ihre eigenen angemeldeten Agenten |
+| `external` | Andere Absender, auch Personen und Bots aus `known` |
+
+Auf Slack, Discord und Telegram entscheidet SwB anhand von `known`, wessen Nachrichten es annimmt. Nachrichten dieser externen Absender behalten die Vertrauensstufe `external`. Wie SwB GitHub-Autoren prüft, beschreibt [GitHub-Inhaberkonten](/de/docs/blocks/github#inhaberkonten).
+
+Ein **Vertrauensrahmen** besteht aus dem Header und den Markierungen, die SwB um externen Text setzt. Stehen Kopien dieses Headers oder dieser Markierungen bereits im Text, entschärft SwB sie, bevor es den Rahmen hinzufügt. Die Markierungen sind `<<<swb-untrusted` und `swb-untrusted>>>`. Agenten behandeln den Text dazwischen nur als Information.
+
+Eine Zusammenfassung aus dem Modus Watch hat die Vertrauensstufe `external`. Jeder Auszug enthält einen Vertrauensrahmen für externen Text. SwB prüft den Autor jedes GitHub-Textfelds.
+
+Der Schlüssel eines [Companions](/de/docs/companion) gilt nur für die Verbindung seines Geräts. SwB speichert nur einen Hash des Schlüssels, um ihn zu prüfen. SwB kennzeichnet Geräteergebnisse als `external` und setzt ihren Freitext in einen Vertrauensrahmen.
+
+## Sichtbarkeit
+
+Eine Ressource ist ein Ziel, ein Kanal, ein Gedächtnisbereich, eine Route oder ein Tool. Die Standardregel ist `private` für den Inhaber und seine Agenten. Sie können Ressourcen mit einem Workspace oder ausgewählten Personen teilen. Tools bleiben privat. Externe Absender erreichen ein Ziel, wenn sowohl die Kanalregel als auch die Zielregel sie zulassen. Wenn SwB eine Nachricht als Kontext speichert, landet sie als Information im Posteingang. Der Agent schläft weiter.
+
+## Schlüssel mit Beschränkungen
+
+Mit `auth.key_scopes` begrenzen Sie den Zugriff auf Routing, Nachrichten und Unterhaltungen. Ein gekoppelter Schlüssel kann innerhalb dieser Grenzen nur die Nachrichten und Unterhaltungen seines Agenten lesen.
+
+SwB speichert Gedächtnisfreigaben für jeden gekoppelten Schlüssel. Wenn SwB alte Freigaben aktualisiert, erhalten aktive gekoppelte Schlüssel mit breitem Zugriff `general` und die Projekte, die zu diesem Zeitpunkt bestehen. Für Schlüssel mit benannten Bereichen in `auth.key_scopes` übernimmt SwB diese Bereiche.
+
+Ein uneingeschränkter OAuth-Client oder konfigurierter Schlüssel kann als Inhaber auf das gesamte Gedächtnis zugreifen. Mit `auth.key_scopes` begrenzen Sie den Gedächtniszugriff nach Agentennamen. Eingeschränkte Zugangsdaten brauchen eine Freigabe, die das private Projekt nennt.
+
+`auth.key_tools` begrenzt die Tools, die ein Schlüssel aufrufen darf. `auth.key_targets` begrenzt, wohin er senden darf.
+
+## Tokens
+
+Geben Sie Tokens auf ihren Claim-Seiten ein. SwB verschlüsselt gespeicherte Tokens mit einem Schlüssel im Datenordner. Der Status zeigt die Namen fehlender Variablen und verbirgt ihre Werte. SwB sendet den Capy-Schlüssel standardmäßig in einem Anfrage-Header an `api.capy.ai`.
+
+Öffnen Sie **Tokens**, um die Gedächtnisbereiche jedes gekoppelten Schlüssels zu sehen. Wählen Sie neben einem Bereich **Remove scope** aus, um diese Freigabe zu entfernen.
+
+Ein neuer gekoppelter Schlüssel erhält seinen eigenen Agentenbereich, wenn er seinen Kopplungscode einlöst. Er erhält auch das Projekt aus dem Code und die Bereiche aus `auth.key_scopes.<agent>`. Für mehr Zugriff legen Sie die zusätzlichen Bereiche fest oder nehmen ein Projekt in den Kopplungscode auf. Koppeln Sie danach einen neuen Schlüssel.
+
+## Limits
+
+| Limit | Wert |
+| - | - |
+| Ungültige Bearer-Schlüssel | 20 Versuche pro Adresse in 10 Minuten, danach HTTP `429` |
+| Geroutete GitHub-Ereignisse von Absendern außerhalb der Inhaberkonten | 5 pro Absender in den letzten 10 Minuten |
+| `/register` | 20 pro Adresse und Stunde |
+| `/token` | 120 pro Adresse in 10 Minuten |
+| `/authorize` | 60 pro Adresse in 10 Minuten |
+| Falsche Codes an `/companion/pair` | 10 pro Adresse in 10 Minuten, danach HTTP `429` |
+| Falsche Codes an `/connect` | 10 pro Adresse in 10 Minuten, danach HTTP `429` |
+| Standardlimit für den Anfrage-Body | 1 MiB |
+| Anfrage-Body an `/mcp` und `/companion/results` | 16 MiB |
+| Anfrage-Body an `/companion/emit` | 16.640 Bytes |
+| Anfrage-Body an `/auth/setup` | 1.024 Bytes |
+| Runden pro Unterhaltung zwischen Agenten | 200 |
+
+Das Limit für Bearer-Schlüssel gilt auch für gültige Schlüssel von derselben Adresse. SwB gibt auf den betroffenen Endpunkten HTTP `429` zurück, bis das Limit zurückgesetzt ist.
+
+SwB pausiert eine Unterhaltung, wenn sie das Rundenlimit erreicht. SwB vermerkt die Pause im Audit-Protokoll. Bei aktivem Slack sendet SwB dem Inhaber eine Direktnachricht.
+
+Der Capy-Block kann für dieselbe Aufgabe und dasselbe Ziel die frühere Unterhaltung zurückgeben. Legen Sie das Zeitfenster mit `blocks.capy.duplicate_window_s` fest. Der Standard ist 600 Sekunden.
+
+## Client-Adressen
+
+SwB verwendet standardmäßig die Verbindungsadresse für Limits und Audit-Einträge. Tragen Sie Ihren Proxy in `trusted_proxies` oder `SWB_TRUSTED_PROXIES` ein. SwB verwendet danach die Client-Adresse, die der Proxy sendet. Konfigurieren Sie den Proxy so, dass er die Header für Client-Adressen aus einer geprüften Quelle setzt.
+
+Mit der [Anleitung zur Cloudflare-Einrichtung](/de/docs/cloudflare#trusted-proxies) fügen Sie einen Cloudflare-Tunnel-Connector oder einen Reverse Proxy in Ihrem Docker-Netzwerk hinzu.
+
+## Audit-Protokoll
+
+SwB vermerkt Tool-Aufrufe, die seine Zugriffsregeln ablehnen. SwB vermerkt fehlgeschlagene Browser-Anmeldungen bei Einrichtungscodes, benutzten, abgelaufenen oder ungültigen Links, Passkeys, CSRF-Prüfungen und OIDC.
+
+SwB vermerkt fehlende oder ungültige Signaturen von GitHub-Webhooks. Für einige Browserfehler und abgelehnte Webhooks begrenzt SwB wiederholte Zeilen. Fehlerzeilen nennen den Grund und verbergen Codes, Tokens und Signaturen.
+
+Die Seite von SwB zeigt die Einträge unter **Audit**. Führen Sie `swb log` aus, um die letzten Einträge auszugeben. Nachrichten an Postfächer haben die Aktion `send`. Einträge zu verworfenen Zustellungen beschreibt [Kanalmodi](/de/docs/channel-modes#zustellung-prüfen).
+
+## Problem melden
+
+Melden Sie Sicherheitsprobleme vertraulich über die [GitHub Security Advisories für SwB](https://github.com/ZhehanZhang/SwB/security/advisories).

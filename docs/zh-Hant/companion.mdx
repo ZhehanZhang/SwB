@@ -1,0 +1,99 @@
+---
+title: Companion
+description: 連接一台裝置，讓代理使用裝置上的本機功能。
+---
+
+**Companion** 是在你自己的裝置上執行的 SwB 程式，會連接到你的 SwB 伺服器。連上之後，代理就能使用這台裝置上的功能。
+
+## 複製設定提示詞
+
+<SetupPrompt name="companion" lang="zh-Hant" />
+
+## 配對裝置
+
+請一個以擁有者身分登入的代理呼叫 `companion_code`，並請它把配對碼存進權限為 `0600` 的檔案。這組權限只允許檔案擁有者存取。
+
+要在主控台取得配對碼，先[用密碼金鑰登入](/zh-Hant/docs/owner-login#密碼金鑰)，開啟 **Settings**，再到 **Connections** 中選取 **Pair a device**。如果使用 Cloudflare Access，改用 `companion_code` 工具。
+
+在裝置上執行下面的指令，並把範例網址換成你的 SwB HTTPS 網址。如果 SwB 就在這台裝置上，可以使用 `http://127.0.0.1:8870`。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+看到提示後輸入配對碼，輸入的內容會隱藏。配對碼只能使用一次，10 分鐘後過期。稽核記錄會記下配對碼由誰產生。
+
+裝置會把自己的金鑰存進私有檔案。
+
+## 選擇功能
+
+每啟用一項功能，就加上一個 `--cap` 選項。
+
+| 選項 | 功能 |
+| --- | --- |
+| `--cap notify` | 在裝置上顯示桌面通知 |
+| `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器的工具 |
+| `--cap herdr` | [Herdr](/zh-Hant/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex app server](/zh-Hant/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode 伺服器](/zh-Hant/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/zh-Hant/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [狀態掛鉤](/zh-Hant/docs/blocks/local-sessions#狀態掛鉤) |
+
+在 Linux 上，通知使用 `notify-send`。在 Debian 和 Ubuntu 上，安裝 `libnotify-bin` 套件即可取得。
+
+每個 MCP 伺服器各加一個 `--mcp` 選項。如果是程式，使用 `--mcp 'NAME=COMMAND'`，把 `NAME` 換成伺服器的名稱，把 `COMMAND` 換成程式的啟動指令。如果是裝置上的 HTTP 伺服器，使用它的本機網址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+
+代理用 `companion_list` 查看每台已配對的裝置及其動作，用 `companion_invoke` 執行動作。
+
+Companion 的文字結果上限為 1 MiB。Drop 的檔案資料從 `structuredContent.result.content_b64` 讀取。
+
+## 本機工作階段
+
+**本機工作階段**是程式開發代理在裝置上開啟中的對話。SwB 會列出它的狀態和 `local:session:<companion>:<harness>:<session>` 位址。
+
+在「選擇功能」的表格中找到你的程式開發代理，開啟對應的連結。配對前先設定好這個代理，配對後讓 Companion 持續執行。然後請一個以擁有者身分登入的代理呼叫 `targets(block="local")`，確認你的工作階段位址出現在結果中。
+
+SwB 會嘗試把每則訊息送到開啟中的工作階段。傳送者可以使用該代理的信箱時，SwB 會把訊息放進信箱。回覆會回到同一段對話中。
+
+使用 `targets` 回傳的工作階段位址，在 `visibility_list` 中找到該位址對應的資源，再用 `visibility_set` 分享這項資源。
+
+指令和支援的代理見[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
+
+## 保持執行
+
+配對時會啟動 Companion 程式。要再次啟動，執行 `swb companion run`。執行 `swb companion status` 可查看本機的裝置 ID 和功能。
+
+如果配對時使用 `uvx`，請把指令中的 `swb` 換成 `uvx swb-one`。在前景執行時，Python 會直接啟動 Companion。
+
+每一條通往 SwB 的連線都由裝置發起。
+
+## 在背景執行
+
+安裝背景服務後，Companion 可以自動啟動。用 `uv tool install swb-one` 安裝 SwB。
+
+需要配對時，把 `--no-run` 加到配對選項中，再執行 `swb companion connect`。配對完成後，指令就會結束。如果 Companion 正在終端機執行，請先停止它，再安裝服務。用已安裝的 `swb` 管理服務。
+
+```sh
+swb companion service install
+```
+
+在 Linux 上，`systemd --user` 會以你的帳號執行服務。執行 `loginctl enable-linger "$USER"`，讓服務在開機時啟動，並在登出後繼續執行。
+
+在 macOS 上，請登入桌面後安裝服務。SwB 正式版會自動將已簽署的 **SwB Companion** 應用程式安裝到 `~/Applications`，並驗證程式。`launchd` 透過此應用程式啟動服務。
+
+在 Windows 上，工作排程器會在你登入時啟動服務。
+
+請在服務管理員中設定本機工具需要的變數。
+
+用 `swb companion service start` 啟動服務。用 `swb companion service status` 查看服務狀態。用 `swb companion service logs` 查看記錄。
+
+用 `swb companion status` 查看執行狀態、連線狀態和 SwB 位址。
+
+用 `swb companion service stop` 立即停止服務。用 `swb companion service uninstall` 移除自動啟動設定。裝置會保留金鑰。
+
+## 中斷連線
+
+在裝置上執行 `swb companion disconnect` 可移除它的金鑰。要在主控台撤銷金鑰，開啟 **Settings** 中的 **Connections**，選取該裝置的 **Disconnect**。
+
+執行中的 Companion 偵測到金鑰已撤銷時，會移除本機的金鑰。如果裝置上還留著金鑰，先執行 `swb companion disconnect`，再重新配對。

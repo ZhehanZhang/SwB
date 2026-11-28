@@ -1,0 +1,100 @@
+---
+title: 채널 모드
+description: 공간마다 SwB이 메시지를 처리하는 방식을 고릅니다.
+---
+
+**공간**은 메시지가 도착하는 곳입니다. Slack 채널, Discord 채널과 스레드, Telegram 그룹, GitHub 저장소가 공간입니다.
+
+| 모드 | SwB이 하는 일 |
+| - | - |
+| `off` | GitHub 이벤트는 소유자 이벤트까지 모두 버립니다. Slack, Discord, Telegram에서는 다른 사람이 보낸 메시지를 버립니다 |
+| `watch` | 메시지를 요약본으로 모읍니다. 요약본은 최근 이벤트를 정리한 글입니다 |
+| `assist` | 에이전트를 깨워 맥락을 읽고 스레드에 답하게 합니다 |
+| `triage` | 에이전트를 깨워 이벤트를 검토하고 대응을 고르게 합니다. 기본 동작은 스레드에 답하는 것입니다 |
+| `work` | 소유자가 보낸 메시지를 처리합니다 |
+
+Slack, Discord, Telegram에서 내가 보낸 멘션과 다이렉트 메시지는 모든 모드에서 `work`로 처리됩니다. 채널과 대상에 대한 접근은 이때에도 공개 범위 설정을 따릅니다.
+
+GitHub `work` 모드를 쓰려면 공간의 [소유자 목록](/ko/docs/blocks/github#소유자-계정)에 내 계정 번호를 추가하세요.
+
+## 모드 설정
+
+연결 페이지나 프로젝트 페이지의 **Channel modes**에서 모드를 설정하세요. YAML로 설정할 수도 있습니다. 소유자는 `space_mode`로 모드, 대상, 프로젝트, 허용할 동작을 설정할 수 있습니다.
+
+YAML은 SwB 설정 파일의 텍스트 형식입니다. YAML에서는 `"off"`처럼 따옴표를 붙여 쓰세요.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      example-org/app:
+        mode: "off"
+```
+
+SwB은 저장된 설정을 먼저 확인합니다. 그다음 채널 설정과 공간 설정을 확인합니다. 이어서 이전 블록 설정, 프로젝트 모드, `modes.default`를 확인합니다. 기본값은 `off`입니다.
+
+## 대상 연결
+
+GitHub, Slack, Discord, Telegram에서는 `assist`, `triage`, `work` 모드일 때 프로젝트 라우트가 에이전트를 깨울 수 있습니다. SwB은 조건에 맞는 첫 번째 대상을 사용합니다.
+
+| 순서 | 대상 |
+| - | - |
+| 1순위 | 저장된 `space_mode` 설정의 대상. 채널 설정은 공간 설정 전체를 대신합니다 |
+| 2순위 | 채널, 공간, 프로젝트 모드 설정에 있는 YAML `target`. 이 순서로 확인합니다 |
+| 3순위 | `triage`에서는 `claude-<project>-triage`라는 이름의 사용 가능한 대상. Claude 루틴이 그 예입니다 |
+| 4순위 | 공간의 `default_target` 또는 그 별칭인 `target` |
+| 마지막 | 프로젝트의 라우트 |
+
+`targets`에서 대상을 고르세요. 이 예제는 기존 GitHub 공간에 에이전트 우편함을 연결합니다.
+
+```python
+space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
+```
+
+assist 모드에는 `mode="assist"`를 사용하세요. 연결을 유지하려면 `target`을 생략하세요. 연결을 지우려면 `target=""`로 설정하세요.
+
+대체 대상을 정하려면 연결된 프로젝트와 대상 주소로 `routes_set`을 호출하세요. 고정된 Capy 라우트에는 `capy:captain:<name>` 같은 대상을 쓰고 `allow_override=false`를 유지하세요.
+
+## 외부 GitHub 발신자 허용
+
+`visibility_set`에 쓸 수 있는 이름은 `visibility_list`를 호출해 확인하세요. 주소 `agent:beta`는 우편함을 가리킵니다. 규칙 `target:beta`는 그 우편함에 누가 닿을 수 있는지 정합니다.
+
+```python
+visibility_set(resource="channel:github/acme/app", visibility="shared")
+visibility_set(resource="target:beta", visibility="shared")
+```
+
+발신자 한 명에게만 접근을 허용하려면 두 리소스에 같은 검증된 발신자 ID를 지정하세요. 예를 들어 두 리소스 모두에 `visibility=["github:1234"]`를 설정하세요.
+
+## Watch 요약본 읽기
+
+`modes.digest_minutes`로 간격을 설정하세요. 기본값은 60분입니다. 간격이 끝나거나 모인 이벤트가 50개가 되면 SwB이 요약본을 대상 우편함에 넣습니다. 대체 대상은 소유자 우편함입니다.
+
+모든 요약본은 소유자로 로그인해 콘솔의 **Inbox**에서 읽거나 MCP `inbox`와 `wait`로 읽으세요. 요약본에는 이벤트 수가 나옵니다. 이벤트마다 작성자, 발췌문, 링크가 있으면 링크도 나옵니다. 요약본의 신뢰 수준은 `external`입니다.
+
+Watch 모드에서 에이전트는 잠든 상태를 유지합니다. 요약본은 받은편지함에서 읽으세요. [GitHub 이벤트 수신처](/ko/docs/blocks/github)는 이때에도 이벤트마다 사본을 받습니다.
+
+## Triage 동작
+
+triage 에이전트는 이벤트 정보를 읽을 수 있습니다. 기본적으로 허용된 동작은 같은 스레드에 `reply`하는 것 하나입니다. GitHub 스레드에는 `github_reply`를 사용하세요. 대화 ID는 `handle`에 넘기세요. 답장은 `text`에 넣으세요.
+
+에이전트에게 동작을 더 주려면 `space_mode`나 YAML에 `actions`를 설정하세요. 답장 기능을 유지하려면 `reply`를 포함하세요. 예를 들어 `actions=["reply", "notify_owner"]`를 사용하세요.
+
+| 동작 | 하는 일 |
+| - | - |
+| `label` | GitHub 이슈나 풀 리퀘스트에 라벨을 붙입니다 |
+| `comment` | GitHub 댓글을 답니다 |
+| `open_issue` | GitHub 이슈를 엽니다 |
+| `link_duplicate` | 중복된 GitHub 이슈를 연결하고 닫습니다 |
+| `notify_owner` | 소유자에게 알림을 보냅니다 |
+
+GitHub를 변경하려면 쓰기 권한이 있는 GitHub 자격 증명이 필요합니다. SwB은 triage 동작을 감사 로그에 기록합니다.
+
+## 전달 확인
+
+모드, 대상, 동작, 설정 문제를 확인하려면 `modes_status`를 사용하세요. 콘솔의 모드 행에는 연결된 에이전트가 나옵니다. triage에서 기본 에이전트 안내는 SwB이 대체 대상을 쓸 때만 나타납니다. triage에 대상이 필요하면 `space_mode`와 `modes_status` 모두 triage 에이전트를 고르라고 안내합니다.
+
+SwB은 Slack, Discord, Telegram에서 메시지를 버린 이유를 감사 로그에 기록합니다. 블록, 공간, 채널, 이유가 같으면 10분에 최대 한 항목만 기록합니다.
+
+SwB은 GitHub 웹훅을 버린 이유도 기록합니다. 이유를 보려면 **Audit**를 열거나 `swb log`를 실행하세요.

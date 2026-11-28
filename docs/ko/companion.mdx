@@ -1,0 +1,99 @@
+---
+title: 컴패니언
+description: 기기를 연결해 에이전트가 그 기기의 로컬 기능을 쓰게 합니다.
+---
+
+**컴패니언**은 SwB 서버에 연결된 기기입니다. 연결하면 에이전트가 그 기기의 기능을 사용할 수 있습니다.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="companion" lang="ko" />
+
+## 기기 페어링
+
+소유자로 로그인한 에이전트에게 `companion_code`를 호출하도록 요청하세요. 코드를 권한 `0600`인 파일에 저장해 달라고 요청하세요. 이 권한은 파일 소유자에게만 접근을 허용합니다.
+
+콘솔에서 코드를 받으려면 [패스키로 로그인](/ko/docs/owner-login#패스키)하세요. **Settings**를 여세요. **Connections**에서 **Pair a device**를 선택하세요. Cloudflare Access를 쓴다면 `companion_code` 도구를 사용하세요.
+
+기기에서 이 명령을 실행하세요. 예시 주소를 내 SwB HTTPS 주소로 바꾸세요. 이 기기에서 SwB을 실행 중이면 `http://127.0.0.1:8870`을 사용해도 됩니다.
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+입력 내용이 가려지는 프롬프트에 페어링 코드를 입력하세요. 코드는 한 번만 쓸 수 있고 10분 뒤에 만료됩니다. 누가 코드를 만들었는지는 감사 로그에 기록됩니다.
+
+기기는 전용 키를 비공개 파일에 저장합니다.
+
+## 기능 고르기
+
+켜려는 기능마다 `--cap` 옵션을 하나씩 추가하세요.
+
+| 옵션 | 기능 |
+| --- | --- |
+| `--cap notify` | 기기에 데스크톱 알림을 표시합니다 |
+| `--cap drop` | `~/SwB Drop` 폴더로 파일을 공유합니다. 파일 하나당 최대 10 MiB입니다 |
+| `--cap mcp --mcp NAME=COMMAND` | 기기에 있는 MCP 서버의 도구를 에이전트가 쓰게 합니다 |
+| `--cap herdr` | [Herdr](/ko/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex 앱 서버](/ko/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode 서버](/ko/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/ko/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [상태 훅](/ko/docs/blocks/local-sessions#상태-훅) |
+
+Linux에서는 알림에 `notify-send`를 사용합니다. Debian과 Ubuntu에서는 `libnotify-bin` 패키지로 설치하세요.
+
+MCP 서버마다 `--mcp` 옵션을 하나씩 추가하세요. 프로그램은 `--mcp 'NAME=COMMAND'`를 사용하세요. `NAME`은 서버에 붙일 이름으로 바꾸세요. `COMMAND`는 프로그램의 시작 명령으로 바꾸세요. 기기의 HTTP 서버는 `--mcp notes=http://127.0.0.1:8000/mcp`처럼 로컬 주소를 사용하세요.
+
+에이전트는 `companion_list`로 페어링된 기기와 각 기기의 동작을 확인합니다. 동작을 실행할 때는 `companion_invoke`를 사용합니다.
+
+컴패니언의 텍스트 결과는 1 MiB까지입니다. Drop 파일 데이터는 `structuredContent.result.content_b64`에서 읽으세요.
+
+## 로컬 세션
+
+**로컬 세션**은 기기에서 열려 있는 코딩 에이전트의 대화입니다. SwB은 세션 상태를 `local:session:<companion>:<harness>:<session>` 주소와 함께 나열합니다.
+
+기능 표에서 내 코딩 에이전트의 링크를 따라가세요. 페어링하기 전에 에이전트를 설정하세요. 페어링한 뒤에는 컴패니언을 계속 실행해 두세요. 소유자로 로그인한 에이전트에게 `targets(block="local")`를 호출하도록 요청하세요. 내 세션 주소가 나오는지 확인하세요.
+
+SwB은 각 메시지를 열린 세션에 전달하려고 시도합니다. 발신자가 그 에이전트의 우편함을 쓸 수 있으면 메시지를 우편함에 넣습니다. 답은 같은 대화로 돌아옵니다.
+
+`targets`에 나온 세션 주소를 사용하세요. `visibility_list`에서 그 주소의 리소스를 찾으세요. `visibility_set`으로 리소스를 공유하세요.
+
+명령어와 지원하는 에이전트는 [로컬 세션](/ko/docs/blocks/local-sessions)을 참고하세요.
+
+## 계속 실행하기
+
+페어링하면 컴패니언이 시작됩니다. 다시 시작하려면 `swb companion run`을 사용하세요. 로컬 기기 ID와 기능을 보려면 `swb companion status`를 사용하세요.
+
+`uvx`로 페어링했다면 `swb` 대신 `uvx swb-one`을 쓰세요. 터미널에서 실행할 때는 Python이 컴패니언을 직접 실행합니다.
+
+SwB과의 연결은 항상 기기 쪽에서 시작합니다.
+
+## 백그라운드에서 실행하기
+
+컴패니언을 자동으로 시작하려면 백그라운드 서비스를 설치하세요. `uv tool install swb-one`으로 SwB를 설치하세요.
+
+새로 페어링하려면 페어링 옵션에 `--no-run`을 추가하세요. 이 옵션을 포함해 `swb companion connect`를 실행하세요. 명령은 페어링을 마치면 종료됩니다. 터미널에서 컴패니언을 실행 중이면 서비스를 설치하기 전에 컴패니언을 중지하세요. 서비스 명령에는 설치한 `swb`를 사용하세요.
+
+```sh
+swb companion service install
+```
+
+Linux에서는 `systemd --user`가 사용자 계정으로 서비스를 실행합니다. 부팅할 때 서비스를 시작하고 로그아웃 후에도 계속 실행하려면 `loginctl enable-linger "$USER"`를 실행하세요.
+
+macOS에서는 데스크톱에 로그인한 상태에서 서비스를 설치하세요. SwB 정식 버전은 서명된 **SwB Companion** 앱을 `~/Applications`에 자동으로 설치하고 검증합니다. `launchd`는 이 앱을 통해 서비스를 시작합니다.
+
+Windows에서는 로그인할 때 작업 스케줄러가 서비스를 시작합니다.
+
+서비스 관리 도구에서 로컬 도구에 필요한 변수를 설정하세요.
+
+`swb companion service start`로 서비스를 시작하세요. `swb companion service status`로 서비스 상태를 확인하세요. `swb companion service logs`로 서비스 로그를 확인하세요.
+
+`swb companion status`로 컴패니언의 실행 상태, 연결 상태, SwB 주소를 확인하세요.
+
+`swb companion service stop`으로 서비스를 즉시 중지하세요. `swb companion service uninstall`로 자동 시작을 해제하세요. 기기 키는 그대로 유지됩니다.
+
+## 연결 해제
+
+기기의 키를 제거하려면 그 기기에서 `swb companion disconnect`를 실행하세요. 콘솔에서 키를 폐기하려면 **Settings**의 **Connections**를 여세요. 그 기기의 **Disconnect**를 선택하세요.
+
+실행 중인 컴패니언은 폐기를 감지하면 로컬 키를 제거합니다. 기기에 키가 남아 있으면 다시 페어링하기 전에 `swb companion disconnect`를 실행하세요.
