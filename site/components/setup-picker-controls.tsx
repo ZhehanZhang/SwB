@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { combineSetupPrompts, setupChoices, type SetupChoice, type SetupSources } from '@/lib/setup-picker';
 import type { setupPickerCopy } from '@/lib/setup-picker-copy';
 import { personalizeSwb } from '@/lib/urls';
-import { MarkTile } from './mark-tile';
+import { AppPicker } from './app-picker';
 import { useSwbAddress } from './swb-address-provider';
 
 type Props = {
@@ -22,22 +22,12 @@ export function SetupPickerControls({ labels, sources }: Props) {
 
   return (
     <div data-setup-picker className="not-prose min-w-0">
-      <fieldset className="grid min-w-0 grid-cols-2 gap-2 min-[600px]:grid-cols-3">
-        <legend className="sr-only">{labels.apps}</legend>
-        {setupChoices.map(({ id, name, mark }) => (
-          <label key={id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm hover:bg-fd-muted has-[:checked]:border-fd-primary has-[:checked]:bg-fd-muted">
-            <input type="checkbox" checked={selection.includes(id)} className="size-4 shrink-0 accent-fd-primary"
-              onChange={({ currentTarget }) => {
-                const { checked } = currentTarget;
-                setSelection((previous) => checked ? [...previous, id] : previous.filter((choice) => choice !== id));
-                setStatus('idle');
-                if (preview.current) preview.current.scrollTop = 0;
-              }} />
-            <MarkTile kind={mark} className="swb-picker-mark" />
-            <span>{name}</span>
-          </label>
-        ))}
-      </fieldset>
+      <AppPicker mode="checkbox" label={labels.apps} apps={setupChoices} selected={selection}
+        onChange={(id, checked) => {
+          setSelection((previous) => checked ? [...previous, id] : previous.filter((choice) => choice !== id));
+          setStatus('idle');
+          if (preview.current) preview.current.scrollTop = 0;
+        }} />
       <textarea ref={preview} aria-label={labels.prompt} lang={prompt ? 'en' : undefined}
         placeholder={labels.prompt} value={prompt} readOnly
         className="mt-4 block h-44 w-full field-sizing-fixed resize-none overflow-y-auto rounded-md border bg-fd-background px-3 py-2 font-mono text-[13px] leading-relaxed sm:h-52" />

@@ -115,32 +115,16 @@ test('the mobile docs drawer opens, navigates and closes inside the shared grid'
   await expect(drawer).toBeHidden();
 });
 
-test('Ask AI clears the last paragraph, footer and cards on short and long docs pages', async ({ page }) => {
+test('the desktop Ask AI icon opens the chat from the docs actions', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const path of ['/docs', '/docs/install']) {
-    await page.goto(path);
-    await page.evaluate(() => document.fonts.ready);
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY))
-      .toBeLessThanOrEqual(1);
-    const ask = page.getByRole('button', { name: 'Ask AI' });
-    const footer = page.locator('[data-docs-footer]');
-    const lastParagraph = page.locator('.swb-mdx > p').last();
-    await expect(ask).toBeVisible();
-    await expect(lastParagraph).toBeVisible();
-    await expect(footer.locator('a').first()).toBeInViewport();
-    const button = (await ask.boundingBox())!;
-    const reserved = await page.locator('.swb-docs-with-chat').evaluate((node) => parseFloat(getComputedStyle(node).paddingBlockEnd));
-    const bottomOffset = page.viewportSize()!.height - (button.y + button.height);
-    expect(reserved).toBeGreaterThanOrEqual(button.height + bottomOffset);
-    const content = [footer, lastParagraph, ...await footer.locator('a').all()];
-    for (const item of content) {
-      const rect = (await item.boundingBox())!;
-      const intersects = button.x < rect.x + rect.width && button.x + button.width > rect.x
-        && button.y < rect.y + rect.height && button.y + button.height > rect.y;
-      expect(intersects, `${path} ${await item.innerText()}`).toBe(false);
-    }
-  }
+  await page.goto('/docs/install');
+  const ask = page.locator('[data-docs-actions] button:has(.lucide-message-circle)');
+  await expect(ask).toHaveAccessibleName('Ask AI');
+  await expect(ask).toBeInViewport();
+  await ask.click();
+  await expect(ask).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(ask).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({ page }) => {
@@ -150,12 +134,8 @@ test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({
       const path = `${prefix}/docs/${slug}`;
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
-      const fixed = page.locator('.swb-ask-trigger');
-      const ask = page.locator('.swb-ask-mobile');
-      await expect(fixed).toBeHidden();
+      const ask = page.locator('[data-docs-actions] button:has(.lucide-message-circle)');
       await expect(ask).toBeInViewport();
-      await expect(ask).toHaveAccessibleName((await fixed.textContent())!.trim());
-      await expect(ask.locator('.lucide-message-circle')).toHaveCount(1);
       await expect(ask).toHaveCSS('position', 'static');
       const collision = await ask.evaluate(async (control) => {
         const elements = Array.from(document.querySelectorAll('.swb-docs :is(p, li, pre, table, h1, h2, h3)'));
@@ -177,7 +157,7 @@ test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({
       expect(collision, path).toBeNull();
     }
   }
-  const ask = page.locator('.swb-ask-mobile');
+  const ask = page.locator('[data-docs-actions] button:has(.lucide-message-circle)');
   await ask.click();
   await expect(ask).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Escape');

@@ -14,7 +14,6 @@ type Copy = {
   docs: string;
   about: string;
   license: string;
-  trademarks: string;
   install: string;
   setupWithAgent: string;
   copy: string;
@@ -29,7 +28,7 @@ type Copy = {
     local: string; localIntro: string; localAlternative: string; localGuide: string;
     server: string; serverIntro: string; serverGuide: string;
     cloud: string; cloudIntro: string; cloudGuide: string;
-    flyClaim: string; paidPlan: string; hobbyPlan: string; freePlan: string; tunnelAttribution: string;
+    freePlan: string;
   };
   usage: { title: string; examples: [string, string, string, string, string, string] };
   hero: { stem: string; endingPrefix?: string; endings: string[]; between: [string, string, string] };
@@ -40,7 +39,6 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: 'Docs',
     about: 'About',
     license: 'Apache-2.0',
-    trademarks: 'Trademarks',
     install: 'uvx swb-one up',
     setupWithAgent: 'Set up with agent',
     copy: 'Copy',
@@ -70,11 +68,7 @@ export const landingCopy: Record<Locale, Copy> = {
       cloud: 'In the cloud',
       cloudIntro: 'Choose a cloud provider.',
       cloudGuide: 'Self-hosting guide',
-      flyClaim: 'Free with monthly allowance',
-      paidPlan: 'Paid plan',
-      hobbyPlan: 'Hobby plan',
       freePlan: 'Free',
-      tunnelAttribution: 'Cloudflare Tunnel and the Cloudflare logo are trademarks of Cloudflare, Inc.',
     },
     usage: {
       title: 'What you can do with SwB',
@@ -92,7 +86,6 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: '文档',
     about: '关于',
     license: 'Apache-2.0',
-    trademarks: '商标',
     install: 'uvx swb-one up',
     setupWithAgent: '让智能体设置',
     copy: '复制',
@@ -123,11 +116,7 @@ export const landingCopy: Record<Locale, Copy> = {
       cloud: '在云端运行',
       cloudIntro: '选择一家云服务商。',
       cloudGuide: '自托管指南',
-      flyClaim: '每月额度内免费',
-      paidPlan: '付费套餐',
-      hobbyPlan: 'Hobby 套餐',
       freePlan: '免费',
-      tunnelAttribution: 'Cloudflare Tunnel 与 Cloudflare 标志是 Cloudflare, Inc. 的商标。',
     },
     usage: {
       title: 'SwB 能帮你做什么',
@@ -145,7 +134,6 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: '文件',
     about: '關於',
     license: 'Apache-2.0',
-    trademarks: '商標',
     install: 'uvx swb-one up',
     setupWithAgent: '讓代理設定',
     copy: '複製',
@@ -176,11 +164,7 @@ export const landingCopy: Record<Locale, Copy> = {
       cloud: '在雲端執行',
       cloudIntro: '選擇一家雲端服務供應商。',
       cloudGuide: '自行託管指南',
-      flyClaim: '每月額度內免費',
-      paidPlan: '付費方案',
-      hobbyPlan: 'Hobby 方案',
       freePlan: '免費',
-      tunnelAttribution: 'Cloudflare Tunnel 與 Cloudflare 標誌是 Cloudflare, Inc. 的商標。',
     },
     usage: {
       title: 'SwB 能幫你做什麼',
@@ -198,7 +182,6 @@ export const landingCopy: Record<Locale, Copy> = {
     "docs": "Docs",
     "about": "Acerca de",
     "license": "Apache-2.0",
-    "trademarks": "Marcas comerciales",
     "install": "uvx swb-one up",
     "setupWithAgent": "Configurar con un agente",
     "copy": "Copiar",
@@ -240,11 +223,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "cloud": "En la nube",
       "cloudIntro": "Elige un proveedor de nube.",
       "cloudGuide": "Guía de autoalojamiento",
-      "flyClaim": "Gratis dentro de la cuota mensual",
-      "paidPlan": "Plan de pago",
-      "hobbyPlan": "Plan Hobby",
-      "freePlan": "Gratis",
-      "tunnelAttribution": "Cloudflare Tunnel y el logotipo de Cloudflare son marcas comerciales de Cloudflare, Inc."
+      "freePlan": "Gratis"
     },
     "usage": {
       "title": "Qué puedes hacer con SwB",
@@ -262,7 +241,6 @@ export const landingCopy: Record<Locale, Copy> = {
     "docs": "Docs",
     "about": "À propos",
     "license": "Apache-2.0",
-    "trademarks": "Marques",
     "install": "uvx swb-one up",
     "setupWithAgent": "Configurer avec un agent",
     "copy": "Copier",
@@ -304,11 +282,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "cloud": "Dans le cloud",
       "cloudIntro": "Choisissez un fournisseur cloud.",
       "cloudGuide": "Guide d'auto-hébergement",
-      "flyClaim": "Gratuit avec quota mensuel",
-      "paidPlan": "Offre payante",
-      "hobbyPlan": "Offre Hobby",
-      "freePlan": "Gratuit",
-      "tunnelAttribution": "Cloudflare Tunnel et le logo Cloudflare sont des marques de Cloudflare, Inc."
+      "freePlan": "Gratuit"
     },
     "usage": {
       "title": "Ce que vous pouvez faire avec SwB",
@@ -326,7 +300,6 @@ export const landingCopy: Record<Locale, Copy> = {
     "docs": "Doku",
     "about": "Über SwB",
     "license": "Apache-2.0",
-    "trademarks": "Marken",
     "install": "uvx swb-one up",
     "setupWithAgent": "Per Agent einrichten",
     "copy": "Kopieren",
@@ -368,11 +341,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "cloud": "In der Cloud",
       "cloudIntro": "Wählen Sie einen Cloud-Anbieter aus.",
       "cloudGuide": "Anleitung zum Selbsthosten",
-      "flyClaim": "Kostenlos mit Monatskontingent",
-      "paidPlan": "Kostenpflichtig",
-      "hobbyPlan": "Hobby-Plan",
-      "freePlan": "Kostenlos",
-      "tunnelAttribution": "Cloudflare Tunnel und das Cloudflare-Logo sind Marken von Cloudflare, Inc."
+      "freePlan": "Kostenlos"
     },
     "usage": {
       "title": "Was Sie mit SwB tun können",
@@ -390,7 +359,6 @@ export const landingCopy: Record<Locale, Copy> = {
     "docs": "문서",
     "about": "소개",
     "license": "Apache-2.0",
-    "trademarks": "상표",
     "install": "uvx swb-one up",
     "setupWithAgent": "에이전트로 설정",
     "copy": "복사",
@@ -431,11 +399,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "cloud": "클라우드",
       "cloudIntro": "클라우드 제공업체를 고르세요.",
       "cloudGuide": "자체 호스팅 가이드",
-      "flyClaim": "월 무료 사용량 제공",
-      "paidPlan": "유료 플랜",
-      "hobbyPlan": "Hobby 플랜",
-      "freePlan": "무료",
-      "tunnelAttribution": "Cloudflare Tunnel과 Cloudflare 로고는 Cloudflare, Inc.의 상표입니다."
+      "freePlan": "무료"
     },
     "usage": {
       "title": "SwB으로 할 수 있는 일",
@@ -453,7 +417,6 @@ export const landingCopy: Record<Locale, Copy> = {
     "docs": "ドキュメント",
     "about": "SwB について",
     "license": "Apache-2.0",
-    "trademarks": "商標",
     "install": "uvx swb-one up",
     "setupWithAgent": "エージェントでセットアップ",
     "copy": "コピー",
@@ -494,11 +457,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "cloud": "クラウド",
       "cloudIntro": "クラウドプロバイダーを選んでください。",
       "cloudGuide": "セルフホスティングガイド",
-      "flyClaim": "毎月の無料枠あり",
-      "paidPlan": "有料プラン",
-      "hobbyPlan": "Hobby プラン",
-      "freePlan": "無料",
-      "tunnelAttribution": "Cloudflare Tunnel および Cloudflare のロゴは、Cloudflare, Inc. の商標です。"
+      "freePlan": "無料"
     },
     "usage": {
       "title": "SwB でできること",

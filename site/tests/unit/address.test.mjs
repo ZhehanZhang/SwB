@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { linkWithSwbAddress, readSharedAddress, validSwbOrigin } from '../../lib/address.ts';
+import { isDocsPath, locales } from '../../lib/i18n.ts';
 import { exampleSwbOrigins, personalizeSwb } from '../../lib/urls.ts';
 
 test('normalizes public HTTPS origins and local HTTP origins', () => {
@@ -29,6 +30,16 @@ test('rejects hostile and ambiguous origins', () => {
     'http://example.com', 'http://localhost.example', 'http://127.0.0.2', 'http://localhost.', 'http://[::2]',
     `https://example.com/${'a'.repeat(234)}`, `https://${'a'.repeat(64)}.example`, 'https://example.com:65536',
   ]) assert.equal(validSwbOrigin(input), null, String(input));
+});
+
+test('exposes the address control on docs in every supported locale', () => {
+  for (const prefix of ['', ...locales.map((locale) => `/${locale}`)]) {
+    assert.equal(isDocsPath(`${prefix}/docs`), true);
+    assert.equal(isDocsPath(`${prefix}/docs/install`), true);
+    assert.equal(isDocsPath(`${prefix}/about`), false);
+  }
+  assert.equal(isDocsPath('/xx/docs/install'), false);
+  assert.equal(isDocsPath('/docs-other'), false);
 });
 
 test('strips a valid share from the URL and preserves other parameters and anchors', () => {

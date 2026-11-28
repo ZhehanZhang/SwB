@@ -6,9 +6,8 @@ import { LanguageSelect } from 'fumadocs-ui/layouts/shared/slots/language-select
 import { FullSearchTrigger, SearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
 import { Languages, Menu } from 'lucide-react';
 import Link from 'next/link';
-import { isAddressDocsPath } from '@/lib/address';
 import { docsRoot, docsVersionAtPath } from '@/lib/docs-version';
-import { localize, type Locale } from '@/lib/i18n';
+import { isDocsPath, localize, type Locale } from '@/lib/i18n';
 import { headerLinks, navLabels } from '@/lib/layout.shared';
 import { Brand } from './brand';
 import { DocsVersionControl } from './docs-version-control';
@@ -50,7 +49,7 @@ export function SiteHeader({ lang, repository, versions = [] }: {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} />
+          <SwbAddressControl lang={lang} show={isDocsPath(path)} />
           {docs && current && <DocsVersionControl lang={lang} version={version} options={options} />}
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:w-6 [&_kbd:first-child]:w-12 [&_kbd:first-child]:text-start [&_kbd:last-child]:text-center" />

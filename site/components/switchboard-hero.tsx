@@ -30,14 +30,14 @@ const index = (kind: MarkKind) => nodes.findIndex((node) => node.kind === kind);
 const trips = livePairs.map(([from, to]) => [index(from), index(to)] as const);
 const firstPair = agentPair(0);
 
-const BEND = 0.14;
 const RETURN_START = 2 * LEG + 0.1;
 
 const layouts = {
-  wide: { W: 1000, H: 820, r: 282, pulse: 5.5 },
-  tall: { W: 1000, H: 1000, r: 338, pulse: 4.5 },
+  wide: { W: 1000, H: 820, r: 282, pulse: 5.5, initialWidth: 624 },
+  tall: { W: 1000, H: 1000, r: 338, pulse: 4.5, initialWidth: 350 },
 };
 type Layout = keyof typeof layouts;
+type Point = { x: number; y: number };
 
 const angle = (i: number) => (i / nodes.length) * Math.PI * 2 - Math.PI / 2 + Math.PI / nodes.length;
 
@@ -47,11 +47,30 @@ function place(layout: Layout, i: number) {
 }
 
 function cord(layout: Layout, i: number) {
-  const { W, H } = layouts[layout];
-  const { x, y } = place(layout, i);
-  const dx = x - W / 2;
-  const dy = y - H / 2;
-  return { x, y, qx: W / 2 + dx / 2 - dy * BEND, qy: H / 2 + dy / 2 + dx * BEND };
+  const { W, H, r } = layouts[layout];
+  const start = { x: W / 2, y: H / 2 };
+  const end = place(layout, i);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const control = (along: number, bend: number) => ({
+    x: start.x + along * dx - bend * dy,
+    y: start.y + along * dy + bend * dx,
+  });
+  return { start, near: control(.3, .17), far: control(.64, .12), end, nx: -dy / r, ny: dx / r };
+}
+
+function ribbon({ start, near, far, end, nx, ny }: ReturnType<typeof cord>, scale: number) {
+  const hub = 3.75 * scale;
+  const app = .575 * scale;
+  const edge = ({ x, y }: Point, offset: number, advance = 0) =>
+    `${x + nx * offset + ny * advance} ${y + ny * offset - nx * advance}`;
+  return [
+    `M ${edge(start, hub)}`,
+    `C ${edge(near, hub)} ${edge(far, app)} ${edge(end, app)}`,
+    `C ${edge(end, app, 4 * app / 3)} ${edge(end, -app, 4 * app / 3)} ${edge(end, -app)}`,
+    `C ${edge(far, -app)} ${edge(near, -hub)} ${edge(start, -hub)}`,
+    `C ${edge(start, -hub, -4 * hub / 3)} ${edge(start, hub, -4 * hub / 3)} ${edge(start, hub)} Z`,
+  ].join(' ');
 }
 
 function side(i: number) {
@@ -69,8 +88,6 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
     if (!element) return;
     const spec = layouts[layout];
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const cx = spec.W / 2;
-    const cy = spec.H / 2;
     const curves = nodes.map((_, i) => cord(layout, i));
     const spokes = element.querySelectorAll<SVGPathElement>('.swb-transit');
     const pulses = element.querySelectorAll<SVGCircleElement>('.swb-hub-pulse');
@@ -79,7 +96,9 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
     const resize = () => {
       const { width } = element.getBoundingClientRect();
       if (!width) return;
-      pulses.forEach((pulse) => pulse.setAttribute('r', String(spec.pulse * spec.W / width)));
+      const scale = spec.W / width;
+      spokes.forEach((path, i) => path.setAttribute('d', ribbon(curves[i], scale)));
+      pulses.forEach((pulse) => pulse.setAttribute('r', String(spec.pulse * scale)));
     };
 
     const redraw = () => {
@@ -105,10 +124,13 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
         const spoke = entering !== returning ? from : to;
         const t = entering ? 1 - progress : progress - 1;
         const u = 1 - t;
-        const { x, y, qx, qy } = curves[spoke];
+        const { start, near, far, end } = curves[spoke];
+        const point = (axis: keyof Point) => (
+          u ** 3 * start[axis] + 3 * u * u * t * near[axis] + 3 * u * t * t * far[axis] + t ** 3 * end[axis]
+        );
         flowing.add(spoke);
-        pulse.setAttribute('cx', String(u * u * cx + 2 * u * t * qx + t * t * x));
-        pulse.setAttribute('cy', String(u * u * cy + 2 * u * t * qy + t * t * y));
+        pulse.setAttribute('cx', String(point('x')));
+        pulse.setAttribute('cy', String(point('y')));
       });
       spokes.forEach((path, i) => path.toggleAttribute('data-flow', flowing.has(i)));
     };
@@ -143,18 +165,17 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
 }
 
 function Board({ layout, className, lang }: { layout: Layout; className: string; lang: Locale }) {
-  const { W, H } = layouts[layout];
+  const { W, H, initialWidth } = layouts[layout];
   const overlay = useRef<SVGSVGElement>(null);
   useCords(overlay, layout);
   return (
     <div className={`swb-board swb-board-${layout} ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
       <svg ref={overlay} viewBox={`0 0 ${W} ${H}`} className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
-        {nodes.map(({ kind }, i) => {
-          const { x, y, qx, qy } = cord(layout, i);
-          return <path key={kind} className="swb-transit" data-app={kind}
+        {nodes.map(({ kind }, i) => (
+          <path key={kind} className="swb-transit" data-app={kind}
             data-active={kind === firstPair.a || kind === firstPair.b ? '' : undefined}
-            d={`M ${W / 2} ${H / 2} Q ${qx} ${qy} ${x} ${y}`} vectorEffect="non-scaling-stroke" />;
-        })}
+            d={ribbon(cord(layout, i), W / initialWidth)} />
+        ))}
         {livePairs.map(([from, to]) => (
           <circle key={`${from}-${to}`} className="swb-hub-pulse" vectorEffect="non-scaling-stroke" />
         ))}

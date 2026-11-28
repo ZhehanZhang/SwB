@@ -6,6 +6,7 @@ import { Children, cloneElement, isValidElement, type ComponentProps, type React
 import type { Locale } from '@/lib/i18n';
 import { codeText } from '@/lib/mdx-text';
 import { personalizeSwb } from '@/lib/urls';
+import styles from './page-actions.module.css';
 import { CopyTextButton } from './prompt-actions';
 import { useSwbAddress } from './swb-address-provider';
 
@@ -64,7 +65,7 @@ const markdownLabels = {
 
 export function PersonalizedMarkdownCopy({ lang, markdownUrl }: { lang: Locale; markdownUrl: string }) {
   const { address } = useSwbAddress();
-  return <CopyTextButton labels={markdownLabels[lang as keyof typeof markdownLabels] ?? markdownLabels.en} className="swb-button swb-button-compact swb-doc-copy bg-fd-secondary hover:bg-fd-accent"
+  return <CopyTextButton labels={markdownLabels[lang as keyof typeof markdownLabels] ?? markdownLabels.en} className={styles.button}
     text={async () => {
       const response = await fetch(markdownUrl);
       if (!response.ok) throw new Error(`Failed to fetch ${markdownUrl}`);

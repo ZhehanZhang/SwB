@@ -1,0 +1,112 @@
+.row {
+  --action-size: 2.25rem;
+  --action-gap: .375rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--action-gap);
+  margin-block-start: .5rem;
+  padding-block-end: 1.25rem;
+  border-block-end: 1px solid var(--border);
+}
+
+.button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: .375rem;
+  block-size: var(--action-size);
+  padding: 0 .625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--foreground);
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: none;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .button:hover {
+    background: color-mix(in srgb, var(--surface-sunken), var(--foreground) 5%);
+  }
+}
+
+.button:active,
+.button[data-state='open'] {
+  background: color-mix(in srgb, var(--surface-sunken), var(--foreground) 10%);
+}
+
+.button > svg {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: inherit;
+}
+
+.navigation {
+  display: flex;
+  gap: var(--action-gap);
+  margin-inline-start: auto;
+}
+
+.icon {
+  inline-size: var(--action-size);
+  padding: 0;
+}
+
+.ask {
+  position: static;
+  gap: 0;
+  font-size: 0;
+  translate: none;
+}
+
+@media (width < 768px) {
+  .desktopSidebar {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobileSidebar {
+    display: none;
+  }
+}
+
+@media (width < 480px) {
+  .button:not(.icon) {
+    gap: .25rem;
+    padding-inline: .375rem;
+    font-size: .75rem;
+  }
+
+  .button:not(.icon) > svg {
+    inline-size: .875rem;
+    block-size: .875rem;
+  }
+}
+
+@media (320px <= width < 380px) {
+  .row {
+    flex-wrap: nowrap;
+  }
+
+  .button:not(.icon) {
+    flex-shrink: 1;
+    min-inline-size: 0;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

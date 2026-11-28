@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { AIChatPanel, AIChatProvider, AIChatSearch, AIChatTrigger, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
+import { AIChatPanel, AIChatProvider, AIChatSearch, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { usePathname } from 'fumadocs-core/framework';
 import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/notebook';
@@ -21,7 +21,6 @@ function ChatLayout({ children, ...props }: DocsLayoutProps) {
   return (
     <DocsLayout {...props} aiChat={{ open, onOpenChange: setOpen, panel: <AIChatPanel /> }}>
       {children}
-      <AIChatTrigger className="swb-button swb-ask-trigger hidden md:inline-flex" />
     </DocsLayout>
   );
 }
@@ -70,7 +69,7 @@ export function DocsShell({ lang, askAI, trees, children }: Pick<DocsLayoutProps
     nav: { enabled: false, mode: 'top' },
     themeSwitch: { enabled: false },
     i18n: false,
-    containerProps: { className: `swb-container swb-docs${askAI ? ' swb-docs-with-chat' : ''}` },
+    containerProps: { className: 'swb-container swb-docs' },
   };
   return askAI ? <EnabledChat key={version} lang={lang} version={version} {...layoutProps} /> : <DocsLayout {...layoutProps} />;
 }
