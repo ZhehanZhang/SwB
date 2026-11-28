@@ -212,6 +212,24 @@ test('long saved addresses leave docs CLS below 0.01', async ({ page }) => {
   }
 });
 
+test('reserves the desktop TOC column before its markup arrives', async ({ page }) => {
+  const layout = () => page.locator('.swb-mdx').evaluate((article) => {
+    const { x, width } = article.getBoundingClientRect();
+    return { x, width };
+  });
+  await page.goto(claude);
+  const complete = await layout();
+  await page.route('**/docs/setup/claude', async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    expect(html).toContain('xl:layout:[--fd-toc-width:268px]');
+    await route.fulfill({ response, body: html.replaceAll('xl:layout:[--fd-toc-width:268px]', '') });
+  });
+  await page.route('**/_next/static/**/*.js', (route) => route.abort());
+  await page.reload();
+  expect(await layout()).toEqual(complete);
+});
+
 test('adds the existing Webhooks prompt and guide to the picker', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(`${start}?agents=webhook`);

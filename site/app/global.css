@@ -184,6 +184,7 @@
 }
 
 @media (min-width: 1280px) {
+  .swb-docs:has([data-swb-toc]) { --fd-toc-width: 268px; }
   .swb-docs { --swb-docs-top: 3.5rem; }
 }
 

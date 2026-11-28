@@ -12,13 +12,15 @@ import { TranslationNote } from './translation-note';
 
 export function Document({ page }: { page: DocumentPage }) {
   const { body: MDX, title, toc, full } = page.data;
+  const hasToc = Boolean(toc?.length);
   const markdown = markdownUrl(page);
   const githubUrl = `${repository}/blob/${releaseBranch}/docs/${page.path.split('/').map(encodeURIComponent).join('/')}`;
   const startNext = page.slugs.join('/') === 'get-started' ? source.getPage([], page.locale) : undefined;
 
   return (
-    <DocsPage toc={toc} full={full} breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: Boolean(toc?.length) }}
-      tableOfContentPopover={{ enabled: Boolean(toc?.length) }}
+    <DocsPage toc={toc} full={full} data-swb-toc={hasToc || undefined}
+      breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: hasToc }}
+      tableOfContentPopover={{ enabled: hasToc }}
       footer={{ component: (
         <footer data-docs-footer>
           <PageFooter items={startNext ? {
